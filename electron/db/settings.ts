@@ -4,7 +4,7 @@ import { DEFAULT_TEMPLATE, isValidTemplate, type ReceiptTemplate } from '../../s
 
 const DEFAULTS: Settings = {
   store: {
-    name: 'Mi Minimarket',
+    name: 'Minimarket Entre Palmas',
     address: '',
     rut: '',
     phone: '',
