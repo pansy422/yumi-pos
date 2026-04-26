@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/common/PageHeader'
-import { ProductDialog } from './ProductDialog'
+import { UnknownBarcodeDialog } from './UnknownBarcodeDialog'
 import { useScanner } from '@/hooks/useScanner'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
@@ -169,17 +169,31 @@ export function InventoryScan() {
         </div>
       </div>
 
-      <ProductDialog
+      <UnknownBarcodeDialog
         open={!!pending}
         onOpenChange={(v) => !v && setPending(null)}
-        product={null}
-        defaultBarcode={pending ?? undefined}
-        onSaved={(p) => {
+        barcode={pending}
+        onResolved={(p, kind) => {
           setLog((l) =>
-            [{ id: nextId(), ts: new Date().toISOString(), product: p, kind: 'created' as const }, ...l].slice(0, 100),
+            [
+              {
+                id: nextId(),
+                ts: new Date().toISOString(),
+                product: p,
+                kind: kind === 'linked' ? ('incremented' as const) : ('created' as const),
+              },
+              ...l,
+            ].slice(0, 100),
           )
           setPending(null)
-          toast({ variant: 'success', title: 'Producto creado', description: p.name })
+          toast({
+            variant: 'success',
+            title: kind === 'linked' ? 'Código vinculado' : 'Producto creado',
+            description:
+              kind === 'linked'
+                ? `${p.name} ahora reconoce ${p.barcode}. Stock: ${p.stock}`
+                : p.name,
+          })
         }}
       />
     </div>
