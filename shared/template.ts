@@ -67,7 +67,6 @@ export const DEFAULT_TEMPLATE: ReceiptTemplate = {
   version: 1,
   blocks: [
     { id: 'b_name', type: 'store_name', align: 'center', bold: true, size: 'large' },
-    { id: 'b_phone', type: 'phone', align: 'center' },
     { id: 'b_sep1', type: 'separator' },
     { id: 'b_num_date', type: 'sale_number_and_date' },
     { id: 'b_sep2', type: 'separator' },
@@ -121,7 +120,6 @@ export const PRESETS: { id: string; label: string; description: string; template
       version: 1,
       blocks: [
         { id: 'i_name', type: 'store_name', align: 'center', bold: true, size: 'large' },
-        { id: 'i_phone', type: 'phone', align: 'center' },
         { id: 'i_sep1', type: 'separator' },
         { id: 'i_num', type: 'sale_number_and_date' },
         { id: 'i_sep2', type: 'separator' },

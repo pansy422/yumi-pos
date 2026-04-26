@@ -151,6 +151,7 @@ export type PrinterSettings = {
   width_chars: number
   auto_print: boolean
   open_drawer_on_cash: boolean
+  extra_copy: boolean
 }
 
 export type AppFlags = {

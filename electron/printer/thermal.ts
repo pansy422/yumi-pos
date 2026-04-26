@@ -63,11 +63,25 @@ export async function printReceipt(
   }
   const tp = buildPrinter(printer)
   await ensureConnected(tp)
+
+  // Boleta para el cliente
   formatReceiptFromTemplate(tp, sale, store, template, printer.width_chars)
   if (printer.open_drawer_on_cash && sale.payment_method === 'efectivo') {
     tp.openCashDrawer()
   }
   tp.cut()
+
+  // Copia para la tienda (opcional)
+  if (printer.extra_copy) {
+    tp.alignCenter()
+    tp.bold(true)
+    tp.println('-------- COPIA TIENDA --------')
+    tp.bold(false)
+    tp.newLine()
+    formatReceiptFromTemplate(tp, sale, store, template, printer.width_chars)
+    tp.cut()
+  }
+
   await tp.execute()
 }
 

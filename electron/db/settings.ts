@@ -19,6 +19,7 @@ const DEFAULTS: Settings = {
     width_chars: 42,
     auto_print: true,
     open_drawer_on_cash: true,
+    extra_copy: false,
   },
   flags: {
     onboarded: false,

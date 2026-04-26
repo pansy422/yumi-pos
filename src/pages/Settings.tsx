@@ -430,6 +430,19 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
             />
           </div>
 
+          <div className="sm:col-span-2 flex items-center justify-between rounded-md border border-border/40 bg-muted/30 px-3 py-2">
+            <div>
+              <Label className="text-sm text-foreground">Imprimir copia para la tienda</Label>
+              <p className="text-xs text-muted-foreground">
+                Sale una segunda boleta con encabezado "COPIA TIENDA". Gasta el doble de papel.
+              </p>
+            </div>
+            <Switch
+              checked={form.extra_copy}
+              onCheckedChange={(v) => setForm({ ...form, extra_copy: v })}
+            />
+          </div>
+
           <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
