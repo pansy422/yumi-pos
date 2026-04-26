@@ -1,7 +1,7 @@
-import { app, BrowserWindow, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron'
 import path from 'node:path'
 import { setupCSP } from './utils/csp'
-import { initDb, closeDb } from './db'
+import { initDb, closeDb, getDbPath } from './db'
 import { registerIpc } from './ipc'
 
 const isDev = !app.isPackaged
@@ -11,11 +11,11 @@ let mainWindow: BrowserWindow | null = null
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    width: 1320,
+    height: 860,
     minWidth: 1024,
     minHeight: 700,
-    backgroundColor: '#0b1220',
+    backgroundColor: '#0b0f1a',
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -24,6 +24,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false,
       spellcheck: false,
+      devTools: isDev,
     },
   })
 
@@ -41,6 +42,10 @@ function createWindow() {
     e.preventDefault()
   })
 
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer crashed]', details.reason)
+  })
+
   if (isDev) {
     mainWindow.loadURL(DEV_URL)
   } else {
@@ -56,6 +61,20 @@ app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', (e) => e.preventDefault())
 })
 
+process.on('uncaughtException', (err) => {
+  console.error('[uncaught]', err)
+  if (app.isReady()) {
+    dialog.showErrorBox(
+      'Yumi POS — error inesperado',
+      `${err.message}\n\nLa base de datos está en:\n${getDbPath()}`,
+    )
+  }
+})
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandled rejection]', reason)
+})
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -68,7 +87,17 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     setupCSP(session.defaultSession, isDev)
-    initDb()
+    try {
+      initDb()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      dialog.showErrorBox(
+        'Yumi POS — no se pudo iniciar',
+        `Error abriendo la base de datos.\n${msg}\n\nRuta esperada:\n${getDbPath()}`,
+      )
+      app.exit(1)
+      return
+    }
     registerIpc()
     if (!isDev) Menu.setApplicationMenu(null)
     createWindow()

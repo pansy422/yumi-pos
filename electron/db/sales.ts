@@ -122,13 +122,25 @@ export function getById(id: string): SaleWithItems | null {
   })) }
 }
 
-export function list(q: { from?: string; to?: string; limit?: number } = {}): Sale[] {
+export function list(
+  q: { from?: string; to?: string; limit?: number; cashSessionId?: string } = {},
+): Sale[] {
   const db = getDb()
   const where: string[] = []
   const params: Record<string, unknown> = {}
-  if (q.from) { where.push('completed_at >= @from'); params.from = q.from }
-  if (q.to) { where.push('completed_at < @to'); params.to = q.to }
-  const limit = Math.min(500, Math.max(1, q.limit ?? 100))
+  if (q.from) {
+    where.push('completed_at >= @from')
+    params.from = q.from
+  }
+  if (q.to) {
+    where.push('completed_at < @to')
+    params.to = q.to
+  }
+  if (q.cashSessionId) {
+    where.push('cash_session_id = @session')
+    params.session = q.cashSessionId
+  }
+  const limit = Math.min(2000, Math.max(1, q.limit ?? 100))
   const sql = `SELECT * FROM sales ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY completed_at DESC LIMIT ${limit}`
   return (db.prepare(sql).all(params) as Record<string, unknown>[])
     .map(rowToSale)

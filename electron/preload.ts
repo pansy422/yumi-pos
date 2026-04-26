@@ -24,6 +24,7 @@ const api = {
   cashClose: invoke(IPC.cashClose),
   cashMove: invoke(IPC.cashMove),
   cashMovements: invoke(IPC.cashMovements),
+  cashSummary: invoke(IPC.cashSummary),
 
   reportDaily: invoke(IPC.reportDaily),
   reportRange: invoke(IPC.reportRange),

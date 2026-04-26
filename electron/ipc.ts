@@ -71,6 +71,7 @@ export function registerIpc(): void {
     cash.move(kind, amt, note),
   )
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
+  handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
 
   handle(IPC.reportDaily, (date: string) => reports.daily(date))
   handle(IPC.reportRange, (from: string, to: string) => reports.range(from, to))

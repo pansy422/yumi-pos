@@ -44,36 +44,43 @@ export function Cash() {
   const [closeDlg, setCloseDlg] = useState(false)
   const [moveDlg, setMoveDlg] = useState(false)
   const [movements, setMovements] = useState<CashMovement[]>([])
-  const [counts, setCounts] = useState<{ expected: number; cashSales: number; movsIn: number; movsOut: number } | null>(
-    null,
-  )
+  const [summary, setSummary] = useState<{
+    expected: number
+    cashSales: number
+    movsIn: number
+    movsOut: number
+    salesCount: number
+  } | null>(null)
+
+  const reload = async () => {
+    if (!cash) return
+    const [ms, s] = await Promise.all([api.cashMovements(cash.id), api.cashSummary(cash.id)])
+    setMovements(ms)
+    setSummary({
+      expected: s.expected,
+      cashSales: s.cash_sales,
+      movsIn: s.deposits,
+      movsOut: s.withdraws,
+      salesCount: s.sales_count,
+    })
+  }
 
   useEffect(() => {
     if (!cash) {
       setMovements([])
-      setCounts(null)
+      setSummary(null)
       return
     }
     let cancelled = false
-    Promise.all([api.cashMovements(cash.id), api.salesList({ limit: 500 })]).then(([ms, sales]) => {
+    Promise.all([api.cashMovements(cash.id), api.cashSummary(cash.id)]).then(([ms, s]) => {
       if (cancelled) return
       setMovements(ms)
-      const cashSales = sales
-        .filter((s) => s.cash_session_id === cash.id && s.voided === 0 && s.payment_method === 'efectivo')
-        .reduce((a, s) => a + s.total, 0)
-      let dep = 0
-      let wd = 0
-      let adj = 0
-      for (const m of ms) {
-        if (m.kind === 'deposit') dep += m.amount
-        else if (m.kind === 'withdraw') wd += m.amount
-        else if (m.kind === 'adjustment') adj += m.amount
-      }
-      setCounts({
-        expected: cash.opening_amount + cashSales + dep - wd + adj,
-        cashSales,
-        movsIn: dep,
-        movsOut: wd,
+      setSummary({
+        expected: s.expected,
+        cashSales: s.cash_sales,
+        movsIn: s.deposits,
+        movsOut: s.withdraws,
+        salesCount: s.sales_count,
       })
     })
     return () => {
@@ -137,10 +144,10 @@ export function Cash() {
               </p>
             ) : (
               <div className="grid grid-cols-2 gap-4">
-                <Stat label="Ventas en efectivo" value={counts?.cashSales ?? 0} />
-                <Stat label="Depósitos" value={counts?.movsIn ?? 0} />
-                <Stat label="Retiros" value={-(counts?.movsOut ?? 0)} />
-                <Stat label="Esperado en caja" value={counts?.expected ?? 0} highlight />
+                <Stat label="Ventas en efectivo" value={summary?.cashSales ?? 0} />
+                <Stat label="Depósitos" value={summary?.movsIn ?? 0} />
+                <Stat label="Retiros" value={-(summary?.movsOut ?? 0)} />
+                <Stat label="Esperado en caja" value={summary?.expected ?? 0} highlight />
               </div>
             )}
           </CardContent>
@@ -190,7 +197,7 @@ export function Cash() {
       <CloseDialog
         open={closeDlg}
         onOpenChange={setCloseDlg}
-        expected={counts?.expected ?? 0}
+        expected={summary?.expected ?? 0}
         onDone={async (diff) => {
           setCloseDlg(false)
           await refresh()
@@ -206,7 +213,7 @@ export function Cash() {
         onOpenChange={setMoveDlg}
         onDone={async () => {
           setMoveDlg(false)
-          if (cash) setMovements(await api.cashMovements(cash.id))
+          await reload()
           await refresh()
           toast({ variant: 'success', title: 'Movimiento registrado' })
         }}

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
-import type { CashMovement, CashSession } from '../../shared/types'
+import type { CashMovement, CashSession, CashSummary } from '../../shared/types'
 
 function rowToSession(r: Record<string, unknown> | undefined): CashSession | null {
   if (!r) return null
@@ -36,17 +36,24 @@ export function open(openingAmount: number, notes?: string): CashSession {
   )!
 }
 
-export function expectedClose(sessionId: string): number {
+export function summary(sessionId: string): CashSummary {
   const db = getDb()
   const session = db
     .prepare(`SELECT opening_amount FROM cash_sessions WHERE id = ?`)
     .get(sessionId) as { opening_amount: number } | undefined
   if (!session) throw new Error('Sesión de caja no encontrada')
-  const cashSales = db
+
+  const sales = db
     .prepare(
-      `SELECT COALESCE(SUM(total),0) AS s FROM sales WHERE cash_session_id = ? AND payment_method = 'efectivo' AND voided = 0`,
+      `SELECT
+         COUNT(*) AS count,
+         COALESCE(SUM(CASE WHEN payment_method = 'efectivo' THEN total ELSE 0 END), 0) AS cash_sales,
+         COALESCE(SUM(total), 0) AS gross_sales
+       FROM sales
+       WHERE cash_session_id = ? AND voided = 0`,
     )
-    .get(sessionId) as { s: number }
+    .get(sessionId) as { count: number; cash_sales: number; gross_sales: number }
+
   const movements = db
     .prepare(
       `SELECT
@@ -56,13 +63,29 @@ export function expectedClose(sessionId: string): number {
        FROM cash_movements WHERE cash_session_id = ?`,
     )
     .get(sessionId) as { dep: number; wd: number; adj: number }
-  return (
-    Number(session.opening_amount) +
-    Number(cashSales.s) +
-    Number(movements.dep) -
-    Number(movements.wd) +
-    Number(movements.adj)
-  )
+
+  const opening = Number(session.opening_amount)
+  const cashSales = Number(sales.cash_sales)
+  const dep = Number(movements.dep)
+  const wd = Number(movements.wd)
+  const adj = Number(movements.adj)
+  const expected = opening + cashSales + dep - wd + adj
+
+  return {
+    session_id: sessionId,
+    opening,
+    sales_count: Number(sales.count),
+    cash_sales: cashSales,
+    gross_sales: Number(sales.gross_sales),
+    deposits: dep,
+    withdraws: wd,
+    adjustments: adj,
+    expected,
+  }
+}
+
+export function expectedClose(sessionId: string): number {
+  return summary(sessionId).expected
 }
 
 export function close(countedAmount: number, notes?: string): CashSession {

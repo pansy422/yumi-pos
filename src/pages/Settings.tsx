@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Database, Download, Printer, Save, Store, Upload } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Database,
+  Download,
+  Network,
+  Printer,
+  Save,
+  Sparkles,
+  Store,
+  Upload,
+  Usb,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,11 +26,18 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/common/PageHeader'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
-import type { DetectedPrinter, PrinterSettings, Settings as SettingsT, StoreSettings } from '@shared/types'
+import { cn } from '@/lib/utils'
+import type {
+  DetectedPrinter,
+  PrinterSettings,
+  Settings as SettingsT,
+  StoreSettings,
+} from '@shared/types'
 
 export function Settings() {
   const { toast } = useToast()
@@ -79,8 +98,8 @@ function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => v
   const [form, setForm] = useState<StoreSettings>(settings.store)
   const [saving, setSaving] = useState(false)
   return (
-    <Card>
-      <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
+    <Card className="card-elev">
+      <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
         <Field label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <Field label="RUT" value={form.rut} onChange={(v) => setForm({ ...form, rut: v })} />
         <Field label="Dirección" value={form.address} onChange={(v) => setForm({ ...form, address: v })} className="sm:col-span-2" />
@@ -117,18 +136,61 @@ function Field({
   value,
   onChange,
   className,
+  type,
 }: {
   label: string
   value: string
   onChange: (v: string) => void
   className?: string
+  type?: string
 }) {
   return (
     <div className={`space-y-1 ${className ?? ''}`}>
       <Label>{label}</Label>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
+}
+
+const PRESETS: {
+  id: string
+  label: string
+  hint: string
+  apply: (p: PrinterSettings) => PrinterSettings
+}[] = [
+  {
+    id: 'epson-tm-t20iiil-net',
+    label: 'Epson TM-T20IIIL (Red)',
+    hint: 'Ethernet, 80mm',
+    apply: (p) => ({
+      ...p,
+      connection: 'network',
+      interface: p.interface.startsWith('tcp://') ? p.interface : 'tcp://192.168.1.100:9100',
+      width_chars: 42,
+    }),
+  },
+  {
+    id: 'epson-tm-t20iiil-usb',
+    label: 'Epson TM-T20III/L (USB)',
+    hint: 'USB, 80mm',
+    apply: (p) => ({
+      ...p,
+      connection: 'usb',
+      interface: p.interface.startsWith('printer:') ? p.interface : '',
+      width_chars: 42,
+    }),
+  },
+  {
+    id: 'generic-58mm',
+    label: 'Genérica 58mm',
+    hint: '32 columnas',
+    apply: (p) => ({ ...p, width_chars: 32 }),
+  },
+]
+
+function isEpsonTm(name: string): boolean {
+  const n = name.toUpperCase()
+  return /TM-?T\d{2}/.test(n) || n.includes('EPSON')
 }
 
 function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => void }) {
@@ -151,15 +213,43 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
     }
   }
 
+  const interfaceValid = (() => {
+    if (!form.enabled) return true
+    if (form.connection === 'usb') return form.interface.startsWith('printer:') && form.interface.length > 8
+    return /^tcp:\/\/[^/:]+(:\d+)?\/?$/.test(form.interface)
+  })()
+
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="grid gap-4 p-4 sm:grid-cols-2">
-          <div className="space-y-1 sm:col-span-2 flex items-center justify-between">
+      <Card className="card-elev">
+        <CardContent className="space-y-1.5 p-5">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Sparkles className="h-4 w-4 text-primary" /> Presets
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {PRESETS.map((p) => (
+              <Button
+                key={p.id}
+                variant="outline"
+                size="sm"
+                onClick={() => setForm((prev) => p.apply(prev))}
+              >
+                {p.id.startsWith('epson') ? <Printer className="h-3.5 w-3.5" /> : null}
+                {p.label}
+                <span className="text-[10px] text-muted-foreground">{p.hint}</span>
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="card-elev">
+        <CardContent className="grid gap-5 p-5 sm:grid-cols-2">
+          <div className="sm:col-span-2 flex items-center justify-between">
             <div>
-              <Label>Impresora habilitada</Label>
+              <Label className="text-sm text-foreground">Impresora habilitada</Label>
               <p className="text-xs text-muted-foreground">
-                Si está apagada, no se imprimen boletas
+                Si está apagada, no se imprimen boletas ni se abre el cajón
               </p>
             </div>
             <Switch
@@ -167,80 +257,145 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
               onCheckedChange={(v) => setForm({ ...form, enabled: v })}
             />
           </div>
-          <div className="space-y-1">
+
+          <div className="space-y-1.5">
             <Label>Tipo de conexión</Label>
-            <Select
-              value={form.connection}
-              onValueChange={(v) =>
-                setForm({
-                  ...form,
-                  connection: v as PrinterSettings['connection'],
-                  interface: v === 'usb' ? 'printer:auto' : 'tcp://192.168.0.10:9100',
-                })
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    connection: 'usb',
+                    interface: form.interface.startsWith('printer:') ? form.interface : '',
+                  })
+                }
+                className={cn(
+                  'flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all',
+                  form.connection === 'usb'
+                    ? 'border-primary bg-primary/10 text-primary shadow-glow'
+                    : 'border-border bg-card hover:bg-accent/60',
+                )}
+              >
+                <Usb className="h-4 w-4" />
+                USB / Driver Windows
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setForm({
+                    ...form,
+                    connection: 'network',
+                    interface: form.interface.startsWith('tcp://')
+                      ? form.interface
+                      : 'tcp://192.168.1.100:9100',
+                  })
+                }
+                className={cn(
+                  'flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all',
+                  form.connection === 'network'
+                    ? 'border-primary bg-primary/10 text-primary shadow-glow'
+                    : 'border-border bg-card hover:bg-accent/60',
+                )}
+              >
+                <Network className="h-4 w-4" />
+                Red (TCP/IP)
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>
+              {form.connection === 'usb' ? 'Interfaz (printer:NOMBRE)' : 'Interfaz (tcp://IP:PUERTO)'}
+            </Label>
+            <Input
+              value={form.interface}
+              onChange={(e) => setForm({ ...form, interface: e.target.value })}
+              placeholder={
+                form.connection === 'usb'
+                  ? 'printer:EPSON TM-T20IIIL Receipt'
+                  : 'tcp://192.168.1.100:9100'
               }
+              className={cn(
+                form.enabled && !interfaceValid && 'border-destructive/60',
+              )}
+            />
+            {form.enabled && !interfaceValid && (
+              <p className="text-[11px] text-destructive">
+                {form.connection === 'usb'
+                  ? 'Selecciona una impresora de la lista de abajo'
+                  : 'Formato esperado: tcp://IP:PUERTO (puerto típico 9100)'}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Ancho de papel (caracteres)</Label>
+            <Select
+              value={String(form.width_chars)}
+              onValueChange={(v) => setForm({ ...form, width_chars: Number(v) })}
             >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="usb">USB</SelectItem>
-                <SelectItem value="network">Red (IP)</SelectItem>
+                <SelectItem value="32">58 mm — 32 columnas</SelectItem>
+                <SelectItem value="42">80 mm — 42 columnas (Epson TM-T20)</SelectItem>
+                <SelectItem value="48">80 mm — 48 columnas</SelectItem>
+                <SelectItem value="56">80 mm — 56 columnas (Font B)</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label>
-              Interfaz {form.connection === 'usb' ? '(printer:NOMBRE)' : '(tcp://IP:9100)'}
-            </Label>
-            <Input
-              value={form.interface}
-              onChange={(e) => setForm({ ...form, interface: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Ancho (caracteres)</Label>
-            <Input
-              type="number"
-              value={form.width_chars}
-              onChange={(e) =>
-                setForm({ ...form, width_chars: Math.max(16, Number(e.target.value) || 32) })
-              }
-            />
-          </div>
-          <div className="space-y-1 flex items-center justify-between">
-            <Label>Imprimir boleta automáticamente</Label>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm text-foreground">Imprimir boleta automáticamente</Label>
+              <p className="text-xs text-muted-foreground">Tras cada cobro</p>
+            </div>
             <Switch
               checked={form.auto_print}
               onCheckedChange={(v) => setForm({ ...form, auto_print: v })}
             />
           </div>
-          <div className="space-y-1 flex items-center justify-between">
-            <Label>Abrir cajón en efectivo</Label>
+
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-sm text-foreground">Abrir cajón en efectivo</Label>
+              <p className="text-xs text-muted-foreground">Pulso DK al cobrar en efectivo</p>
+            </div>
             <Switch
               checked={form.open_drawer_on_cash}
               onCheckedChange={(v) => setForm({ ...form, open_drawer_on_cash: v })}
             />
           </div>
-          <div className="sm:col-span-2 flex justify-end gap-2">
+
+          <div className="sm:col-span-2 flex flex-wrap items-center justify-end gap-2 pt-2">
             <Button
               variant="outline"
-              disabled={busy}
+              disabled={busy || !form.enabled}
               onClick={async () => {
+                await api.settingsSet({ printer: form })
                 const r = await api.printerOpenDrawer()
                 if (r.ok) toast({ variant: 'success', title: 'Cajón abierto' })
-                else toast({ variant: 'destructive', title: 'No se pudo abrir', description: r.error })
+                else
+                  toast({ variant: 'destructive', title: 'No se pudo abrir', description: r.error })
               }}
             >
               Abrir cajón
             </Button>
             <Button
               variant="outline"
-              disabled={busy}
+              disabled={busy || !form.enabled || !interfaceValid}
               onClick={async () => {
+                await api.settingsSet({ printer: form })
                 const r = await api.printerTest()
                 if (r.ok) toast({ variant: 'success', title: 'Prueba enviada' })
                 else
-                  toast({ variant: 'destructive', title: 'No se pudo imprimir', description: r.error })
+                  toast({
+                    variant: 'destructive',
+                    title: 'No se pudo imprimir',
+                    description: r.error,
+                  })
               }}
             >
               Imprimir prueba
@@ -252,31 +407,99 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-4">
-          <div className="mb-2 text-xs uppercase text-muted-foreground">
-            Impresoras detectadas en Windows
-          </div>
-          {printers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Ninguna impresora detectada.</p>
-          ) : (
-            <ul className="divide-y">
-              {printers.map((p) => (
-                <li
-                  key={p.name}
-                  className="flex cursor-pointer items-center justify-between py-2 text-sm hover:bg-accent/40 rounded px-2"
-                  onClick={() =>
-                    setForm({ ...form, connection: 'usb', interface: `printer:${p.name}` })
-                  }
-                >
-                  <span>{p.name}</span>
-                  {p.isDefault && <span className="text-xs text-primary">predeterminada</span>}
-                </li>
-              ))}
+      {form.connection === 'usb' && (
+        <Card className="card-elev">
+          <CardContent className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                Impresoras detectadas en Windows
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => setPrinters(await api.printerList())}
+              >
+                Refrescar
+              </Button>
+            </div>
+            {printers.length === 0 ? (
+              <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
+                <div className="flex items-center gap-2 font-medium">
+                  <AlertCircle className="h-4 w-4" /> Ninguna impresora detectada
+                </div>
+                <p className="mt-1 text-xs">
+                  Instala el driver Epson Advanced Printer Driver para tu TM-T20IIIL en Windows y vuelve a refrescar.
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/50">
+                {printers.map((p) => {
+                  const iface = `printer:${p.name}`
+                  const active = form.interface === iface
+                  const recommended = isEpsonTm(p.name)
+                  return (
+                    <li
+                      key={p.name}
+                      className={cn(
+                        'flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent/40',
+                        active && 'bg-primary/10',
+                      )}
+                      onClick={() =>
+                        setForm({ ...form, connection: 'usb', interface: iface })
+                      }
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{p.name}</span>
+                          {recommended && (
+                            <Badge variant="success" className="shrink-0">
+                              Recomendada
+                            </Badge>
+                          )}
+                          {p.isDefault && (
+                            <Badge variant="secondary" className="shrink-0">
+                              Predeterminada
+                            </Badge>
+                          )}
+                        </div>
+                        {(p.driver || p.port) && (
+                          <div className="mono text-[11px] text-muted-foreground">
+                            {[p.driver, p.port].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                      {active && <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />}
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {form.connection === 'network' && (
+        <Card className="card-elev">
+          <CardContent className="p-5 text-sm">
+            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+              <Network className="h-3.5 w-3.5" /> Modo red
+            </div>
+            <ul className="space-y-1.5 text-muted-foreground">
+              <li>
+                1. La impresora y el PC deben estar en la misma red. Verifica con el cable Ethernet conectado.
+              </li>
+              <li>
+                2. Imprime un autotest manteniendo el botón <span className="mono">FEED</span> al
+                encender la impresora — saldrá la IP impresa.
+              </li>
+              <li>
+                3. Escribe la IP arriba en formato <span className="mono">tcp://IP:9100</span> y
+                presiona Imprimir prueba.
+              </li>
             </ul>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
@@ -285,15 +508,15 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
   const { toast } = useToast()
   return (
     <div className="space-y-4">
-      <Card>
-        <CardContent className="grid gap-3 p-4 text-sm">
+      <Card className="card-elev">
+        <CardContent className="grid gap-3 p-5 text-sm">
           <Row k="Versión" v={info?.version ?? '—'} />
           <Row k="Base de datos" v={info?.dbPath ?? '—'} />
           <Row k="Datos de usuario" v={info?.userDataPath ?? '—'} />
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="space-y-3 p-4">
+      <Card className="card-elev">
+        <CardContent className="space-y-3 p-5">
           <div>
             <div className="font-semibold">Respaldo</div>
             <p className="text-xs text-muted-foreground">
@@ -330,7 +553,7 @@ function Row({ k, v }: { k: string; v: string }) {
   return (
     <div className="flex items-center justify-between gap-4">
       <span className="text-muted-foreground">{k}</span>
-      <span className="font-mono text-xs break-all text-right">{v}</span>
+      <span className="mono break-all text-right text-xs">{v}</span>
     </div>
   )
 }

@@ -81,6 +81,18 @@ export type CashSession = {
   notes: string | null
 }
 
+export type CashSummary = {
+  session_id: string
+  opening: number
+  sales_count: number
+  cash_sales: number
+  gross_sales: number
+  deposits: number
+  withdraws: number
+  adjustments: number
+  expected: number
+}
+
 export type CashMovementKind = 'sale' | 'withdraw' | 'deposit' | 'adjustment'
 
 export type CashMovement = {
@@ -142,7 +154,13 @@ export type RangeReport = {
   daily: { date: string; revenue: number; profit: number; count: number }[]
 }
 
-export type DetectedPrinter = { name: string; isDefault: boolean; status?: string }
+export type DetectedPrinter = {
+  name: string
+  isDefault: boolean
+  status?: string
+  port?: string
+  driver?: string
+}
 
 export type ScanInResult =
   | { kind: 'created'; product: Product }
@@ -163,7 +181,7 @@ export type Api = {
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
 
   salesCreate: (input: SaleInput) => Promise<SaleWithItems>
-  salesList: (q?: { from?: string; to?: string; limit?: number }) => Promise<Sale[]>
+  salesList: (q?: { from?: string; to?: string; limit?: number; cashSessionId?: string }) => Promise<Sale[]>
   salesGet: (id: string) => Promise<SaleWithItems | null>
   salesVoid: (id: string, reason: string) => Promise<void>
 
@@ -172,6 +190,7 @@ export type Api = {
   cashClose: (countedAmount: number, notes?: string) => Promise<CashSession>
   cashMove: (kind: 'withdraw' | 'deposit' | 'adjustment', amount: number, note: string) => Promise<CashMovement>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
+  cashSummary: (sessionId: string) => Promise<CashSummary>
 
   reportDaily: (date: string) => Promise<DailyReport>
   reportRange: (from: string, to: string) => Promise<RangeReport>

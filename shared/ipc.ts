@@ -19,6 +19,7 @@ export const IPC = {
   cashClose: 'cash:close',
   cashMove: 'cash:move',
   cashMovements: 'cash:movements',
+  cashSummary: 'cash:summary',
 
   reportDaily: 'report:daily',
   reportRange: 'report:range',

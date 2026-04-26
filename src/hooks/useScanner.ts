@@ -33,7 +33,7 @@ export function useScanner({
       if (now - lastTime.current > maxIntervalMs) buffer.current = ''
       lastTime.current = now
 
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.key === 'Tab') {
         const code = buffer.current.trim()
         buffer.current = ''
         if (code.length >= minLength) {
@@ -42,7 +42,7 @@ export function useScanner({
         }
         return
       }
-      if (e.key.length === 1) {
+      if (e.key.length === 1 && buffer.current.length < 64) {
         buffer.current += e.key
       }
     }

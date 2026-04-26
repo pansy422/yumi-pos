@@ -12,8 +12,8 @@ const DEFAULTS: Settings = {
   printer: {
     enabled: false,
     connection: 'usb',
-    interface: 'printer:auto',
-    width_chars: 32,
+    interface: '',
+    width_chars: 42,
     auto_print: true,
     open_drawer_on_cash: true,
   },
