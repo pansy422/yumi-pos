@@ -1,0 +1,160 @@
+import { randomUUID } from 'node:crypto'
+import { getDb } from './index'
+import type {
+  Product,
+  ProductInput,
+  ProductPatch,
+  ScanInResult,
+} from '../../shared/types'
+
+function row(r: Record<string, unknown> | undefined): Product | null {
+  if (!r) return null
+  return {
+    id: r.id as string,
+    barcode: (r.barcode as string | null) ?? null,
+    name: r.name as string,
+    sku: (r.sku as string | null) ?? null,
+    cost: Number(r.cost),
+    price: Number(r.price),
+    stock: Number(r.stock),
+    category: (r.category as string | null) ?? null,
+    archived: Number(r.archived) === 1 ? 1 : 0,
+    created_at: r.created_at as string,
+    updated_at: r.updated_at as string,
+  }
+}
+
+export function list(q: { search?: string; includeArchived?: boolean } = {}): Product[] {
+  const db = getDb()
+  const where: string[] = []
+  const params: Record<string, unknown> = {}
+  if (!q.includeArchived) where.push('archived = 0')
+  if (q.search && q.search.trim()) {
+    where.push('(name LIKE @s OR barcode LIKE @s OR sku LIKE @s)')
+    params.s = `%${q.search.trim()}%`
+  }
+  const sql = `SELECT * FROM products ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name COLLATE NOCASE LIMIT 500`
+  return (db.prepare(sql).all(params) as Record<string, unknown>[])
+    .map(row)
+    .filter((p): p is Product => p !== null)
+}
+
+export function get(id: string): Product | null {
+  const db = getDb()
+  return row(db.prepare(`SELECT * FROM products WHERE id = ?`).get(id) as Record<string, unknown>)
+}
+
+export function byBarcode(barcode: string): Product | null {
+  const db = getDb()
+  return row(
+    db.prepare(`SELECT * FROM products WHERE barcode = ?`).get(barcode) as Record<string, unknown>,
+  )
+}
+
+export function create(input: ProductInput): Product {
+  const db = getDb()
+  const id = randomUUID()
+  if (input.barcode) {
+    const exists = db.prepare(`SELECT 1 FROM products WHERE barcode = ?`).get(input.barcode)
+    if (exists) throw new Error(`Ya existe un producto con el código ${input.barcode}`)
+  }
+  db.prepare(
+    `INSERT INTO products (id, barcode, name, sku, cost, price, stock, category)
+     VALUES (@id, @barcode, @name, @sku, @cost, @price, @stock, @category)`,
+  ).run({
+    id,
+    barcode: input.barcode ?? null,
+    name: input.name.trim(),
+    sku: input.sku ?? null,
+    cost: Math.round(input.cost),
+    price: Math.round(input.price),
+    stock: Math.round(input.stock ?? 0),
+    category: input.category ?? null,
+  })
+  return get(id)!
+}
+
+export function update(id: string, patch: ProductPatch): Product {
+  const db = getDb()
+  const current = get(id)
+  if (!current) throw new Error('Producto no encontrado')
+  if (patch.barcode && patch.barcode !== current.barcode) {
+    const exists = db
+      .prepare(`SELECT 1 FROM products WHERE barcode = ? AND id <> ?`)
+      .get(patch.barcode, id)
+    if (exists) throw new Error(`Ya existe un producto con el código ${patch.barcode}`)
+  }
+  const next = {
+    barcode: patch.barcode ?? current.barcode,
+    name: (patch.name ?? current.name).trim(),
+    sku: patch.sku ?? current.sku,
+    cost: Math.round(patch.cost ?? current.cost),
+    price: Math.round(patch.price ?? current.price),
+    stock: Math.round(patch.stock ?? current.stock),
+    category: patch.category ?? current.category,
+    archived: patch.archived ?? current.archived,
+  }
+  db.prepare(
+    `UPDATE products SET barcode=@barcode, name=@name, sku=@sku, cost=@cost, price=@price,
+     stock=@stock, category=@category, archived=@archived, updated_at=datetime('now') WHERE id=@id`,
+  ).run({ id, ...next })
+  return get(id)!
+}
+
+export function archive(id: string, archived: boolean): void {
+  const db = getDb()
+  db.prepare(
+    `UPDATE products SET archived = ?, updated_at = datetime('now') WHERE id = ?`,
+  ).run(archived ? 1 : 0, id)
+}
+
+export function adjustStock(id: string, delta: number, _note?: string): Product {
+  const db = getDb()
+  const tx = db.transaction(() => {
+    const current = get(id)
+    if (!current) throw new Error('Producto no encontrado')
+    db.prepare(
+      `UPDATE products SET stock = stock + ?, updated_at = datetime('now') WHERE id = ?`,
+    ).run(Math.round(delta), id)
+  })
+  tx()
+  return get(id)!
+}
+
+export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): ScanInResult {
+  const db = getDb()
+  const code = barcode.trim()
+  if (!code) throw new Error('Código vacío')
+  const existing = byBarcode(code)
+  if (existing) {
+    db.prepare(
+      `UPDATE products SET stock = stock + 1, archived = 0, updated_at = datetime('now') WHERE id = ?`,
+    ).run(existing.id)
+    return { kind: 'incremented', product: get(existing.id)! }
+  }
+  if (opts?.newProduct) {
+    const created = create({ ...opts.newProduct, barcode: code, stock: opts.newProduct.stock ?? 1 })
+    return { kind: 'created', product: created }
+  }
+  return { kind: 'needs_info', barcode: code }
+}
+
+export function importMany(rows: ProductInput[]): { created: number; updated: number } {
+  const db = getDb()
+  let created = 0
+  let updated = 0
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      const existing = r.barcode ? byBarcode(r.barcode) : null
+      if (existing) {
+        update(existing.id, r)
+        updated++
+      } else {
+        create(r)
+        created++
+      }
+    }
+  })
+  tx()
+  return { created, updated }
+}

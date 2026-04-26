@@ -1,0 +1,44 @@
+import type { SaleWithItems } from '@shared/types'
+
+export function sampleSale(): SaleWithItems {
+  return {
+    id: 'sample',
+    number: 1024,
+    started_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    subtotal: 4490,
+    discount: 500,
+    total: 3990,
+    payment_method: 'efectivo',
+    cash_received: 5000,
+    change_given: 1010,
+    cash_session_id: 'sample',
+    voided: 0,
+    items: [
+      {
+        product_id: 'p1',
+        name_snapshot: 'Coca-Cola 500ml',
+        price_snapshot: 1290,
+        cost_snapshot: 800,
+        qty: 2,
+        line_total: 2580,
+      },
+      {
+        product_id: 'p2',
+        name_snapshot: 'Pan amasado unidad',
+        price_snapshot: 350,
+        cost_snapshot: 220,
+        qty: 4,
+        line_total: 1400,
+      },
+      {
+        product_id: 'p3',
+        name_snapshot: 'Gomitas surtidas Premium',
+        price_snapshot: 510,
+        cost_snapshot: 320,
+        qty: 1,
+        line_total: 510,
+      },
+    ],
+  }
+}
