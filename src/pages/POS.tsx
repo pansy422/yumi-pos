@@ -40,7 +40,7 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, todayISO } from '@shared/money'
+import { formatCLP, formatWeight, todayISO } from '@shared/money'
 import type { PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -50,6 +50,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
 const PAY_METHODS: { id: PaymentMethod; label: string; hint?: string }[] = [
@@ -397,7 +404,7 @@ export function POS() {
                             <div className="mono text-[11px] text-muted-foreground">
                               {p.barcode ?? 'sin código'} ·{' '}
                               {p.is_weight === 1
-                                ? `${(p.stock / 1000).toFixed(3)} kg`
+                                ? formatWeight(p.stock)
                                 : `stock ${p.stock}`}
                             </div>
                           </div>
@@ -494,12 +501,9 @@ export function POS() {
                                 it.stock <= 0 && 'text-destructive font-semibold',
                               )}
                             >
-                              stock:{' '}
-                              {isWeight
-                                ? `${(it.stock / 1000).toFixed(3)} kg`
-                                : it.stock}
+                              stock: {isWeight ? formatWeight(it.stock) : it.stock}
                               {overstock
-                                ? ` · pediste ${isWeight ? `${(it.qty / 1000).toFixed(3)} kg` : it.qty}`
+                                ? ` · pediste ${isWeight ? formatWeight(it.qty) : it.qty}`
                                 : ''}
                             </span>
                           </div>
@@ -533,7 +537,7 @@ export function POS() {
                               className="mx-auto flex h-9 w-32 items-center justify-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 num font-semibold transition-colors hover:bg-accent hover:border-primary/40"
                             >
                               <Scale className="h-3.5 w-3.5 text-primary" />
-                              {(it.qty / 1000).toFixed(3)} kg
+                              {formatWeight(it.qty)}
                             </button>
                           ) : (
                             <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
@@ -692,7 +696,7 @@ export function POS() {
           toast({
             variant: 'success',
             title: weightProduct.name,
-            description: `${(grams / 1000).toFixed(3)} kg · ${formatCLP(Math.round((weightProduct.price * grams) / 1000))}`,
+            description: `${formatWeight(grams)} · ${formatCLP(Math.round((weightProduct.price * grams) / 1000))}`,
           })
           setWeightProduct(null)
         }}
@@ -1109,6 +1113,13 @@ function SearchDialog({
   )
 }
 
+type PaymentLine = {
+  id: number
+  method: PaymentMethod
+  amount: number
+  cash_received: number
+}
+
 function PaymentDialog({
   open,
   onOpenChange,
@@ -1121,8 +1132,7 @@ function PaymentDialog({
   const settings = useSession((s) => s.settings)
   const { toast } = useToast()
 
-  const [method, setMethod] = useState<PaymentMethod>('efectivo')
-  const [received, setReceived] = useState(0)
+  const [lines, setLines] = useState<PaymentLine[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
@@ -1130,30 +1140,65 @@ function PaymentDialog({
 
   useEffect(() => {
     if (!open) {
-      setMethod('efectivo')
-      setReceived(0)
+      setLines([])
       setLastSale(null)
       setShowPreview(false)
     } else {
-      setReceived(tot)
+      // Por defecto una línea efectivo cubriendo todo el total
+      setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
     }
   }, [open, tot])
 
-  const change = method === 'efectivo' ? Math.max(0, received - tot) : 0
-  const insufficient = method === 'efectivo' && received < tot
-  const needsCashOpen = method === 'efectivo' && !cash
+  const totalAssigned = lines.reduce((a, l) => a + (l.amount || 0), 0)
+  const remaining = tot - totalAssigned
+  const hasCash = lines.some((l) => l.method === 'efectivo' && l.amount > 0)
+  const cashShortage = lines.some(
+    (l) => l.method === 'efectivo' && l.cash_received < l.amount,
+  )
+  const needsCashOpen = hasCash && !cash
+  const cashChange = lines
+    .filter((l) => l.method === 'efectivo')
+    .reduce((a, l) => a + Math.max(0, (l.cash_received || 0) - l.amount), 0)
+  const canSubmit =
+    !submitting && remaining === 0 && !cashShortage && !needsCashOpen && lines.length > 0
 
-  const quickAmounts = useMemo(() => {
-    const round = (n: number) => Math.ceil(n / 1000) * 1000
-    return Array.from(
-      new Set([round(tot), round(tot) + 1000, round(tot) + 5000, round(tot) + 10000, round(tot) + 20000]),
+  const updateLine = (id: number, patch: Partial<PaymentLine>) =>
+    setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+
+  const removeLine = (id: number) =>
+    setLines((cur) => cur.filter((l) => l.id !== id))
+
+  const addLine = () => {
+    const id = (lines.at(-1)?.id ?? 0) + 1
+    const fillAmount = Math.max(0, remaining)
+    setLines((cur) => [
+      ...cur,
+      {
+        id,
+        method: cur.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+        amount: fillAmount,
+        cash_received: fillAmount,
+      },
+    ])
+  }
+
+  const fillRemainingTo = (id: number) => {
+    setLines((cur) =>
+      cur.map((l) => {
+        if (l.id !== id) return l
+        const others = cur.filter((o) => o.id !== id).reduce((a, o) => a + o.amount, 0)
+        const target = Math.max(0, tot - others)
+        return {
+          ...l,
+          amount: target,
+          cash_received: l.method === 'efectivo' ? Math.max(l.cash_received, target) : 0,
+        }
+      }),
     )
-      .filter((n) => n >= tot)
-      .slice(0, 5)
-  }, [tot])
+  }
 
   const submit = async () => {
-    if (submitting || insufficient || needsCashOpen) return
+    if (!canSubmit) return
     setSubmitting(true)
     try {
       const sale = await api.salesCreate({
@@ -1164,8 +1209,13 @@ function PaymentDialog({
           surcharge: i.surcharge,
         })),
         discount,
-        payment_method: method,
-        cash_received: method === 'efectivo' ? received : undefined,
+        payments: lines
+          .filter((l) => l.amount > 0)
+          .map((l) => ({
+            method: l.method,
+            amount: l.amount,
+            cash_received: l.method === 'efectivo' ? l.cash_received : undefined,
+          })),
       })
       setLastSale(sale)
       clear()
@@ -1218,95 +1268,152 @@ function PaymentDialog({
               </div>
             </div>
 
-            <div className="grid gap-6 px-6 py-5 sm:grid-cols-[1fr_220px]">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Método de pago</Label>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {PAY_METHODS.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setMethod(m.id)}
-                        className={cn(
-                          'flex flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-xs font-medium transition-all',
-                          method === m.id
-                            ? 'border-primary bg-primary/10 text-primary shadow-glow'
-                            : 'border-border bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                        )}
-                      >
-                        {m.label}
-                        {m.hint && (
-                          <span className="text-[9px] uppercase tracking-wider opacity-70">
-                            {m.hint}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Pagos</Label>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">Pendiente</span>
+                  <span
+                    className={cn(
+                      'num font-semibold',
+                      remaining === 0
+                        ? 'text-success'
+                        : remaining > 0
+                          ? 'text-warning'
+                          : 'text-destructive',
+                    )}
+                  >
+                    {formatCLP(remaining)}
+                  </span>
                 </div>
+              </div>
 
-                {method === 'efectivo' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Recibido</Label>
-                      <MoneyInput value={received} onValueChange={setReceived} autoFocus className="h-12 text-2xl" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {quickAmounts.map((n) => (
-                          <Button
-                            key={n}
-                            type="button"
-                            size="sm"
-                            variant={received === n ? 'secondary' : 'outline'}
-                            onClick={() => setReceived(n)}
-                            className="num text-xs"
-                          >
-                            {formatCLP(n)}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
+              <div className="space-y-2">
+                {lines.map((line) => {
+                  const isCash = line.method === 'efectivo'
+                  const overshort = isCash && line.cash_received < line.amount
+                  return (
                     <div
+                      key={line.id}
                       className={cn(
-                        'rounded-lg border p-4 transition-colors',
-                        insufficient
+                        'rounded-lg border p-3 transition-colors',
+                        overshort
                           ? 'border-destructive/40 bg-destructive/10'
-                          : 'border-success/30 bg-success/5',
+                          : 'border-border/60 bg-card/30',
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                          Vuelto
-                        </span>
-                        <span
-                          className={cn(
-                            'num text-3xl font-bold',
-                            insufficient ? 'text-destructive' : 'text-success',
+                      <div className="grid gap-2 sm:grid-cols-[140px_1fr_auto]">
+                        <div className="grid grid-cols-3 gap-1 sm:col-span-1">
+                          {(['efectivo', 'debito', 'credito'] as PaymentMethod[]).map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => updateLine(line.id, { method: m })}
+                              className={cn(
+                                'rounded-md border px-1 py-1 text-[10px] uppercase font-medium transition-colors',
+                                line.method === m
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border bg-card hover:bg-accent',
+                              )}
+                            >
+                              {m === 'efectivo' ? 'Efec' : m === 'debito' ? 'Déb' : 'Créd'}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <MoneyInput
+                            value={line.amount}
+                            onValueChange={(n) =>
+                              updateLine(line.id, {
+                                amount: n,
+                                cash_received: isCash ? Math.max(line.cash_received, n) : 0,
+                              })
+                            }
+                            placeholder="Monto"
+                          />
+                          {isCash ? (
+                            <MoneyInput
+                              value={line.cash_received}
+                              onValueChange={(n) => updateLine(line.id, { cash_received: n })}
+                              placeholder="Recibido"
+                            />
+                          ) : (
+                            <Select
+                              value={line.method === 'transferencia' ? 'transferencia' : 'otro'}
+                              onValueChange={(v) =>
+                                updateLine(line.id, { method: v as PaymentMethod })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="transferencia">Transferencia</SelectItem>
+                                <SelectItem value="otro">Otro</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
-                        >
-                          {insufficient ? '—' : formatCLP(change)}
-                        </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {remaining !== 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => fillRemainingTo(line.id)}
+                              className="text-[10px]"
+                            >
+                              Cubrir saldo
+                            </Button>
+                          )}
+                          {lines.length > 1 && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeLine(line.id)}
+                              className="h-8 w-8 text-destructive"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      {insufficient && (
-                        <div className="mt-1 text-xs text-destructive">
-                          Faltan {formatCLP(tot - received)}
+                      {isCash && line.amount > 0 && (
+                        <div className="mt-2 flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">
+                            Vuelto de esta línea
+                          </span>
+                          <span
+                            className={cn(
+                              'num font-semibold',
+                              overshort ? 'text-destructive' : 'text-success',
+                            )}
+                          >
+                            {overshort
+                              ? `Faltan ${formatCLP(line.amount - line.cash_received)}`
+                              : formatCLP(line.cash_received - line.amount)}
+                          </span>
                         </div>
                       )}
                     </div>
-                  </>
-                )}
+                  )
+                })}
+              </div>
 
-                {needsCashOpen && (
-                  <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-                    Debes abrir la caja antes de cobrar en efectivo. Ve a Caja{' '}
-                    <Kbd className="border-warning/40 text-warning">F3</Kbd>.
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button size="sm" variant="outline" onClick={addLine} disabled={lines.length >= 4}>
+                  <Plus className="h-3 w-3" /> Otro método
+                </Button>
+                {hasCash && cashChange > 0 && (
+                  <div className="rounded-md border border-success/30 bg-success/10 px-3 py-1 text-xs">
+                    <span className="uppercase tracking-wider text-success/80">Vuelto total</span>{' '}
+                    <span className="num font-bold text-success">{formatCLP(cashChange)}</span>
                   </div>
                 )}
               </div>
 
-              {method === 'efectivo' && (
-                <div>
-                  <Label className="mb-1.5 block text-xs">Numpad</Label>
-                  <Numpad value={received} onChange={setReceived} />
+              {needsCashOpen && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                  Debes abrir la caja antes de cobrar en efectivo. Ve a Caja{' '}
+                  <Kbd className="border-warning/40 text-warning">F3</Kbd>.
                 </div>
               )}
             </div>
@@ -1319,14 +1426,17 @@ function PaymentDialog({
                 variant="success"
                 size="lg"
                 onClick={submit}
-                disabled={submitting || insufficient || needsCashOpen}
+                disabled={!canSubmit}
                 className="shadow-glow"
               >
                 {submitting ? (
                   'Cobrando…'
                 ) : (
                   <>
-                    Confirmar <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">Enter</Kbd>
+                    Confirmar{' '}
+                    <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                      Enter
+                    </Kbd>
                   </>
                 )}
               </Button>

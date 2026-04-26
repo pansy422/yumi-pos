@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDownAZ, Edit3, FileUp, Pencil, Plus, Search, ScanBarcode, Tag } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowDownAZ,
+  Edit3,
+  FileUp,
+  Pencil,
+  Plus,
+  Printer,
+  Search,
+  ScanBarcode,
+  Tag,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -28,7 +39,7 @@ import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
 import { api } from '@/lib/api'
 import type { CategoryStat, Product } from '@shared/types'
-import { formatCLP } from '@shared/money'
+import { formatCLP, formatWeight } from '@shared/money'
 import { cn } from '@/lib/utils'
 
 export function Inventory() {
@@ -70,10 +81,17 @@ export function Inventory() {
     return () => clearTimeout(t)
   }, [search, includeArchived, category])
 
-  const totalStockValue = items.reduce((a, i) => a + i.stock * i.cost, 0)
-  const lowStock = items.filter((i) => i.stock > 0 && i.stock < 5 && !i.archived).length
+  const totalStockValue = items.reduce(
+    (a, i) => a + (i.is_weight === 1 ? Math.round((i.cost * i.stock) / 1000) : i.cost * i.stock),
+    0,
+  )
+  // Producto "crítico" cuando tiene stock_min definido y bajo, o stock <= 0.
+  const lowStock = items.filter(
+    (i) => !i.archived && i.stock > 0 && i.stock_min > 0 && i.stock < i.stock_min,
+  ).length
   const outOfStock = items.filter((i) => i.stock <= 0 && !i.archived).length
-  const showCriticalBanner = !firstLoad && (lowStock + outOfStock) > 0 && !search && category === '__all__'
+  const showCriticalBanner =
+    !firstLoad && lowStock + outOfStock > 0 && !search && category === '__all__'
 
   return (
     <div className="flex h-full flex-col">
@@ -82,6 +100,21 @@ export function Inventory() {
         description={`${items.length} ${items.length === 1 ? 'producto' : 'productos'}${lowStock ? ` · ${lowStock} con stock bajo` : ''}`}
         actions={
           <>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const r = await api.printLowStock()
+                if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
+                else
+                  toast({
+                    variant: 'destructive',
+                    title: 'No se pudo imprimir',
+                    description: r.error,
+                  })
+              }}
+            >
+              <Printer className="h-4 w-4" /> Imprimir reposición
+            </Button>
             <Button variant="outline" onClick={() => setCsvOpen(true)}>
               <FileUp className="h-4 w-4" /> Importar CSV
             </Button>
@@ -99,23 +132,43 @@ export function Inventory() {
       <div className="flex flex-col gap-4 p-6">
         {showCriticalBanner && (
           <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning animate-fade-in">
-            <div>
-              <div className="font-medium">Atención al stock</div>
-              <p className="mt-0.5 text-[11px] opacity-90">
-                {outOfStock > 0 && (
-                  <>
-                    <span className="font-semibold">{outOfStock}</span> producto
-                    {outOfStock === 1 ? '' : 's'} sin stock
-                  </>
-                )}
-                {outOfStock > 0 && lowStock > 0 && ' · '}
-                {lowStock > 0 && (
-                  <>
-                    <span className="font-semibold">{lowStock}</span> con stock bajo (&lt;5)
-                  </>
-                )}
-              </p>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4" />
+              <div>
+                <div className="font-medium">Atención al stock</div>
+                <p className="mt-0.5 text-[11px] opacity-90">
+                  {outOfStock > 0 && (
+                    <>
+                      <span className="font-semibold">{outOfStock}</span> producto
+                      {outOfStock === 1 ? '' : 's'} sin stock
+                    </>
+                  )}
+                  {outOfStock > 0 && lowStock > 0 && ' · '}
+                  {lowStock > 0 && (
+                    <>
+                      <span className="font-semibold">{lowStock}</span> bajo del mínimo
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-warning"
+              onClick={async () => {
+                const r = await api.printLowStock()
+                if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
+                else
+                  toast({
+                    variant: 'destructive',
+                    title: 'No se pudo imprimir',
+                    description: r.error,
+                  })
+              }}
+            >
+              <Printer className="h-3.5 w-3.5" /> Imprimir reposición
+            </Button>
           </div>
         )}
         {!firstLoad && items.length > 0 && (
@@ -258,10 +311,14 @@ export function Inventory() {
                         <td className="px-4 py-2.5 text-right num">
                           <Badge
                             variant={
-                              p.stock <= 0 ? 'destructive' : p.stock < 5 ? 'warning' : 'secondary'
+                              p.stock <= 0
+                                ? 'destructive'
+                                : p.stock_min > 0 && p.stock < p.stock_min
+                                  ? 'warning'
+                                  : 'secondary'
                             }
                           >
-                            {p.stock}
+                            {p.is_weight === 1 ? formatWeight(p.stock) : p.stock}
                           </Badge>
                         </td>
                         <td className="px-2">

@@ -1,5 +1,5 @@
 import type { SaleWithItems, StoreSettings } from './types'
-import { formatCLP } from './money'
+import { formatCLP, formatWeight } from './money'
 
 export type Align = 'left' | 'center' | 'right'
 export type Size = 'normal' | 'large' | 'xl'
@@ -212,6 +212,8 @@ export function paymentLabel(m: string): string {
       return 'CREDITO'
     case 'transferencia':
       return 'TRANSFERENCIA'
+    case 'mixto':
+      return 'MIXTO'
     default:
       return m.toUpperCase()
   }
@@ -339,11 +341,10 @@ export function renderTemplate(
             out.push(baseLine({ ...b, align: 'left' }, l))
           }
           if (it.is_weight === 1) {
-            const kg = (it.qty / 1000).toFixed(3)
             out.push(
               baseLine(
                 { ...b, align: 'left' },
-                `  ${kg} kg x ${formatCLP(it.price_snapshot)}/kg`,
+                `  ${formatWeight(it.qty)} x ${formatCLP(it.price_snapshot)}/kg`,
                 formatCLP(it.line_total),
               ),
             )
@@ -380,7 +381,21 @@ export function renderTemplate(
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'TOTAL', vars.total))
         break
       case 'payment_method':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', vars.payment))
+        if (sale.payments && sale.payments.length > 1) {
+          // Pago dividido: mostramos "Pago: MIXTO" + una línea por método
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', 'MIXTO'))
+          for (const p of sale.payments) {
+            out.push(
+              baseLine(
+                { ...b, align: b.align ?? 'left' },
+                `  ${paymentLabel(p.method)}`,
+                formatCLP(p.amount),
+              ),
+            )
+          }
+        } else {
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', vars.payment))
+        }
         break
       case 'cash_received':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Recibido', vars.received))

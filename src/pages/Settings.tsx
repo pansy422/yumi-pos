@@ -7,6 +7,7 @@ import {
   Network,
   Printer,
   Receipt,
+  RefreshCw,
   Save,
   Sparkles,
   Store,
@@ -580,6 +581,13 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
 
 function DataTab({ info }: { info: { version: string; dbPath: string; userDataPath: string } | null }) {
   const { toast } = useToast()
+  const settings = useSession((s) => s.settings)
+  const refresh = useSession((s) => s.refresh)
+  const [autoDir, setAutoDir] = useState<string>('')
+  useEffect(() => {
+    api.backupAutoDir().then(setAutoDir)
+  }, [])
+  if (!settings) return null
   return (
     <div className="space-y-4">
       <Card className="card-elev">
@@ -589,12 +597,71 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
           <Row k="Datos de usuario" v={info?.userDataPath ?? '—'} />
         </CardContent>
       </Card>
+
+      <Card className="card-elev">
+        <CardContent className="space-y-4 p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="font-semibold">Respaldo automático diario</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Cada vez que abras la app o pasen 24h, se guarda una copia automática
+                en una carpeta dedicada. Mantiene los últimos {settings.backup.keep_last}{' '}
+                respaldos y borra los más viejos.
+              </p>
+            </div>
+            <Switch
+              checked={settings.backup.auto_daily}
+              onCheckedChange={async (v) => {
+                await api.settingsSet({
+                  backup: { ...settings.backup, auto_daily: v },
+                })
+                await refresh()
+              }}
+            />
+          </div>
+          <Separator />
+          <div className="space-y-2 text-xs">
+            <Row k="Carpeta de respaldos" v={autoDir || '—'} />
+            <Row
+              k="Último respaldo automático"
+              v={
+                settings.backup.last_run
+                  ? new Date(settings.backup.last_run).toLocaleString('es-CL')
+                  : 'nunca'
+              }
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const r = await api.backupRunAuto()
+                if (r.ok && r.data.ran)
+                  toast({ variant: 'success', title: 'Respaldo creado', description: r.data.path })
+                else if (r.ok)
+                  toast({
+                    variant: 'warning',
+                    title: 'No corrió',
+                    description: r.data.reason,
+                  })
+                else toast({ variant: 'destructive', title: 'Error', description: r.error })
+                refresh()
+              }}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Ejecutar ahora
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="card-elev">
         <CardContent className="space-y-3 p-5">
           <div>
-            <div className="font-semibold">Respaldo</div>
+            <div className="font-semibold">Respaldo manual</div>
             <p className="text-xs text-muted-foreground">
-              Guarda una copia de tu base de datos. Hazlo periódicamente.
+              Para llevarte una copia a un pendrive o nube. También puedes restaurar
+              desde un archivo previo.
             </p>
           </div>
           <Separator />
@@ -602,7 +669,8 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
             <Button
               onClick={async () => {
                 const r = await api.backupExport()
-                if (r) toast({ variant: 'success', title: 'Respaldo guardado', description: r.path })
+                if (r)
+                  toast({ variant: 'success', title: 'Respaldo guardado', description: r.path })
               }}
             >
               <Download className="h-4 w-4" /> Descargar respaldo
@@ -611,7 +679,8 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
               variant="outline"
               onClick={async () => {
                 const r = await api.backupImport()
-                if (r) toast({ variant: 'success', title: 'Respaldo restaurado', description: r.path })
+                if (r)
+                  toast({ variant: 'success', title: 'Respaldo restaurado', description: r.path })
               }}
             >
               <Upload className="h-4 w-4" /> Restaurar respaldo

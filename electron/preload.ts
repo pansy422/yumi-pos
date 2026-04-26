@@ -13,6 +13,7 @@ const api = {
   productsScanIn: invoke(IPC.productsScanIn),
   productsAdjustStock: invoke(IPC.productsAdjustStock),
   productsImport: invoke(IPC.productsImport),
+  productsCritical: invoke(IPC.productsCritical),
   categoriesList: invoke(IPC.categoriesList),
   categoriesRename: invoke(IPC.categoriesRename),
 
@@ -21,6 +22,7 @@ const api = {
   salesGet: invoke(IPC.salesGet),
   salesVoid: invoke(IPC.salesVoid),
   salesNextNumber: invoke(IPC.salesNextNumber),
+  salesReturnItems: invoke(IPC.salesReturnItems),
 
   cashCurrent: invoke(IPC.cashCurrent),
   cashOpen: invoke(IPC.cashOpen),
@@ -30,6 +32,7 @@ const api = {
   cashSummary: invoke(IPC.cashSummary),
   cashZReport: invoke(IPC.cashZReport),
   printZReport: invoke(IPC.printZReport),
+  printLowStock: invoke(IPC.printLowStock),
 
   reportDaily: invoke(IPC.reportDaily),
   reportRange: invoke(IPC.reportRange),
@@ -44,6 +47,8 @@ const api = {
 
   backupExport: invoke(IPC.backupExport),
   backupImport: invoke(IPC.backupImport),
+  backupRunAuto: invoke(IPC.backupRunAuto),
+  backupAutoDir: invoke(IPC.backupAutoDir),
 
   appInfo: invoke(IPC.appInfo),
 }

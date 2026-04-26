@@ -53,12 +53,17 @@ export function summary(sessionId: string): CashSummary {
     .prepare(
       `SELECT
          COUNT(*) AS count,
-         COALESCE(SUM(CASE WHEN payment_method = 'efectivo' THEN total ELSE 0 END), 0) AS cash_sales,
+         COALESCE((
+           SELECT SUM(sp.amount)
+           FROM sale_payments sp
+           JOIN sales s2 ON s2.id = sp.sale_id
+           WHERE s2.cash_session_id = ? AND s2.voided = 0 AND sp.method = 'efectivo'
+         ), 0) AS cash_sales,
          COALESCE(SUM(total), 0) AS gross_sales
        FROM sales
        WHERE cash_session_id = ? AND voided = 0`,
     )
-    .get(sessionId) as { count: number; cash_sales: number; gross_sales: number }
+    .get(sessionId, sessionId) as { count: number; cash_sales: number; gross_sales: number }
 
   const movements = db
     .prepare(
@@ -109,9 +114,13 @@ export function buildZReport(sessionId: string): ZReport {
   const sum = summary(sessionId)
   const byPayment = db
     .prepare(
-      `SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-       FROM sales WHERE cash_session_id = ? AND voided = 0
-       GROUP BY payment_method`,
+      `SELECT sp.method AS method,
+              COUNT(*) AS count,
+              COALESCE(SUM(sp.amount),0) AS total
+       FROM sale_payments sp
+       JOIN sales s ON s.id = sp.sale_id
+       WHERE s.cash_session_id = ? AND s.voided = 0
+       GROUP BY sp.method`,
     )
     .all(sessionId) as { method: PaymentMethod; count: number; total: number }[]
   const voided = db

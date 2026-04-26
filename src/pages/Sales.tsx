@@ -46,16 +46,17 @@ import { EmptyState, ChartEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
-import { formatCLP, todayISO } from '@shared/money'
+import { formatCLP, formatWeight, todayISO } from '@shared/money'
 import { cn } from '@/lib/utils'
 import type { PaymentMethod, Sale, SaleWithItems } from '@shared/types'
 
-const PAY_LABEL: Record<PaymentMethod, string> = {
+const PAY_LABEL: Record<PaymentMethod | 'mixto', string> = {
   efectivo: 'Efectivo',
   debito: 'Débito',
   credito: 'Crédito',
   transferencia: 'Transferencia',
   otro: 'Otro',
+  mixto: 'Mixto',
 }
 
 type Range = 'today' | '7d' | '30d' | 'custom'
@@ -75,6 +76,10 @@ export function Sales() {
   const [voidTarget, setVoidTarget] = useState<Sale | null>(null)
   const [voidReason, setVoidReason] = useState('')
   const [voiding, setVoiding] = useState(false)
+  const [returnDlg, setReturnDlg] = useState(false)
+  const [returnQty, setReturnQty] = useState<Record<string, number>>({})
+  const [returnReason, setReturnReason] = useState('')
+  const [returning, setReturning] = useState(false)
 
   const computeRange = (r: Range): { f: string; t: string } => {
     const today = new Date()
@@ -369,17 +374,36 @@ export function Sales() {
               <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
                 <div className="space-y-2">
                   <ul className="divide-y divide-border/40 rounded-md border border-border/40 bg-card/30">
-                    {picked.items.map((it, i) => (
+                    {picked.items.map((it, i) => {
+                      const remaining = it.qty - it.returned_qty
+                      const isWeight = it.is_weight === 1
+                      return (
                       <li key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                         <div className="min-w-0 flex-1">
-                          <div className="truncate">{it.name_snapshot}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="truncate">{it.name_snapshot}</span>
+                            {it.returned_qty > 0 && (
+                              <Badge variant="warning" className="text-[9px]">
+                                {isWeight ? formatWeight(it.returned_qty) : it.returned_qty}{' '}
+                                devuelto{!isWeight && it.returned_qty > 1 ? 's' : ''}
+                              </Badge>
+                            )}
+                          </div>
                           <div className="text-xs text-muted-foreground num">
-                            {it.qty} × {formatCLP(it.price_snapshot)}
+                            {isWeight ? formatWeight(it.qty) : it.qty} ×{' '}
+                            {formatCLP(it.price_snapshot)}
+                            {isWeight ? '/kg' : ''}
+                            {remaining < it.qty && (
+                              <span className="ml-2 text-warning">
+                                · pendientes {isWeight ? formatWeight(remaining) : remaining}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="num font-semibold">{formatCLP(it.line_total)}</div>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                   <div className="space-y-1 rounded-md border border-border/40 bg-muted/30 p-3 text-sm">
                     <div className="flex justify-between">
@@ -430,11 +454,23 @@ export function Sales() {
                 >
                   <Printer className="h-4 w-4" /> Reimprimir
                 </Button>
+                {!picked.voided &&
+                  picked.items.some((i) => i.qty - i.returned_qty > 0) && (
+                    <Button
+                      variant="warning"
+                      onClick={() => {
+                        const initial: Record<string, number> = {}
+                        for (const it of picked.items) initial[it.product_id] = 0
+                        setReturnQty(initial)
+                        setReturnReason('')
+                        setReturnDlg(true)
+                      }}
+                    >
+                      Devolver productos
+                    </Button>
+                  )}
                 {!picked.voided && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setVoidTarget(picked)}
-                  >
+                  <Button variant="destructive" onClick={() => setVoidTarget(picked)}>
                     <Ban className="h-4 w-4" /> Anular venta
                   </Button>
                 )}
@@ -477,6 +513,110 @@ export function Sales() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={returnDlg} onOpenChange={setReturnDlg}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Devolver productos</DialogTitle>
+            <DialogDescription>
+              Marca cuántas unidades vuelven al stock. La venta queda registrada y se ajusta la
+              caja si fue en efectivo.
+            </DialogDescription>
+          </DialogHeader>
+
+          {picked && (
+            <ul className="max-h-72 divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
+              {picked.items.map((it) => {
+                const remaining = it.qty - it.returned_qty
+                const value = returnQty[it.product_id] ?? 0
+                const isWeight = it.is_weight === 1
+                return (
+                  <li key={it.product_id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-medium">{it.name_snapshot}</div>
+                      <div className="text-[11px] text-muted-foreground num">
+                        Pendiente:{' '}
+                        {isWeight ? formatWeight(remaining) : remaining}
+                        {remaining === 0 && ' (todo devuelto)'}
+                      </div>
+                    </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={remaining}
+                      value={value}
+                      onChange={(e) =>
+                        setReturnQty({
+                          ...returnQty,
+                          [it.product_id]: Math.max(
+                            0,
+                            Math.min(remaining, Number(e.target.value) || 0),
+                          ),
+                        })
+                      }
+                      disabled={remaining === 0}
+                      className="h-8 w-20 text-center num"
+                      placeholder={isWeight ? 'gramos' : 'qty'}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          <div className="space-y-1">
+            <Label>Motivo</Label>
+            <Input
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="ej. cliente llevó equivocado"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReturnDlg(false)} disabled={returning}>
+              Cancelar
+            </Button>
+            <Button
+              variant="warning"
+              disabled={
+                returning ||
+                Object.values(returnQty).every((q) => !q) ||
+                !returnReason.trim()
+              }
+              onClick={async () => {
+                if (!picked) return
+                const returns = Object.entries(returnQty)
+                  .filter(([, qty]) => qty > 0)
+                  .map(([product_id, qty]) => ({ product_id, qty }))
+                if (returns.length === 0) return
+                setReturning(true)
+                try {
+                  const r = await api.salesReturnItems(picked.id, returns, returnReason.trim())
+                  toast({
+                    variant: 'success',
+                    title: 'Devolución registrada',
+                    description: `Reembolsados ${formatCLP(r.refunded_total)}`,
+                  })
+                  setReturnDlg(false)
+                  setPicked(r.sale)
+                  load()
+                } catch (err) {
+                  toast({
+                    variant: 'destructive',
+                    title: 'No se pudo devolver',
+                    description: err instanceof Error ? err.message : String(err),
+                  })
+                } finally {
+                  setReturning(false)
+                }
+              }}
+            >
+              {returning ? 'Devolviendo…' : 'Confirmar devolución'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

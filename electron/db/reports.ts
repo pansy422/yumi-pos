@@ -30,12 +30,18 @@ function topProducts(fromDate: string, toDate: string) {
 
 function byPayment(fromDate: string, toDate: string) {
   const db = getDb()
+  // Usamos sale_payments para que el desglose sea correcto en pagos
+  // mixtos: una venta de $5.000 efectivo + $3.000 débito cuenta $5.000
+  // en efectivo y $3.000 en débito, no $8.000 en "mixto".
   return db
     .prepare(
-      `SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(total),0) AS total
-       FROM sales
-       WHERE date(completed_at, 'localtime') BETWEEN ? AND ? AND voided = 0
-       GROUP BY payment_method`,
+      `SELECT sp.method AS method,
+              COUNT(*) AS count,
+              COALESCE(SUM(sp.amount),0) AS total
+       FROM sale_payments sp
+       JOIN sales s ON s.id = sp.sale_id
+       WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
+       GROUP BY sp.method`,
     )
     .all(fromDate, toDate) as { method: PaymentMethod; count: number; total: number }[]
 }

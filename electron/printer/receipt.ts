@@ -1,7 +1,8 @@
 import type { ThermalPrinter } from 'node-thermal-printer'
 import type { Align, ReceiptTemplate, RenderedLine, Size } from '../../shared/template'
 import { DEFAULT_TEMPLATE, pad, renderTemplate } from '../../shared/template'
-import type { SaleWithItems, StoreSettings } from '../../shared/types'
+import { formatCLP, formatWeight } from '../../shared/money'
+import type { Product, SaleWithItems, StoreSettings } from '../../shared/types'
 
 function applyAlign(tp: ThermalPrinter, align: Align) {
   if (align === 'center') tp.alignCenter()
@@ -166,6 +167,68 @@ export function formatZReport(
   tp.newLine()
   tp.alignCenter()
   tp.println(`Sesion ${z.session.id.slice(0, 8)}`)
+  tp.newLine()
+  tp.newLine()
+}
+
+export function formatLowStockReport(
+  tp: ThermalPrinter,
+  products: Product[],
+  store: StoreSettings,
+  width: number,
+): void {
+  const w = width > 0 ? width : 42
+  tp.alignCenter()
+  tp.bold(true)
+  tp.setTextDoubleHeight()
+  tp.println(store.name || 'Yumi POS')
+  tp.setTextNormal()
+  tp.bold(false)
+  tp.println('REPOSICION DE STOCK')
+  tp.println(
+    new Date().toLocaleString('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  )
+  tp.println('-'.repeat(w))
+
+  if (products.length === 0) {
+    tp.alignCenter()
+    tp.println('Sin productos críticos')
+    tp.newLine()
+    tp.newLine()
+    return
+  }
+
+  tp.alignLeft()
+  tp.bold(true)
+  tp.println(pad('Producto', 'Stock / Min', w))
+  tp.bold(false)
+  tp.println('-'.repeat(w))
+
+  for (const p of products) {
+    const left = p.name.length > w - 14 ? p.name.slice(0, w - 14) : p.name
+    const stock = p.is_weight === 1 ? formatWeight(p.stock) : String(p.stock)
+    const min = p.is_weight === 1 ? formatWeight(p.stock_min) : String(p.stock_min)
+    tp.println(pad(left, `${stock} / ${min}`, w))
+    if (p.barcode) {
+      tp.println(`  ${p.barcode}`)
+    }
+  }
+
+  tp.println('-'.repeat(w))
+  tp.println(pad('Total productos', String(products.length), w))
+  const valor = products.reduce(
+    (a, p) => a + (p.is_weight === 1 ? Math.round((p.cost * p.stock_min) / 1000) : p.cost * p.stock_min),
+    0,
+  )
+  if (valor > 0) {
+    tp.println(pad('Costo aprox. reponer', formatCLP(valor), w))
+  }
   tp.newLine()
   tp.newLine()
 }
