@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { Logo } from '@/components/brand/Logo'
+import { Wordmark } from '@/components/brand/Logo'
 import { Numpad } from './Numpad'
 import { MoneyInput } from './MoneyInput'
 import { useToast } from '@/hooks/useToast'
@@ -72,7 +72,6 @@ export function FirstRunWizard() {
       >
         <div className="border-b bg-gradient-to-br from-brand-1/10 via-transparent to-brand-2/10 px-8 py-6">
           <div className="flex items-center gap-3">
-            <Logo size={40} />
             <div>
               <DialogTitle className="text-xl">Configuremos Yumi POS</DialogTitle>
               <DialogDescription>3 pasos rápidos y empiezas a vender</DialogDescription>
@@ -97,17 +96,12 @@ export function FirstRunWizard() {
         <div className="px-8 py-6 min-h-[360px]">
           {step === 'welcome' && (
             <div className="flex flex-col items-center justify-center gap-4 py-8 text-center animate-fade-in">
-              <div className="brand-gradient flex h-20 w-20 items-center justify-center rounded-2xl shadow-glow">
-                <Logo size={48} className="brightness-200" />
-              </div>
-              <h2 className="text-2xl font-semibold">Bienvenido</h2>
+              <Wordmark className="text-3xl" />
+              <h2 className="text-xl font-semibold">Bienvenido</h2>
               <p className="max-w-md text-sm text-muted-foreground">
                 Vamos a configurar tu tienda, conectar la impresora y abrir tu primera caja.
                 Toma menos de 2 minutos.
               </p>
-              <Button size="lg" className="mt-4" onClick={() => setStep('store')}>
-                Empezar <ArrowRight className="h-4 w-4" />
-              </Button>
             </div>
           )}
 

@@ -5,12 +5,14 @@ import { useShortcut } from '@/lib/keyboard'
 export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  useShortcut({ key: 'F1' }, () => navigate('/pos'))
-  useShortcut({ key: 'F2' }, () => navigate('/inventario'))
-  useShortcut({ key: 'F3' }, () => navigate('/caja'))
-  useShortcut({ key: 'F4' }, () => navigate('/reportes'))
-  useShortcut({ key: 'F6' }, () => navigate('/ventas'))
-  useShortcut({ key: 'F9' }, () => navigate('/ajustes'))
+  // Atajos de navegación: deben funcionar incluso si el foco está en un input
+  // (caso típico cuando el cajero está escribiendo cantidades).
+  useShortcut({ key: 'F1' }, () => navigate('/pos'), { allowInInput: true })
+  useShortcut({ key: 'F2' }, () => navigate('/inventario'), { allowInInput: true })
+  useShortcut({ key: 'F3' }, () => navigate('/caja'), { allowInInput: true })
+  useShortcut({ key: 'F4' }, () => navigate('/reportes'), { allowInInput: true })
+  useShortcut({ key: 'F6' }, () => navigate('/ventas'), { allowInInput: true })
+  useShortcut({ key: 'F9' }, () => navigate('/ajustes'), { allowInInput: true })
 
   return (
     <div className="flex h-screen overflow-hidden">

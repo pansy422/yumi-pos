@@ -1,7 +1,7 @@
 import { app, dialog } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { closeDb, getDbPath, initDb } from '../db'
+import { closeDb, getDb, getDbPath, initDb } from '../db'
 
 export async function exportBackup(): Promise<{ path: string } | null> {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -13,16 +13,11 @@ export async function exportBackup(): Promise<{ path: string } | null> {
   })
   if (result.canceled || !result.filePath) return null
 
-  const src = getDbPath()
-  fs.copyFileSync(src, result.filePath)
-  const wal = src + '-wal'
-  if (fs.existsSync(wal)) {
-    try {
-      fs.copyFileSync(wal, result.filePath + '-wal')
-    } catch {
-      // ignore
-    }
-  }
+  // Usamos el backup nativo de SQLite: hace un checkpoint del WAL y copia
+  // la base completa de forma atómica, sin tener que copiar -wal/-shm.
+  // El archivo resultante es una DB autocontenida.
+  const db = getDb()
+  await db.backup(result.filePath)
   return { path: result.filePath }
 }
 
@@ -41,7 +36,8 @@ export async function importBackup(): Promise<{ path: string } | null> {
     cancelId: 0,
     title: 'Restaurar respaldo',
     message: 'Esto reemplazará tu base de datos actual.',
-    detail: 'Se hará una copia de la base actual antes de reemplazarla. La aplicación se reiniciará al terminar.',
+    detail:
+      'Se hará una copia de seguridad de la base actual antes de reemplazarla. La aplicación se reiniciará al terminar.',
   })
   if (confirm.response !== 1) return null
 
@@ -49,6 +45,18 @@ export async function importBackup(): Promise<{ path: string } | null> {
   closeDb()
   if (fs.existsSync(target)) {
     fs.copyFileSync(target, target + '.bak-' + Date.now())
+  }
+  // También limpiamos los sidecars del WAL para evitar mezclar el WAL viejo
+  // con la base nueva.
+  for (const ext of ['-wal', '-shm']) {
+    const sidecar = target + ext
+    if (fs.existsSync(sidecar)) {
+      try {
+        fs.unlinkSync(sidecar)
+      } catch {
+        // ignore
+      }
+    }
   }
   fs.copyFileSync(result.filePaths[0], target)
   initDb()
