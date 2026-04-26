@@ -34,13 +34,31 @@ const ROLE_LABEL: Record<UserRole, string> = {
 export function UsersTab() {
   const { toast } = useToast()
   const refresh = useSession((s) => s.refresh)
+  const currentUser = useSession((s) => s.user)
+  const setUser = useSession((s) => s.setUser)
   const [items, setItems] = React.useState<User[]>([])
   const [edit, setEdit] = React.useState<User | null>(null)
   const [creating, setCreating] = React.useState(false)
 
   const load = async () => {
-    setItems(await api.usersList(true))
+    const list = await api.usersList(true)
+    setItems(list)
     refresh()
+    // Si el usuario logueado fue editado o desactivado, sincronizamos
+    // su copia en sesión para que cambios como font_scale o role se
+    // reflejen al instante sin cerrar/abrir sesión.
+    if (currentUser) {
+      const updated = list.find((u) => u.id === currentUser.id)
+      if (!updated || updated.active === 0) {
+        setUser(null)
+      } else if (
+        updated.font_scale !== currentUser.font_scale ||
+        updated.name !== currentUser.name ||
+        updated.role !== currentUser.role
+      ) {
+        setUser(updated)
+      }
+    }
   }
   React.useEffect(() => {
     load()
