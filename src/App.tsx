@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { ToasterProvider } from '@/hooks/useToast'
+import { ShortcutsDialog } from '@/components/common/ShortcutsDialog'
+import { FirstRunWizard } from '@/components/common/FirstRunWizard'
 import { useSession } from '@/stores/session'
 import { POS } from '@/pages/POS'
 import { Inventory } from '@/pages/Inventory'
@@ -30,6 +32,8 @@ export default function App() {
           <Route path="*" element={<Navigate to="/pos" replace />} />
         </Route>
       </Routes>
+      <ShortcutsDialog />
+      <FirstRunWizard />
     </ToasterProvider>
   )
 }

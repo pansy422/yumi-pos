@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart3, Box, DollarSign, Settings as Cog, ShoppingCart } from 'lucide-react'
+import { BarChart3, Box, DollarSign, HelpCircle, Settings as Cog, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/stores/session'
-import { Badge } from '@/components/ui/badge'
+import { Wordmark } from '@/components/brand/Logo'
+import { Kbd } from '@/components/common/Kbd'
 
 const ITEMS = [
   { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1' },
@@ -15,48 +16,77 @@ const ITEMS = [
 export function Sidebar() {
   const cash = useSession((s) => s.cash)
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-card/40">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
-          Y
-        </div>
-        <div className="leading-tight">
-          <div className="text-sm font-semibold">Yumi POS</div>
-          <div className="text-[10px] text-muted-foreground">offline</div>
-        </div>
+    <aside className="flex w-60 shrink-0 flex-col border-r border-border/70 bg-card/40 backdrop-blur-sm">
+      <div className="flex h-16 items-center px-4">
+        <Wordmark />
       </div>
-      <nav className="flex flex-1 flex-col gap-1 p-2">
+      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
         {ITEMS.map((it) => (
           <NavLink
             key={it.to}
             to={it.to}
             className={({ isActive }) =>
               cn(
-                'flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors',
+                'group relative flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                 isActive
-                  ? 'bg-primary/15 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'bg-gradient-to-r from-primary/15 via-primary/8 to-transparent text-foreground'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
               )
             }
           >
-            <span className="flex items-center gap-2">
-              <it.icon className="h-4 w-4" />
-              {it.label}
-            </span>
-            <span className="text-[10px] text-muted-foreground">{it.hint}</span>
+            {({ isActive }) => (
+              <>
+                <span className="flex items-center gap-3">
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full brand-gradient" />
+                  )}
+                  <it.icon
+                    className={cn('h-4 w-4', isActive ? 'text-primary' : '')}
+                  />
+                  {it.label}
+                </span>
+                <Kbd className={cn(isActive ? 'border-primary/30 text-primary' : '')}>{it.hint}</Kbd>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
-      <div className="border-t p-3">
-        {cash ? (
-          <Badge variant="success" className="w-full justify-center">
-            Caja abierta
-          </Badge>
-        ) : (
-          <Badge variant="warning" className="w-full justify-center">
-            Caja cerrada
-          </Badge>
-        )}
+
+      <div className="px-3 pb-2">
+        <div
+          className={cn(
+            'flex items-center justify-between rounded-lg border px-3 py-2 text-xs',
+            cash
+              ? 'border-success/30 bg-success/10 text-success'
+              : 'border-warning/30 bg-warning/10 text-warning',
+          )}
+        >
+          <span className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span
+                className={cn(
+                  'absolute inline-flex h-full w-full animate-ping-soft rounded-full',
+                  cash ? 'bg-success' : 'bg-warning',
+                )}
+              />
+              <span
+                className={cn(
+                  'relative inline-flex h-2 w-2 rounded-full',
+                  cash ? 'bg-success' : 'bg-warning',
+                )}
+              />
+            </span>
+            Caja {cash ? 'abierta' : 'cerrada'}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <HelpCircle className="h-3.5 w-3.5" />
+          Atajos
+        </span>
+        <Kbd>?</Kbd>
       </div>
     </aside>
   )

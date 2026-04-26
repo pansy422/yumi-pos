@@ -80,29 +80,54 @@ export function InventoryScan() {
       />
       <div className="grid flex-1 grid-cols-3 gap-4 p-6">
         <div className="col-span-1">
-          <Card>
-            <CardContent className="space-y-4 p-4">
+          <Card className="card-elev relative overflow-hidden">
+            <div className="pointer-events-none absolute inset-0 opacity-40">
+              <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-brand-1/30 blur-3xl" />
+              <div className="absolute -left-12 -bottom-12 h-44 w-44 rounded-full bg-brand-2/30 blur-3xl" />
+            </div>
+            <CardContent className="relative space-y-4 p-5">
               <div className="flex items-center justify-between">
-                <Label>Modo pistoleo</Label>
+                <div>
+                  <Label>Modo pistoleo</Label>
+                  <p className="text-[11px] text-muted-foreground">Lecturas automáticas</p>
+                </div>
                 <Switch checked={active} onCheckedChange={setActive} />
               </div>
-              <div className="flex flex-col items-center gap-2 rounded-md bg-muted/40 p-6 text-center">
-                <ScanBarcode
-                  className={`h-12 w-12 ${active ? 'text-primary animate-pulse' : 'text-muted-foreground'}`}
-                />
-                <p className="text-sm">
-                  {active ? 'Listo. Pasa el código…' : 'Activa el modo para escanear.'}
-                </p>
+              <div className="relative flex flex-col items-center justify-center gap-3 rounded-xl border border-border/60 bg-card/40 px-4 py-10 text-center">
+                {active && (
+                  <div className="absolute inset-x-6 top-1/2 h-px bg-gradient-to-r from-transparent via-primary to-transparent">
+                    <div className="absolute inset-0 animate-pulse-soft bg-primary/40 blur-sm" />
+                  </div>
+                )}
+                <div className="relative">
+                  {active && (
+                    <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping-soft" />
+                  )}
+                  <div
+                    className={`relative flex h-20 w-20 items-center justify-center rounded-full ${
+                      active ? 'brand-gradient shadow-glow' : 'bg-muted'
+                    }`}
+                  >
+                    <ScanBarcode
+                      className={`h-10 w-10 ${active ? 'text-white' : 'text-muted-foreground'}`}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium">
+                    {active ? 'Pasa el código…' : 'Modo desactivado'}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {active ? 'Cada lectura se guarda al instante' : 'Activa el switch para escanear'}
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Cada lectura se guarda automáticamente. No tienes que confirmar.
-              </p>
             </CardContent>
           </Card>
         </div>
 
         <div className="col-span-2">
-          <Card className="h-full overflow-hidden">
+          <Card className="card-elev h-full overflow-hidden">
             <CardContent className="flex h-full flex-col p-0">
               <div className="border-b px-4 py-2 text-xs uppercase text-muted-foreground">
                 Últimas lecturas

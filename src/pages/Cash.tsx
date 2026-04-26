@@ -105,7 +105,7 @@ export function Cash() {
       />
 
       <div className="grid flex-1 grid-cols-3 gap-4 p-6">
-        <Card>
+        <Card className="card-elev">
           <CardContent className="space-y-3 p-4 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Estado</span>
@@ -217,9 +217,21 @@ export function Cash() {
 
 function Stat({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
   return (
-    <div className={`rounded-md border p-3 ${highlight ? 'bg-primary/10 border-primary/30' : 'bg-muted/30'}`}>
-      <div className="text-xs uppercase text-muted-foreground">{label}</div>
-      <div className={`num ${highlight ? 'text-2xl' : 'text-xl'} font-bold`}>{formatCLP(value)}</div>
+    <div
+      className={`rounded-lg border p-4 transition-colors ${
+        highlight
+          ? 'border-primary/30 bg-gradient-to-br from-brand-1/10 via-card to-brand-2/5'
+          : 'border-border/60 bg-muted/30'
+      }`}
+    >
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div
+        className={`num font-bold tracking-tight ${
+          highlight ? 'text-2xl brand-text' : 'text-xl'
+        } ${value < 0 ? 'text-destructive' : ''}`}
+      >
+        {formatCLP(value)}
+      </div>
     </div>
   )
 }

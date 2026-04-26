@@ -4,6 +4,8 @@ import type { CartItem, Product } from '@shared/types'
 type State = {
   items: CartItem[]
   discount: number
+  lastAddedAt: number
+  lastAddedId: string | null
 }
 
 type Actions = {
@@ -19,13 +21,16 @@ type Actions = {
 export const useCart = create<State & Actions>((set, get) => ({
   items: [],
   discount: 0,
+  lastAddedAt: 0,
+  lastAddedId: null,
   add: (p, qty = 1) =>
     set((s) => {
       const idx = s.items.findIndex((i) => i.product_id === p.id)
+      const stamp = Date.now()
       if (idx >= 0) {
         const copy = [...s.items]
         copy[idx] = { ...copy[idx], qty: copy[idx].qty + qty }
-        return { items: copy }
+        return { items: copy, lastAddedAt: stamp, lastAddedId: p.id }
       }
       return {
         items: [
@@ -40,6 +45,8 @@ export const useCart = create<State & Actions>((set, get) => ({
             stock: p.stock,
           },
         ],
+        lastAddedAt: stamp,
+        lastAddedId: p.id,
       }
     }),
   setQty: (productId, qty) =>
@@ -50,7 +57,7 @@ export const useCart = create<State & Actions>((set, get) => ({
     })),
   remove: (productId) =>
     set((s) => ({ items: s.items.filter((i) => i.product_id !== productId) })),
-  clear: () => set({ items: [], discount: 0 }),
+  clear: () => set({ items: [], discount: 0, lastAddedId: null }),
   setDiscount: (n) => set({ discount: Math.max(0, Math.round(n)) }),
   subtotal: () => get().items.reduce((acc, i) => acc + i.price * i.qty, 0),
   total: () => Math.max(0, get().subtotal() - get().discount),

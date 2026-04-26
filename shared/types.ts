@@ -112,9 +112,14 @@ export type PrinterSettings = {
   open_drawer_on_cash: boolean
 }
 
+export type AppFlags = {
+  onboarded: boolean
+}
+
 export type Settings = {
   store: StoreSettings
   printer: PrinterSettings
+  flags: AppFlags
 }
 
 export type DailyReport = {

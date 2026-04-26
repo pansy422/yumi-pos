@@ -1,5 +1,5 @@
 import { getDb } from './index'
-import type { PrinterSettings, Settings, StoreSettings } from '../../shared/types'
+import type { AppFlags, PrinterSettings, Settings, StoreSettings } from '../../shared/types'
 
 const DEFAULTS: Settings = {
   store: {
@@ -16,6 +16,9 @@ const DEFAULTS: Settings = {
     width_chars: 32,
     auto_print: true,
     open_drawer_on_cash: true,
+  },
+  flags: {
+    onboarded: false,
   },
 }
 
@@ -44,11 +47,13 @@ export function getAll(): Settings {
   return {
     store: { ...DEFAULTS.store, ...readKey<Partial<StoreSettings>>('store', {}) },
     printer: { ...DEFAULTS.printer, ...readKey<Partial<PrinterSettings>>('printer', {}) },
+    flags: { ...DEFAULTS.flags, ...readKey<Partial<AppFlags>>('flags', {}) },
   }
 }
 
 export function setPatch(patch: Partial<Settings>): Settings {
   if (patch.store) writeKey('store', { ...getAll().store, ...patch.store })
   if (patch.printer) writeKey('printer', { ...getAll().printer, ...patch.printer })
+  if (patch.flags) writeKey('flags', { ...getAll().flags, ...patch.flags })
   return getAll()
 }
