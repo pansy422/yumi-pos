@@ -1,23 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  BarChart3,
+  Box,
+  DollarSign,
   DoorOpen,
   Minus,
   PauseCircle,
   Play,
   Plus,
   PlusSquare,
+  Receipt as ReceiptIcon,
   Search,
+  Settings as Cog,
   ShoppingCart,
   Sparkles,
   Trash2,
   X,
   Zap,
 } from 'lucide-react'
+import { Wordmark } from '@/components/brand/Logo'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { PageHeader } from '@/components/common/PageHeader'
 import { MoneyInput } from '@/components/common/MoneyInput'
 import { Numpad } from '@/components/common/Numpad'
 import { AnimatedCheck } from '@/components/common/AnimatedCheck'
@@ -169,56 +175,98 @@ export function POS() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title="Vender"
-        description="Pasa el código por el lector. El escáner está siempre activo."
-        actions={
-          <>
-            <Button variant="outline" onClick={() => setSearchOpen(true)}>
-              <Search className="h-4 w-4" /> Buscar
-              <Kbd className="ml-1">Ctrl B</Kbd>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setHeldOpen(true)}
-              className="relative"
-            >
-              <Play className="h-4 w-4" />
-              En espera
-              {heldTickets.length > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-warning-foreground">
-                  {heldTickets.length}
-                </span>
+      {/* Barra superior tipo "caja registradora": branding + estado de caja
+          + navegación admin. Reemplaza al sidebar oculto en /pos. */}
+      <div className="flex items-center gap-4 border-b border-border/60 bg-card/40 px-6 py-2.5 backdrop-blur-sm">
+        <Wordmark />
+        <span className="h-6 w-px bg-border" />
+        <div
+          className={cn(
+            'flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium',
+            cash
+              ? 'border-success/40 bg-success/10 text-success'
+              : 'border-warning/40 bg-warning/10 text-warning',
+          )}
+        >
+          <span className="relative flex h-2 w-2">
+            <span
+              className={cn(
+                'absolute inline-flex h-full w-full animate-ping-soft rounded-full',
+                cash ? 'bg-success' : 'bg-warning',
               )}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={items.length === 0}
-              onClick={() => {
-                setHoldName(`Ticket ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`)
-                setHoldNameOpen(true)
-              }}
-            >
-              <PauseCircle className="h-4 w-4" /> Reservar
-            </Button>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                const r = await api.printerOpenDrawer()
-                if (r.ok) toast({ variant: 'success', title: 'Cajón abierto' })
-                else
-                  toast({
-                    variant: 'destructive',
-                    title: 'No se pudo abrir',
-                    description: r.error,
-                  })
-              }}
-            >
-              <DoorOpen className="h-4 w-4" /> Cajón
-            </Button>
-          </>
-        }
-      />
+            />
+            <span
+              className={cn(
+                'relative inline-flex h-2 w-2 rounded-full',
+                cash ? 'bg-success' : 'bg-warning',
+              )}
+            />
+          </span>
+          Caja {cash ? 'abierta' : 'cerrada'}
+        </div>
+        <nav className="ml-auto flex items-center gap-1 text-xs">
+          <NavBtn to="/inventario" icon={Box} label="Inventario" hint="F2" />
+          <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
+          <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
+          <NavBtn to="/reportes" icon={BarChart3} label="Reportes" hint="F4" />
+          <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />
+        </nav>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 bg-card/20 px-6 py-3">
+        <div>
+          <div className="text-2xl font-semibold tracking-tight">Vender</div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Pasa el código por el lector. El escáner está siempre activo.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => setSearchOpen(true)}>
+            <Search className="h-4 w-4" /> Buscar
+            <Kbd className="ml-1">Ctrl B</Kbd>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setHeldOpen(true)}
+            className="relative"
+          >
+            <Play className="h-4 w-4" />
+            En espera
+            {heldTickets.length > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-warning-foreground">
+                {heldTickets.length}
+              </span>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            disabled={items.length === 0}
+            onClick={() => {
+              setHoldName(
+                `Ticket ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`,
+              )
+              setHoldNameOpen(true)
+            }}
+          >
+            <PauseCircle className="h-4 w-4" /> Reservar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              const r = await api.printerOpenDrawer()
+              if (r.ok) toast({ variant: 'success', title: 'Cajón abierto' })
+              else
+                toast({
+                  variant: 'destructive',
+                  title: 'No se pudo abrir',
+                  description: r.error,
+                })
+            }}
+          >
+            <DoorOpen className="h-4 w-4" /> Cajón
+          </Button>
+        </div>
+      </div>
 
       <div className="grid flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden p-6">
         <div className="flex min-h-0 flex-col gap-4">
@@ -367,21 +415,20 @@ export function POS() {
                 <MoneyInput value={discount} onValueChange={setDiscount} />
               </div>
               <div className="border-t border-border/60 pt-3">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   Total a cobrar
                 </div>
-                <div className="num text-4xl font-bold tracking-tight brand-text">
+                <div className="num text-[64px] font-bold leading-none tracking-tight brand-text">
                   {formatCLP(tot)}
                 </div>
               </div>
               <Button
                 variant="success"
-                size="xl"
-                className="w-full text-base shadow-glow"
+                className="h-20 w-full text-xl font-bold shadow-glow"
                 disabled={items.length === 0}
                 onClick={() => setPayOpen(true)}
               >
-                <Zap className="h-5 w-5" />
+                <Zap className="h-6 w-6" />
                 Cobrar
                 <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
                   F5
@@ -475,6 +522,29 @@ export function POS() {
 
       <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
     </div>
+  )
+}
+
+function NavBtn({
+  to,
+  icon: Icon,
+  label,
+  hint,
+}: {
+  to: string
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  hint: string
+}) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      <span>{label}</span>
+      <Kbd>{hint}</Kbd>
+    </Link>
   )
 }
 
