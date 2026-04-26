@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Plus, Trash2, User as UserIcon } from 'lucide-react'
+import { Plus, Trash2, Type, User as UserIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -34,13 +34,31 @@ const ROLE_LABEL: Record<UserRole, string> = {
 export function UsersTab() {
   const { toast } = useToast()
   const refresh = useSession((s) => s.refresh)
+  const currentUser = useSession((s) => s.user)
+  const setUser = useSession((s) => s.setUser)
   const [items, setItems] = React.useState<User[]>([])
   const [edit, setEdit] = React.useState<User | null>(null)
   const [creating, setCreating] = React.useState(false)
 
   const load = async () => {
-    setItems(await api.usersList(true))
+    const list = await api.usersList(true)
+    setItems(list)
     refresh()
+    // Si el usuario logueado fue editado o desactivado, sincronizamos
+    // su copia en sesión para que cambios como font_scale o role se
+    // reflejen al instante sin cerrar/abrir sesión.
+    if (currentUser) {
+      const updated = list.find((u) => u.id === currentUser.id)
+      if (!updated || updated.active === 0) {
+        setUser(null)
+      } else if (
+        updated.font_scale !== currentUser.font_scale ||
+        updated.name !== currentUser.name ||
+        updated.role !== currentUser.role
+      ) {
+        setUser(updated)
+      }
+    }
   }
   React.useEffect(() => {
     load()
@@ -141,6 +159,14 @@ export function UsersTab() {
   )
 }
 
+const FONT_SCALES: { id: number; label: string; hint: string }[] = [
+  { id: 0.9, label: 'Pequeña', hint: 'A' },
+  { id: 1.0, label: 'Normal', hint: 'A' },
+  { id: 1.15, label: 'Grande', hint: 'A' },
+  { id: 1.3, label: 'Muy grande', hint: 'A' },
+  { id: 1.5, label: 'Máxima', hint: 'A' },
+]
+
 function UserEditor({
   open,
   onOpenChange,
@@ -157,6 +183,7 @@ function UserEditor({
   const [role, setRole] = React.useState<UserRole>('cashier')
   const [pin, setPin] = React.useState('')
   const [active, setActive] = React.useState(true)
+  const [fontScale, setFontScale] = React.useState(1)
   const [saving, setSaving] = React.useState(false)
 
   React.useEffect(() => {
@@ -166,11 +193,13 @@ function UserEditor({
       setRole(user.role)
       setActive(user.active === 1)
       setPin('')
+      setFontScale(user.font_scale ?? 1)
     } else {
       setName('')
       setRole('cashier')
       setActive(true)
       setPin('')
+      setFontScale(1)
     }
   }, [open, user])
 
@@ -195,6 +224,7 @@ function UserEditor({
         role,
         pin: pin || undefined,
         active,
+        font_scale: fontScale,
       }
       await api.usersSave(input)
       onSaved()
@@ -253,6 +283,38 @@ function UserEditor({
               className="text-center num text-xl tracking-[0.4em]"
             />
           </div>
+
+          <div className="space-y-1">
+            <Label className="flex items-center gap-1.5">
+              <Type className="h-3.5 w-3.5" /> Tamaño de letra
+            </Label>
+            <div className="grid grid-cols-5 overflow-hidden rounded-md border border-border">
+              {FONT_SCALES.map((s) => {
+                const active = Math.abs(fontScale - s.id) < 0.01
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setFontScale(s.id)}
+                    className={`flex flex-col items-center justify-center px-1 py-2 transition-colors ${
+                      active
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-card hover:bg-accent text-muted-foreground'
+                    }`}
+                  >
+                    <span style={{ fontSize: `${10 + (s.id - 1) * 8}px`, fontWeight: 600 }}>
+                      {s.hint}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wider">{s.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Esta preferencia se aplica al instante cuando este usuario inicie sesión.
+            </p>
+          </div>
+
           {user && (
             <div className="flex items-center justify-between rounded-md border border-border/40 bg-muted/30 px-3 py-2">
               <Label className="text-sm text-foreground">Activo</Label>

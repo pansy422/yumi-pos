@@ -403,21 +403,33 @@ export function returnItems(
     if (refunded === 0) throw new Error('Las cantidades a devolver son cero')
 
     // Si la venta tuvo efectivo y la sesión sigue abierta, agregamos un
-    // ajuste negativo en la caja para que el cuadre refleje el reembolso.
-    const hadCash = sale.payments.some((p) => p.method === 'efectivo')
-    if (hadCash && sale.cash_session_id) {
+    // ajuste negativo en la caja por el monto que efectivamente sale del
+    // cajón. En pagos mixtos, el reembolso al cajón se acota al monto
+    // que entró en efectivo (no podemos sacar más en cash de lo que se
+    // pagó en cash). El resto del reembolso queda solo en sale_items
+    // como devolución y la cajera lo gestiona aparte (anular tarjeta,
+    // transferencia inversa, etc.).
+    const cashInSale = sale.payments
+      .filter((p) => p.method === 'efectivo')
+      .reduce((a, p) => a + p.amount, 0)
+    const cashRefund = Math.min(refunded, cashInSale)
+    if (cashRefund > 0 && sale.cash_session_id) {
       const sessionOpen = db
         .prepare(`SELECT 1 FROM cash_sessions WHERE id = ? AND closed_at IS NULL`)
         .get(sale.cash_session_id)
       if (sessionOpen) {
+        const noteSuffix =
+          cashRefund < refunded
+            ? ` (efectivo $${cashRefund.toLocaleString('es-CL')} de $${refunded.toLocaleString('es-CL')} reembolsado; el resto pagado por otro medio)`
+            : ''
         db.prepare(
           `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, sale_id)
            VALUES (?, ?, 'adjustment', ?, ?, ?)`,
         ).run(
           randomUUID(),
           sale.cash_session_id,
-          -refunded,
-          `Devolución parcial venta #${sale.number}: ${reason}`,
+          -cashRefund,
+          `Devolución parcial venta #${sale.number}: ${reason}${noteSuffix}`,
           saleId,
         )
       }

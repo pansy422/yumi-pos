@@ -50,7 +50,9 @@ export function FirstRunWizard() {
   if (!settings || !store || !printer) return null
 
   const finish = async () => {
-    await api.settingsSet({ flags: { onboarded: true } })
+    await api.settingsSet({
+      flags: { ...(settings.flags ?? { theme: 'light' }), onboarded: true },
+    })
     await refresh()
     setOpen(false)
     toast({ variant: 'success', title: '¡Listo para vender!' })

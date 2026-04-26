@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Wordmark } from '@/components/brand/Logo'
-import { Numpad } from '@/components/common/Numpad'
+import { PinPad } from '@/components/common/PinPad'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
@@ -120,9 +120,10 @@ export function LoginDialog() {
                 if (e.key === 'Enter') submit()
               }}
             />
-            <Numpad
-              value={Number(pin) || 0}
-              onChange={(n) => setPin(n === 0 ? '' : String(n).slice(0, 6))}
+            <PinPad
+              value={pin}
+              onChange={(s) => setPin(s.slice(0, 6))}
+              onSubmit={submit}
             />
           </div>
 
