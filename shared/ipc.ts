@@ -8,6 +8,8 @@ export const IPC = {
   productsScanIn: 'products:scanIn',
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',
+  categoriesList: 'categories:list',
+  categoriesRename: 'categories:rename',
 
   salesCreate: 'sales:create',
   salesList: 'sales:list',
@@ -20,6 +22,8 @@ export const IPC = {
   cashMove: 'cash:move',
   cashMovements: 'cash:movements',
   cashSummary: 'cash:summary',
+  cashZReport: 'cash:zreport',
+  printZReport: 'printer:zreport',
 
   reportDaily: 'report:daily',
   reportRange: 'report:range',

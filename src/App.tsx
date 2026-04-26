@@ -8,6 +8,7 @@ import { useSession } from '@/stores/session'
 import { POS } from '@/pages/POS'
 import { Inventory } from '@/pages/Inventory'
 import { InventoryScan } from '@/pages/InventoryScan'
+import { Sales } from '@/pages/Sales'
 import { Cash } from '@/pages/Cash'
 import { Reports } from '@/pages/Reports'
 import { Settings } from '@/pages/Settings'
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/pos" element={<POS />} />
           <Route path="/inventario" element={<Inventory />} />
           <Route path="/inventario/pistolear" element={<InventoryScan />} />
+          <Route path="/ventas" element={<Sales />} />
           <Route path="/caja" element={<Cash />} />
           <Route path="/reportes" element={<Reports />} />
           <Route path="/ajustes" element={<Settings />} />

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/common/MoneyInput'
+import { CategoryCombobox } from '@/components/common/CategoryCombobox'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
 import type { Product, ProductInput } from '@shared/types'
@@ -128,9 +129,9 @@ export function ProductDialog({
           </div>
           <div className="space-y-1">
             <Label>Categoría</Label>
-            <Input
+            <CategoryCombobox
               value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
+              onChange={(v) => setForm({ ...form, category: v })}
             />
           </div>
           <div className="space-y-1">

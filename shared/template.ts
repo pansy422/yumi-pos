@@ -27,6 +27,8 @@ export type ReceiptBlock = BlockMeta &
     | { type: 'items' }
     | { type: 'subtotal' }
     | { type: 'discount' }
+    | { type: 'net_amount' }
+    | { type: 'tax_amount' }
     | { type: 'total' }
     | { type: 'payment_method' }
     | { type: 'cash_received' }
@@ -52,6 +54,8 @@ export const BLOCK_LABELS: Record<ReceiptBlock['type'], string> = {
   items: 'Productos del ticket',
   subtotal: 'Subtotal',
   discount: 'Descuento',
+  net_amount: 'Neto (sin IVA)',
+  tax_amount: 'IVA',
   total: 'TOTAL',
   payment_method: 'Método de pago',
   cash_received: 'Recibido (efectivo)',
@@ -63,9 +67,6 @@ export const DEFAULT_TEMPLATE: ReceiptTemplate = {
   version: 1,
   blocks: [
     { id: 'b_name', type: 'store_name', align: 'center', bold: true, size: 'large' },
-    { id: 'b_addr', type: 'address', align: 'center' },
-    { id: 'b_rut', type: 'rut', align: 'center' },
-    { id: 'b_phone', type: 'phone', align: 'center' },
     { id: 'b_sep1', type: 'separator' },
     { id: 'b_num_date', type: 'sale_number_and_date' },
     { id: 'b_sep2', type: 'separator' },
@@ -100,7 +101,6 @@ export const PRESETS: { id: string; label: string; description: string; template
       version: 1,
       blocks: [
         { id: 'c_name', type: 'store_name', align: 'center', bold: true, size: 'large' },
-        { id: 'c_rut', type: 'rut', align: 'center' },
         { id: 'c_sep', type: 'separator' },
         { id: 'c_num', type: 'sale_number_and_date' },
         { id: 'c_items', type: 'items' },
@@ -109,6 +109,34 @@ export const PRESETS: { id: string; label: string; description: string; template
         { id: 'c_pm', type: 'payment_method', align: 'right' },
         { id: 'c_chg', type: 'change_given', show: 'cash', align: 'right' },
         { id: 'c_sp', type: 'spacer', lines: 2 },
+      ],
+    },
+  },
+  {
+    id: 'with_iva',
+    label: 'Con desglose IVA',
+    description: 'Estándar mostrando Neto, IVA 19% y TOTAL',
+    template: {
+      version: 1,
+      blocks: [
+        { id: 'i_name', type: 'store_name', align: 'center', bold: true, size: 'large' },
+        { id: 'i_sep1', type: 'separator' },
+        { id: 'i_num', type: 'sale_number_and_date' },
+        { id: 'i_sep2', type: 'separator' },
+        { id: 'i_items', type: 'items' },
+        { id: 'i_sep3', type: 'separator' },
+        { id: 'i_disc', type: 'discount', show: 'has_discount' },
+        { id: 'i_net', type: 'net_amount' },
+        { id: 'i_tax', type: 'tax_amount' },
+        { id: 'i_total', type: 'total', bold: true, size: 'large' },
+        { id: 'i_sep4', type: 'separator' },
+        { id: 'i_pm', type: 'payment_method' },
+        { id: 'i_rec', type: 'cash_received', show: 'cash' },
+        { id: 'i_chg', type: 'change_given', show: 'cash' },
+        { id: 'i_sp1', type: 'spacer', lines: 1 },
+        { id: 'i_foot', type: 'text', value: '{{footer}}', align: 'center' },
+        { id: 'i_tag', type: 'text', value: '#{{number}}', align: 'center' },
+        { id: 'i_sp2', type: 'spacer', lines: 2 },
       ],
     },
   },
@@ -132,6 +160,17 @@ export const PRESETS: { id: string; label: string; description: string; template
 
 export type RenderVars = Record<string, string>
 
+export function computeTax(sale: SaleWithItems, store: StoreSettings): { net: number; tax: number; rate: number } {
+  const rate = Math.max(0, Number(store.tax_rate ?? 0))
+  if (rate === 0) return { net: sale.total, tax: 0, rate }
+  if (store.tax_inclusive ?? true) {
+    const net = Math.round(sale.total / (1 + rate / 100))
+    return { net, tax: sale.total - net, rate }
+  }
+  const tax = Math.round(sale.total * (rate / 100))
+  return { net: sale.total, tax, rate }
+}
+
 export function buildVars(sale: SaleWithItems, store: StoreSettings): RenderVars {
   const date = new Date(sale.completed_at).toLocaleString('es-CL', {
     day: '2-digit',
@@ -140,6 +179,8 @@ export function buildVars(sale: SaleWithItems, store: StoreSettings): RenderVars
     hour: '2-digit',
     minute: '2-digit',
   })
+  const { net, tax, rate } = computeTax(sale, store)
+  const surchargeTotal = sale.items.reduce((a, i) => a + i.surcharge * i.qty, 0)
   return {
     store_name: store.name || '',
     address: store.address || '',
@@ -154,6 +195,10 @@ export function buildVars(sale: SaleWithItems, store: StoreSettings): RenderVars
     received: sale.cash_received != null ? formatCLP(sale.cash_received) : '',
     change: sale.change_given != null ? formatCLP(sale.change_given) : '',
     payment: paymentLabel(sale.payment_method),
+    net: formatCLP(net),
+    tax: formatCLP(tax),
+    tax_rate: String(rate),
+    surcharge: surchargeTotal > 0 ? formatCLP(surchargeTotal) : '',
   }
 }
 
@@ -307,6 +352,18 @@ export function renderTemplate(
         break
       case 'discount':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Descuento', '-' + vars.discount))
+        break
+      case 'net_amount':
+        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Neto', vars.net))
+        break
+      case 'tax_amount':
+        out.push(
+          baseLine(
+            { ...b, align: b.align ?? 'left' },
+            `IVA ${vars.tax_rate}%`,
+            vars.tax,
+          ),
+        )
         break
       case 'total':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'TOTAL', vars.total))

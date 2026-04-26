@@ -1,5 +1,13 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart3, Box, DollarSign, HelpCircle, Settings as Cog, ShoppingCart } from 'lucide-react'
+import {
+  BarChart3,
+  Box,
+  DollarSign,
+  HelpCircle,
+  Receipt,
+  Settings as Cog,
+  ShoppingCart,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/stores/session'
 import { Wordmark } from '@/components/brand/Logo'
@@ -10,6 +18,7 @@ const ITEMS = [
   { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2' },
   { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3' },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4' },
+  { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6' },
   { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9' },
 ]
 

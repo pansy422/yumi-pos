@@ -8,7 +8,12 @@ import * as reports from './db/reports'
 import * as settingsRepo from './db/settings'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
-import { openDrawer, printReceipt as printReceiptHw, printTest } from './printer/thermal'
+import {
+  openDrawer,
+  printReceipt as printReceiptHw,
+  printTest,
+  printZReportHw,
+} from './printer/thermal'
 import { getDbPath } from './db'
 
 function safe<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
@@ -56,6 +61,10 @@ export function registerIpc(): void {
   handle(IPC.productsImport, (rows: Parameters<typeof products.importMany>[0]) =>
     products.importMany(rows),
   )
+  handle(IPC.categoriesList, () => products.categories())
+  handle(IPC.categoriesRename, (from: string, to: string) => ({
+    updated: products.renameCategory(from, to),
+  }))
 
   handle(IPC.salesCreate, (input: Parameters<typeof sales.create>[0]) => sales.create(input))
   handle(IPC.salesList, (q?: Parameters<typeof sales.list>[0]) => sales.list(q ?? {}))
@@ -72,6 +81,14 @@ export function registerIpc(): void {
   )
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
+  handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))
+  ipcMain.handle(IPC.printZReport, (_e, sessionId: string) =>
+    safe(async () => {
+      const z = cash.buildZReport(sessionId)
+      const s = settingsRepo.getAll()
+      await printZReportHw(z, s.store, s.printer)
+    }),
+  )
 
   handle(IPC.reportDaily, (date: string) => reports.daily(date))
   handle(IPC.reportRange, (from: string, to: string) => reports.range(from, to))

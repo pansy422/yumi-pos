@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -198,7 +199,7 @@ export function Cash() {
         open={closeDlg}
         onOpenChange={setCloseDlg}
         expected={summary?.expected ?? 0}
-        onDone={async (diff) => {
+        onDone={async (diff, sessionId, printZ) => {
           setCloseDlg(false)
           await refresh()
           toast({
@@ -206,6 +207,16 @@ export function Cash() {
             title: 'Caja cerrada',
             description: diff === 0 ? 'Cuadra perfecta' : `Diferencia: ${formatCLP(diff)}`,
           })
+          if (printZ && sessionId) {
+            const r = await api.printZReport(sessionId)
+            if (!r.ok) {
+              toast({
+                variant: 'destructive',
+                title: 'No se imprimió el Z',
+                description: r.error,
+              })
+            }
+          }
         }}
       />
       <MoveDialog
@@ -319,19 +330,23 @@ function CloseDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
   expected: number
-  onDone: (diff: number) => void
+  onDone: (diff: number, sessionId: string | null, printZ: boolean) => void
 }) {
   const { toast } = useToast()
+  const settings = useSession((s) => s.settings)
+  const cash = useSession((s) => s.cash)
   const [counted, setCounted] = useState(0)
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [printZ, setPrintZ] = useState(true)
 
   useEffect(() => {
     if (open) {
       setCounted(expected)
       setNotes('')
+      setPrintZ(!!settings?.printer.enabled)
     }
-  }, [open, expected])
+  }, [open, expected, settings])
 
   const diff = counted - expected
 
@@ -357,6 +372,17 @@ function CloseDialog({
             <Label>Notas</Label>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+          {settings?.printer.enabled && (
+            <div className="flex items-center justify-between rounded-md border border-border/40 bg-muted/30 px-3 py-2">
+              <div>
+                <Label className="text-sm text-foreground">Imprimir cierre Z</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Boletín con resumen de ventas, métodos de pago y cuadre
+                </p>
+              </div>
+              <Switch checked={printZ} onCheckedChange={setPrintZ} />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
@@ -367,9 +393,10 @@ function CloseDialog({
             disabled={saving}
             onClick={async () => {
               setSaving(true)
+              const sessionId = cash?.id ?? null
               try {
                 await api.cashClose(counted, notes || undefined)
-                onDone(diff)
+                onDone(diff, sessionId, printZ)
               } catch (err) {
                 toast({
                   variant: 'destructive',

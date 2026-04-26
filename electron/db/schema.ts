@@ -91,6 +91,9 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
       INSERT OR IGNORE INTO sale_counter (id, last_number) VALUES (1, 0);
     `)
   },
+  (db) => {
+    db.exec(`ALTER TABLE sale_items ADD COLUMN surcharge INTEGER NOT NULL DEFAULT 0`)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

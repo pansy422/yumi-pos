@@ -32,8 +32,14 @@ export function create(input: SaleInput): SaleWithItems {
   const saleId = randomUUID()
   const now = new Date().toISOString()
   let subtotal = 0
-  const itemsResolved: { id: string; qty: number; price: number; cost: number; name: string }[] =
-    []
+  const itemsResolved: {
+    id: string
+    qty: number
+    price: number
+    surcharge: number
+    cost: number
+    name: string
+  }[] = []
 
   const result = db.transaction((): SaleWithItems => {
     for (const it of input.items) {
@@ -43,8 +49,9 @@ export function create(input: SaleInput): SaleWithItems {
       if (!p) throw new Error(`Producto no encontrado: ${it.product_id}`)
       const qty = Math.max(1, Math.round(it.qty))
       const price = Math.round(it.price)
-      subtotal += price * qty
-      itemsResolved.push({ id: p.id, qty, price, cost: p.cost, name: p.name })
+      const surcharge = Math.round(it.surcharge ?? 0)
+      subtotal += (price + surcharge) * qty
+      itemsResolved.push({ id: p.id, qty, price, surcharge, cost: p.cost, name: p.name })
     }
     const discount = Math.max(0, Math.round(input.discount || 0))
     const total = Math.max(0, subtotal - discount)
@@ -78,12 +85,13 @@ export function create(input: SaleInput): SaleWithItems {
     })
 
     const insItem = db.prepare(
-      `INSERT INTO sale_items (sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot, qty, line_total)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sale_items (sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     const decStock = db.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`)
     for (const it of itemsResolved) {
-      insItem.run(it.id, it.id, it.name, it.price, it.cost, it.qty, it.price * it.qty)
+      const lineTotal = (it.price + it.surcharge) * it.qty
+      insItem.run(it.id, it.id, it.name, it.price, it.cost, it.surcharge, it.qty, lineTotal)
       decStock.run(it.qty, it.id)
     }
 
@@ -108,7 +116,7 @@ export function getById(id: string): SaleWithItems | null {
   if (!sale) return null
   const items = db
     .prepare(
-      `SELECT product_id, name_snapshot, price_snapshot, cost_snapshot, qty, line_total
+      `SELECT product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total
        FROM sale_items WHERE sale_id = ? ORDER BY id ASC`,
     )
     .all(id) as SaleItem[]
@@ -117,6 +125,7 @@ export function getById(id: string): SaleWithItems | null {
     name_snapshot: r.name_snapshot,
     price_snapshot: Number(r.price_snapshot),
     cost_snapshot: Number(r.cost_snapshot),
+    surcharge: Number(r.surcharge ?? 0),
     qty: Number(r.qty),
     line_total: Number(r.line_total),
   })) }

@@ -24,7 +24,9 @@ function row(r: Record<string, unknown> | undefined): Product | null {
   }
 }
 
-export function list(q: { search?: string; includeArchived?: boolean } = {}): Product[] {
+export function list(
+  q: { search?: string; includeArchived?: boolean; category?: string | null } = {},
+): Product[] {
   const db = getDb()
   const where: string[] = []
   const params: Record<string, unknown> = {}
@@ -33,7 +35,15 @@ export function list(q: { search?: string; includeArchived?: boolean } = {}): Pr
     where.push('(name LIKE @s OR barcode LIKE @s OR sku LIKE @s)')
     params.s = `%${q.search.trim()}%`
   }
-  const sql = `SELECT * FROM products ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name COLLATE NOCASE LIMIT 500`
+  if (q.category !== undefined) {
+    if (q.category === null) {
+      where.push("(category IS NULL OR TRIM(category) = '')")
+    } else if (q.category.trim()) {
+      where.push('category = @cat')
+      params.cat = q.category
+    }
+  }
+  const sql = `SELECT * FROM products ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY name COLLATE NOCASE LIMIT 1000`
   return (db.prepare(sql).all(params) as Record<string, unknown>[])
     .map(row)
     .filter((p): p is Product => p !== null)
@@ -44,11 +54,12 @@ export function get(id: string): Product | null {
   return row(db.prepare(`SELECT * FROM products WHERE id = ?`).get(id) as Record<string, unknown>)
 }
 
-export function byBarcode(barcode: string): Product | null {
+export function byBarcode(barcode: string, opts: { includeArchived?: boolean } = {}): Product | null {
   const db = getDb()
-  return row(
-    db.prepare(`SELECT * FROM products WHERE barcode = ?`).get(barcode) as Record<string, unknown>,
-  )
+  const sql = opts.includeArchived
+    ? `SELECT * FROM products WHERE barcode = ?`
+    : `SELECT * FROM products WHERE barcode = ? AND archived = 0`
+  return row(db.prepare(sql).get(barcode) as Record<string, unknown>)
 }
 
 export function create(input: ProductInput): Product {
@@ -125,7 +136,7 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
   const db = getDb()
   const code = barcode.trim()
   if (!code) throw new Error('Código vacío')
-  const existing = byBarcode(code)
+  const existing = byBarcode(code, { includeArchived: true })
   if (existing) {
     db.prepare(
       `UPDATE products SET stock = stock + 1, archived = 0, updated_at = datetime('now') WHERE id = ?`,
@@ -139,13 +150,46 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
   return { kind: 'needs_info', barcode: code }
 }
 
+export type CategoryStat = { name: string; count: number; stock: number; value: number }
+
+export function categories(): CategoryStat[] {
+  const db = getDb()
+  const rows = db
+    .prepare(
+      `SELECT category AS name,
+              COUNT(*) AS count,
+              COALESCE(SUM(stock), 0) AS stock,
+              COALESCE(SUM(stock * cost), 0) AS value
+       FROM products
+       WHERE archived = 0 AND category IS NOT NULL AND TRIM(category) <> ''
+       GROUP BY category
+       ORDER BY count DESC, name COLLATE NOCASE`,
+    )
+    .all() as { name: string; count: number; stock: number; value: number }[]
+  return rows.map((r) => ({
+    name: r.name,
+    count: Number(r.count),
+    stock: Number(r.stock),
+    value: Number(r.value),
+  }))
+}
+
+export function renameCategory(from: string, to: string): number {
+  const db = getDb()
+  const target = to.trim() || null
+  const result = db
+    .prepare(`UPDATE products SET category = ?, updated_at = datetime('now') WHERE category = ?`)
+    .run(target, from)
+  return Number(result.changes)
+}
+
 export function importMany(rows: ProductInput[]): { created: number; updated: number } {
   const db = getDb()
   let created = 0
   let updated = 0
   const tx = db.transaction(() => {
     for (const r of rows) {
-      const existing = r.barcode ? byBarcode(r.barcode) : null
+      const existing = r.barcode ? byBarcode(r.barcode, { includeArchived: true }) : null
       if (existing) {
         update(existing.id, r)
         updated++

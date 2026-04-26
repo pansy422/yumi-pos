@@ -1,5 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, Plus, Search, ShoppingCart, Sparkles, Trash2, X, Zap } from 'lucide-react'
+import {
+  DoorOpen,
+  Minus,
+  PauseCircle,
+  Play,
+  Plus,
+  PlusSquare,
+  Search,
+  ShoppingCart,
+  Sparkles,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,12 +25,14 @@ import { ReceiptPreview } from '@/components/common/ReceiptPreview'
 import { EmptyState, CartEmptyArt } from '@/components/common/EmptyState'
 import { Kbd } from '@/components/common/Kbd'
 import { useCart } from '@/stores/cart'
+import { useHeldTickets, type HeldTicket } from '@/stores/heldTickets'
+import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
 import { useSession } from '@/stores/session'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP } from '@shared/money'
+import { formatCLP, todayISO } from '@shared/money'
 import type { PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -38,8 +53,24 @@ const PAY_METHODS: { id: PaymentMethod; label: string; hint?: string }[] = [
 ]
 
 export function POS() {
-  const { items, add, setQty, remove, clear, discount, setDiscount, subtotal, total, lastAddedId, lastAddedAt } =
-    useCart()
+  const {
+    items,
+    add,
+    setQty,
+    setSurcharge,
+    remove,
+    clear,
+    discount,
+    setDiscount,
+    subtotal,
+    total,
+    lastAddedId,
+    lastAddedAt,
+    loadItems,
+  } = useCart()
+  const heldTickets = useHeldTickets((s) => s.tickets)
+  const holdTicket = useHeldTickets((s) => s.hold)
+  const removeHeld = useHeldTickets((s) => s.remove)
   const cash = useSession((s) => s.cash)
   const { toast } = useToast()
 
@@ -48,6 +79,18 @@ export function POS() {
   const [searchOpen, setSearchOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [payOpen, setPayOpen] = useState(false)
+  const [multiplier, setMultiplier] = useState(1)
+  const [heldOpen, setHeldOpen] = useState(false)
+  const [holdNameOpen, setHoldNameOpen] = useState(false)
+  const [holdName, setHoldName] = useState('')
+
+  const addWithMultiplier = useCallback(
+    (p: Product) => {
+      add(p, multiplier)
+      if (multiplier !== 1) setMultiplier(1)
+    },
+    [add, multiplier],
+  )
 
   const handleScan = useCallback(
     async (code: string) => {
@@ -60,10 +103,31 @@ export function POS() {
         })
         return
       }
-      add(p)
-      toast({ variant: 'success', title: p.name, description: `+1 · ${formatCLP(p.price)}` })
+      addWithMultiplier(p)
+      const willAdd = multiplier
+      const inCart = items.find((i) => i.product_id === p.id)?.qty ?? 0
+      const after = inCart + willAdd
+      if (p.stock <= 0) {
+        toast({
+          variant: 'warning',
+          title: p.name,
+          description: `Sin stock — vendiendo a deuda (stock quedará en ${p.stock - willAdd})`,
+        })
+      } else if (after > p.stock) {
+        toast({
+          variant: 'warning',
+          title: p.name,
+          description: `Vendiendo más que el stock (${after}/${p.stock})`,
+        })
+      } else {
+        toast({
+          variant: 'success',
+          title: p.name,
+          description: `+${willAdd} · ${formatCLP(p.price)}`,
+        })
+      }
     },
-    [add, toast],
+    [addWithMultiplier, multiplier, items, toast],
   )
 
   useScanner({ enabled: !payOpen && !searchOpen, onScan: handleScan })
@@ -110,11 +174,50 @@ export function POS() {
               <Search className="h-4 w-4" /> Buscar
               <Kbd className="ml-1">Ctrl B</Kbd>
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setHeldOpen(true)}
+              className="relative"
+            >
+              <Play className="h-4 w-4" />
+              En espera
+              {heldTickets.length > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-warning text-[10px] font-bold text-warning-foreground">
+                  {heldTickets.length}
+                </span>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              disabled={items.length === 0}
+              onClick={() => {
+                setHoldName(`Ticket ${new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`)
+                setHoldNameOpen(true)
+              }}
+            >
+              <PauseCircle className="h-4 w-4" /> Reservar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                const r = await api.printerOpenDrawer()
+                if (r.ok) toast({ variant: 'success', title: 'Cajón abierto' })
+                else
+                  toast({
+                    variant: 'destructive',
+                    title: 'No se pudo abrir',
+                    description: r.error,
+                  })
+              }}
+            >
+              <DoorOpen className="h-4 w-4" /> Cajón
+            </Button>
           </>
         }
       />
 
       <div className="grid flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden p-6">
+        <div className="flex min-h-0 flex-col gap-4">
         <Card className="card-elev flex-1 overflow-hidden">
           <CardContent className="flex h-full flex-col p-0">
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
@@ -126,6 +229,7 @@ export function POS() {
                     {totalUnits} {totalUnits === 1 ? 'unidad' : 'unidades'}
                   </Badge>
                 )}
+                <MultiplierControl value={multiplier} onChange={setMultiplier} />
               </div>
               {items.length > 0 && (
                 <Button
@@ -174,7 +278,20 @@ export function POS() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right num">{formatCLP(it.price)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="num">{formatCLP(it.price + it.surcharge)}</div>
+                          {it.surcharge !== 0 && (
+                            <div
+                              className={cn(
+                                'mono text-[10px]',
+                                it.surcharge > 0 ? 'text-warning' : 'text-success',
+                              )}
+                            >
+                              {it.surcharge > 0 ? '+' : ''}
+                              {formatCLP(it.surcharge)} recargo
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
                             <Button
@@ -203,17 +320,23 @@ export function POS() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right num font-semibold">
-                          {formatCLP(it.price * it.qty)}
+                          {formatCLP((it.price + it.surcharge) * it.qty)}
                         </td>
                         <td className="px-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => remove(it.product_id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <SurchargeButton
+                              value={it.surcharge}
+                              onChange={(n) => setSurcharge(it.product_id, n)}
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => remove(it.product_id)}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -223,6 +346,8 @@ export function POS() {
             )}
           </CardContent>
         </Card>
+        <QuickKeysPanel onPick={addWithMultiplier} />
+        </div>
 
         <div className="flex flex-col gap-4">
           <Card className="card-elev relative overflow-hidden">
@@ -282,6 +407,15 @@ export function POS() {
               </Row>
             </CardContent>
           </Card>
+          <TodayCard />
+          {!cash && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+              <div className="font-medium">Caja cerrada</div>
+              <p className="mt-0.5 text-[11px] opacity-90">
+                Abre la caja en F3 para poder cobrar en efectivo.
+              </p>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-[11px] text-muted-foreground">
             <div className="mb-1.5 flex items-center gap-1.5 text-foreground/80">
@@ -316,11 +450,44 @@ export function POS() {
         setSearch={setSearch}
         results={results}
         onPick={(p) => {
-          add(p)
+          addWithMultiplier(p)
           setSearchOpen(false)
           setSearch('')
         }}
         searchInputRef={searchInputRef}
+      />
+
+      <HoldNameDialog
+        open={holdNameOpen}
+        onOpenChange={setHoldNameOpen}
+        defaultName={holdName}
+        onConfirm={(name) => {
+          holdTicket(name, items, discount)
+          clear()
+          setHoldNameOpen(false)
+          toast({ variant: 'success', title: 'Ticket en espera', description: name })
+        }}
+      />
+
+      <HeldTicketsDialog
+        open={heldOpen}
+        onOpenChange={setHeldOpen}
+        tickets={heldTickets}
+        onRecall={(t) => {
+          if (items.length > 0) {
+            const ok = window.confirm(
+              'Tienes productos en el ticket actual. ¿Reemplazarlos por el ticket en espera?',
+            )
+            if (!ok) return
+          }
+          loadItems(t.items, t.discount)
+          removeHeld(t.id)
+          setHeldOpen(false)
+          toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
+        }}
+        onDiscard={(t) => {
+          if (window.confirm(`¿Descartar el ticket "${t.name}"?`)) removeHeld(t.id)
+        }}
       />
 
       <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
@@ -334,6 +501,291 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <span className="text-muted-foreground">{label}</span>
       {children}
     </div>
+  )
+}
+
+function TodayCard() {
+  const [data, setData] = useState<{ count: number; revenue: number; profit: number } | null>(null)
+  const cashId = useSession((s) => s.cash?.id)
+
+  useEffect(() => {
+    let cancelled = false
+    api.reportDaily(todayISO()).then((r) => {
+      if (cancelled) return
+      setData({ count: r.sales_count, revenue: r.revenue, profit: r.profit })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [cashId])
+
+  return (
+    <Card className="card-elev card-glow">
+      <CardContent className="p-4">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Hoy</div>
+        <div className="num mt-1 text-2xl font-bold tracking-tight brand-text">
+          {data ? formatCLP(data.revenue) : '—'}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>
+            <span className="num">{data?.count ?? 0}</span>{' '}
+            {(data?.count ?? 0) === 1 ? 'venta' : 'ventas'}
+          </span>
+          <span>
+            Ganancia <span className="num text-success">{data ? formatCLP(data.profit) : '—'}</span>
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function SurchargeButton({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (n: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState(value !== 0 ? String(value) : '')
+  useEffect(() => {
+    setText(value !== 0 ? String(value) : '')
+  }, [value])
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        onClick={() => setOpen(true)}
+        title="Recargo o descuento por unidad"
+        className={cn(
+          'flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+          value !== 0 && (value > 0 ? 'text-warning' : 'text-success'),
+        )}
+      >
+        <PlusSquare className="h-4 w-4" />
+      </button>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Recargo / descuento por unidad</DialogTitle>
+          <DialogDescription>
+            Cantidad fija sumada al precio de cada unidad. Usa negativo para descontar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1">
+          <Label>Monto por unidad</Label>
+          <Input
+            autoFocus
+            type="number"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="ej. 500 para sumar $500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onChange(Number(text) || 0)
+                setOpen(false)
+              }
+            }}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Lo verás reflejado en la línea del producto y en el total.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onChange(0)
+              setOpen(false)
+            }}
+          >
+            Quitar recargo
+          </Button>
+          <Button
+            onClick={() => {
+              onChange(Number(text) || 0)
+              setOpen(false)
+            }}
+          >
+            Aplicar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function MultiplierControl({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (n: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState(String(value))
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setText(String(value))
+  }, [value])
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => {
+          setEditing(true)
+          setTimeout(() => inputRef.current?.select(), 30)
+        }}
+        className={cn(
+          'flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium transition-colors',
+          value === 1
+            ? 'border-border/60 text-muted-foreground hover:bg-accent'
+            : 'border-warning/40 bg-warning/15 text-warning',
+        )}
+        title="Multiplicador para próxima lectura"
+      >
+        × <span className="num">{value}</span>
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-xs text-muted-foreground">×</span>
+      <Input
+        ref={inputRef}
+        value={text}
+        type="number"
+        min={1}
+        max={99}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          const n = Math.max(1, Math.min(99, Number(text) || 1))
+          onChange(n)
+          setEditing(false)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === 'Escape') {
+            const n = Math.max(1, Math.min(99, Number(text) || 1))
+            onChange(n)
+            setEditing(false)
+          }
+        }}
+        className="h-7 w-14 text-center num"
+      />
+    </div>
+  )
+}
+
+function HoldNameDialog({
+  open,
+  onOpenChange,
+  defaultName,
+  onConfirm,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  defaultName: string
+  onConfirm: (name: string) => void
+}) {
+  const [name, setName] = useState(defaultName)
+  useEffect(() => {
+    if (open) setName(defaultName)
+  }, [open, defaultName])
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reservar ticket</DialogTitle>
+          <DialogDescription>
+            Guarda el carrito actual para retomarlo después. El ticket queda en este equipo.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1">
+          <Label>Nombre o referencia</Label>
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="ej. señor del pan"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onConfirm(name)
+            }}
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={() => onConfirm(name)}>
+            <PauseCircle className="h-4 w-4" /> Reservar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function HeldTicketsDialog({
+  open,
+  onOpenChange,
+  tickets,
+  onRecall,
+  onDiscard,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  tickets: HeldTicket[]
+  onRecall: (t: HeldTicket) => void
+  onDiscard: (t: HeldTicket) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Tickets en espera</DialogTitle>
+          <DialogDescription>
+            {tickets.length === 0
+              ? 'No tienes tickets reservados.'
+              : `${tickets.length} ticket${tickets.length === 1 ? '' : 's'} guardado${tickets.length === 1 ? '' : 's'}`}
+          </DialogDescription>
+        </DialogHeader>
+        {tickets.length > 0 && (
+          <ul className="max-h-80 divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
+            {tickets.map((t) => {
+              const itemsTotal = t.items.reduce((a, i) => a + i.price * i.qty, 0)
+              const total = Math.max(0, itemsTotal - t.discount)
+              const units = t.items.reduce((a, i) => a + i.qty, 0)
+              return (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate">{t.name}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {units} unidad{units === 1 ? '' : 'es'} ·{' '}
+                      <span className="num">{formatCLP(total)}</span>
+                      {' · '}
+                      {new Date(t.created_at).toLocaleTimeString('es-CL', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => onDiscard(t)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                  <Button size="sm" onClick={() => onRecall(t)}>
+                    <Play className="h-4 w-4" /> Recuperar
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -450,7 +902,12 @@ function PaymentDialog({
     setSubmitting(true)
     try {
       const sale = await api.salesCreate({
-        items: items.map((i) => ({ product_id: i.product_id, qty: i.qty, price: i.price })),
+        items: items.map((i) => ({
+          product_id: i.product_id,
+          qty: i.qty,
+          price: i.price,
+          surcharge: i.surcharge,
+        })),
         discount,
         payment_method: method,
         cash_received: method === 'efectivo' ? received : undefined,

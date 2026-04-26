@@ -4,11 +4,13 @@ import { DEFAULT_TEMPLATE, isValidTemplate, type ReceiptTemplate } from '../../s
 
 const DEFAULTS: Settings = {
   store: {
-    name: 'Mi Minimarket',
+    name: 'Minimarket Entre Palmas',
     address: '',
     rut: '',
     phone: '',
     receipt_footer: '¡Gracias por tu compra!',
+    tax_rate: 19,
+    tax_inclusive: true,
   },
   printer: {
     enabled: false,
@@ -17,6 +19,7 @@ const DEFAULTS: Settings = {
     width_chars: 42,
     auto_print: true,
     open_drawer_on_cash: true,
+    extra_copy: false,
   },
   flags: {
     onboarded: false,
