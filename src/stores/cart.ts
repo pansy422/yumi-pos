@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { CartItem, Product } from '@shared/types'
 
 type State = {
@@ -21,7 +22,9 @@ type Actions = {
   loadItems: (items: CartItem[], discount: number) => void
 }
 
-export const useCart = create<State & Actions>((set, get) => ({
+export const useCart = create<State & Actions>()(
+  persist(
+    (set, get) => ({
   items: [],
   discount: 0,
   lastAddedAt: 0,
@@ -80,4 +83,22 @@ export const useCart = create<State & Actions>((set, get) => ({
       lastAddedId: null,
       lastAddedAt: 0,
     }),
-}))
+    }),
+    {
+      name: 'yumi-cart-current',
+      // Solo persistir el contenido del ticket. Los flags transitorios de
+      // "recién agregado" se descartan tras un refresh.
+      partialize: (s) => ({ items: s.items, discount: s.discount }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<State>),
+        items: ((persisted as { items?: CartItem[] }).items ?? []).map((i) => ({
+          ...i,
+          surcharge: i.surcharge ?? 0,
+        })),
+        lastAddedAt: 0,
+        lastAddedId: null,
+      }),
+    },
+  ),
+)

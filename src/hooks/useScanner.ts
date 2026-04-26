@@ -4,6 +4,14 @@ type Options = {
   enabled?: boolean
   minLength?: number
   maxIntervalMs?: number
+  /**
+   * Ms mínimos entre dos lecturas idénticas. Por debajo se ignora la
+   * segunda como un doble-disparo del hardware del lector. Un cajero
+   * físicamente no escanea el mismo código dos veces en menos de
+   * ~250ms — eso siempre es ruido del lector. Lecturas distintas no
+   * se filtran.
+   */
+  dedupeMs?: number
   onScan: (code: string) => void
 }
 
@@ -20,10 +28,12 @@ export function useScanner({
   enabled = true,
   minLength = 4,
   maxIntervalMs = 50,
+  dedupeMs = 250,
   onScan,
 }: Options) {
   const buffer = useRef<string>('')
   const lastTime = useRef<number>(0)
+  const lastFire = useRef<{ code: string; ts: number }>({ code: '', ts: 0 })
 
   useEffect(() => {
     if (!enabled) return
@@ -36,10 +46,18 @@ export function useScanner({
       if (e.key === 'Enter' || e.key === 'Tab') {
         const code = buffer.current.trim()
         buffer.current = ''
-        if (code.length >= minLength) {
-          e.preventDefault()
-          onScan(code)
+        if (code.length < minLength) return
+        e.preventDefault()
+        // Anti doble-disparo: ignorar el mismo código si llegó hace
+        // menos de dedupeMs. Códigos distintos pasan siempre.
+        if (
+          code === lastFire.current.code &&
+          now - lastFire.current.ts < dedupeMs
+        ) {
+          return
         }
+        lastFire.current = { code, ts: now }
+        onScan(code)
         return
       }
       if (e.key.length === 1 && buffer.current.length < 64) {
@@ -48,5 +66,5 @@ export function useScanner({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [enabled, minLength, maxIntervalMs, onScan])
+  }, [enabled, minLength, maxIntervalMs, dedupeMs, onScan])
 }

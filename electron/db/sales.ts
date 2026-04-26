@@ -206,6 +206,14 @@ export function list(
     .filter((s): s is Sale => s !== null)
 }
 
+export function nextNumber(): number {
+  const db = getDb()
+  const r = db.prepare(`SELECT last_number FROM sale_counter WHERE id = 1`).get() as
+    | { last_number: number }
+    | undefined
+  return (r?.last_number ?? 0) + 1
+}
+
 export function voidSale(id: string, reason: string): void {
   const db = getDb()
   const tx = db.transaction(() => {

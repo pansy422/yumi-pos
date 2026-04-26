@@ -219,6 +219,7 @@ export type Api = {
   salesList: (q?: { from?: string; to?: string; limit?: number; cashSessionId?: string }) => Promise<Sale[]>
   salesGet: (id: string) => Promise<SaleWithItems | null>
   salesVoid: (id: string, reason: string) => Promise<void>
+  salesNextNumber: () => Promise<number>
 
   cashCurrent: () => Promise<CashSession | null>
   cashOpen: (openingAmount: number, notes?: string) => Promise<CashSession>

@@ -20,6 +20,7 @@ const api = {
   salesList: invoke(IPC.salesList),
   salesGet: invoke(IPC.salesGet),
   salesVoid: invoke(IPC.salesVoid),
+  salesNextNumber: invoke(IPC.salesNextNumber),
 
   cashCurrent: invoke(IPC.cashCurrent),
   cashOpen: invoke(IPC.cashOpen),

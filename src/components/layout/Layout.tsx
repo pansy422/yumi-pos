@@ -5,6 +5,7 @@ import { useShortcut } from '@/lib/keyboard'
 export function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
+
   // Atajos de navegación: deben funcionar incluso si el foco está en un input
   // (caso típico cuando el cajero está escribiendo cantidades).
   useShortcut({ key: 'F1' }, () => navigate('/pos'), { allowInInput: true })
@@ -14,9 +15,14 @@ export function Layout() {
   useShortcut({ key: 'F6' }, () => navigate('/ventas'), { allowInInput: true })
   useShortcut({ key: 'F9' }, () => navigate('/ajustes'), { allowInInput: true })
 
+  // En la pantalla de venta el sidebar se oculta para que la cajera vea el
+  // ticket, total y botón cobrar lo más grande posible — modo "caja
+  // registradora". Las demás pantallas (admin) sí tienen sidebar.
+  const isPOS = location.pathname === '/pos'
+
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar />
+      {!isPOS && <Sidebar />}
       <main className="flex-1 overflow-auto bg-background">
         <div key={location.pathname} className="h-full animate-fade-in">
           <Outlet />

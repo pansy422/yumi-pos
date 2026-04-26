@@ -15,6 +15,7 @@ export const IPC = {
   salesList: 'sales:list',
   salesGet: 'sales:get',
   salesVoid: 'sales:void',
+  salesNextNumber: 'sales:nextNumber',
 
   cashCurrent: 'cash:current',
   cashOpen: 'cash:open',
