@@ -137,13 +137,17 @@ export function POS() {
     setTimeout(() => searchInputRef.current?.focus(), 30)
   })
 
-  useShortcut({ key: 'F5' }, () => {
-    if (items.length === 0) {
-      toast({ variant: 'warning', title: 'Carrito vacío' })
-      return
-    }
-    setPayOpen(true)
-  })
+  useShortcut(
+    { key: 'F5' },
+    () => {
+      if (items.length === 0) {
+        toast({ variant: 'warning', title: 'Carrito vacío' })
+        return
+      }
+      setPayOpen(true)
+    },
+    { allowInInput: true },
+  )
 
   useShortcut({ key: 'Escape' }, () => {
     if (payOpen || searchOpen) return
@@ -386,27 +390,6 @@ export function POS() {
             </CardContent>
           </Card>
 
-          <Card className="card-elev">
-            <CardContent className="space-y-2 p-4 text-xs">
-              <Row label="Caja">
-                {cash ? (
-                  <Badge variant="success" className="px-2">
-                    Abierta
-                  </Badge>
-                ) : (
-                  <Badge variant="warning" className="px-2">
-                    Cerrada
-                  </Badge>
-                )}
-              </Row>
-              <Row label="Productos en ticket">
-                <span className="num">{items.length}</span>
-              </Row>
-              <Row label="Unidades">
-                <span className="num">{totalUnits}</span>
-              </Row>
-            </CardContent>
-          </Card>
           <TodayCard />
           {!cash && (
             <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
@@ -491,15 +474,6 @@ export function POS() {
       />
 
       <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
-    </div>
-  )
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
     </div>
   )
 }

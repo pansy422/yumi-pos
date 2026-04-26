@@ -17,7 +17,8 @@
     "dist": "npm run build && electron-builder --win --x64",
     "rebuild": "node scripts/patch-deps.cjs && electron-rebuild -f -w better-sqlite3,@thiagoelg/node-printer",
     "postinstall": "node scripts/patch-deps.cjs && electron-builder install-app-deps",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit",
+    "test:smoke": "node scripts/smoke-test.cjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

@@ -274,6 +274,7 @@ function RangeView() {
                   Sin ventas en el rango
                 </p>
               ) : (
+                <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
@@ -296,6 +297,7 @@ function RangeView() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </CardContent>
           </Card>
