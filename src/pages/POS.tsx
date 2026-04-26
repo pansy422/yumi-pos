@@ -26,12 +26,13 @@ import { EmptyState, CartEmptyArt } from '@/components/common/EmptyState'
 import { Kbd } from '@/components/common/Kbd'
 import { useCart } from '@/stores/cart'
 import { useHeldTickets, type HeldTicket } from '@/stores/heldTickets'
+import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
 import { useSession } from '@/stores/session'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP } from '@shared/money'
+import { formatCLP, todayISO } from '@shared/money'
 import type { PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -216,6 +217,7 @@ export function POS() {
       />
 
       <div className="grid flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden p-6">
+        <div className="flex min-h-0 flex-col gap-4">
         <Card className="card-elev flex-1 overflow-hidden">
           <CardContent className="flex h-full flex-col p-0">
             <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
@@ -344,6 +346,8 @@ export function POS() {
             )}
           </CardContent>
         </Card>
+        <QuickKeysPanel onPick={addWithMultiplier} />
+        </div>
 
         <div className="flex flex-col gap-4">
           <Card className="card-elev relative overflow-hidden">
@@ -403,6 +407,15 @@ export function POS() {
               </Row>
             </CardContent>
           </Card>
+          <TodayCard />
+          {!cash && (
+            <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+              <div className="font-medium">Caja cerrada</div>
+              <p className="mt-0.5 text-[11px] opacity-90">
+                Abre la caja en F3 para poder cobrar en efectivo.
+              </p>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-[11px] text-muted-foreground">
             <div className="mb-1.5 flex items-center gap-1.5 text-foreground/80">
@@ -488,6 +501,42 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <span className="text-muted-foreground">{label}</span>
       {children}
     </div>
+  )
+}
+
+function TodayCard() {
+  const [data, setData] = useState<{ count: number; revenue: number; profit: number } | null>(null)
+  const cashId = useSession((s) => s.cash?.id)
+
+  useEffect(() => {
+    let cancelled = false
+    api.reportDaily(todayISO()).then((r) => {
+      if (cancelled) return
+      setData({ count: r.sales_count, revenue: r.revenue, profit: r.profit })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [cashId])
+
+  return (
+    <Card className="card-elev card-glow">
+      <CardContent className="p-4">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Hoy</div>
+        <div className="num mt-1 text-2xl font-bold tracking-tight brand-text">
+          {data ? formatCLP(data.revenue) : '—'}
+        </div>
+        <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>
+            <span className="num">{data?.count ?? 0}</span>{' '}
+            {(data?.count ?? 0) === 1 ? 'venta' : 'ventas'}
+          </span>
+          <span>
+            Ganancia <span className="num text-success">{data ? formatCLP(data.profit) : '—'}</span>
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

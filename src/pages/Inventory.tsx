@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDownAZ, Edit3, Pencil, Plus, Search, ScanBarcode, Tag } from 'lucide-react'
+import { ArrowDownAZ, Edit3, FileUp, Pencil, Plus, Search, ScanBarcode, Tag } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -25,6 +25,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, BoxEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { ProductDialog } from './ProductDialog'
+import { CsvImport } from '@/components/common/CsvImport'
 import { api } from '@/lib/api'
 import type { CategoryStat, Product } from '@shared/types'
 import { formatCLP } from '@shared/money'
@@ -44,6 +45,7 @@ export function Inventory() {
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameFrom, setRenameFrom] = useState('')
   const [renameTo, setRenameTo] = useState('')
+  const [csvOpen, setCsvOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -69,8 +71,9 @@ export function Inventory() {
   }, [search, includeArchived, category])
 
   const totalStockValue = items.reduce((a, i) => a + i.stock * i.cost, 0)
-  const lowStock = items.filter((i) => i.stock > 0 && i.stock < 5).length
+  const lowStock = items.filter((i) => i.stock > 0 && i.stock < 5 && !i.archived).length
   const outOfStock = items.filter((i) => i.stock <= 0 && !i.archived).length
+  const showCriticalBanner = !firstLoad && (lowStock + outOfStock) > 0 && !search && category === '__all__'
 
   return (
     <div className="flex h-full flex-col">
@@ -79,6 +82,9 @@ export function Inventory() {
         description={`${items.length} ${items.length === 1 ? 'producto' : 'productos'}${lowStock ? ` · ${lowStock} con stock bajo` : ''}`}
         actions={
           <>
+            <Button variant="outline" onClick={() => setCsvOpen(true)}>
+              <FileUp className="h-4 w-4" /> Importar CSV
+            </Button>
             <Button asChild variant="outline">
               <Link to="/inventario/pistolear">
                 <ScanBarcode className="h-4 w-4" /> Pistolear
@@ -91,6 +97,27 @@ export function Inventory() {
         }
       />
       <div className="flex flex-col gap-4 p-6">
+        {showCriticalBanner && (
+          <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning animate-fade-in">
+            <div>
+              <div className="font-medium">Atención al stock</div>
+              <p className="mt-0.5 text-[11px] opacity-90">
+                {outOfStock > 0 && (
+                  <>
+                    <span className="font-semibold">{outOfStock}</span> producto
+                    {outOfStock === 1 ? '' : 's'} sin stock
+                  </>
+                )}
+                {outOfStock > 0 && lowStock > 0 && ' · '}
+                {lowStock > 0 && (
+                  <>
+                    <span className="font-semibold">{lowStock}</span> con stock bajo (&lt;5)
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
         {!firstLoad && items.length > 0 && (
           <div className="grid grid-cols-3 gap-3">
             <SmallStat label="Productos activos" value={String(items.filter((i) => !i.archived).length)} />
@@ -277,6 +304,15 @@ export function Inventory() {
           setEditing(null)
           load()
           loadCategories()
+        }}
+      />
+
+      <CsvImport
+        open={csvOpen}
+        onOpenChange={setCsvOpen}
+        onImported={async () => {
+          await load()
+          await loadCategories()
         }}
       />
 
