@@ -6,6 +6,7 @@ import {
   Download,
   Network,
   Printer,
+  Receipt,
   Save,
   Sparkles,
   Store,
@@ -28,6 +29,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ReceiptEditor } from '@/components/common/ReceiptEditor'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
@@ -63,6 +65,9 @@ export function Settings() {
             <TabsTrigger value="printer">
               <Printer className="h-4 w-4" /> Impresora
             </TabsTrigger>
+            <TabsTrigger value="receipt">
+              <Receipt className="h-4 w-4" /> Boleta
+            </TabsTrigger>
             <TabsTrigger value="data">
               <Database className="h-4 w-4" /> Datos
             </TabsTrigger>
@@ -82,6 +87,16 @@ export function Settings() {
               onSaved={() => {
                 refresh()
                 toast({ variant: 'success', title: 'Impresora guardada' })
+              }}
+            />
+          </TabsContent>
+          <TabsContent value="receipt">
+            <ReceiptEditor
+              settings={settings}
+              onSave={async (template) => {
+                await api.settingsSet({ receipt_template: template })
+                await refresh()
+                toast({ variant: 'success', title: 'Plantilla guardada' })
               }}
             />
           </TabsContent>

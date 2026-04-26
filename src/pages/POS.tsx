@@ -662,7 +662,12 @@ function PaymentDialog({
             </div>
             {showPreview && settings && (
               <div className="border-t border-border/60 bg-muted/30 p-4">
-                <ReceiptPreview sale={lastSale} store={settings.store} width={settings.printer.width_chars} />
+                <ReceiptPreview
+                  sale={lastSale}
+                  store={settings.store}
+                  template={settings.receipt_template}
+                  width={settings.printer.width_chars}
+                />
               </div>
             )}
           </>

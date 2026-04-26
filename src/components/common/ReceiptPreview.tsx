@@ -1,92 +1,74 @@
 import { cn } from '@/lib/utils'
 import type { SaleWithItems, StoreSettings } from '@shared/types'
-import { formatCLP } from '@shared/money'
-
-const PAYMENT_LABEL: Record<string, string> = {
-  efectivo: 'EFECTIVO',
-  debito: 'DÉBITO',
-  credito: 'CRÉDITO',
-  transferencia: 'TRANSFERENCIA',
-  otro: 'OTRO',
-}
-
-function pad(left: string, right: string, width: number) {
-  const space = Math.max(1, width - left.length - right.length)
-  return left + ' '.repeat(space) + right
-}
+import {
+  type ReceiptTemplate,
+  type RenderedLine,
+  pad,
+  renderTemplate,
+} from '@shared/template'
 
 export function ReceiptPreview({
   sale,
   store,
-  width = 32,
+  template,
+  width = 42,
   className,
 }: {
   sale: SaleWithItems
   store: StoreSettings
+  template: ReceiptTemplate
   width?: number
   className?: string
 }) {
-  const date = new Date(sale.completed_at).toLocaleString('es-CL')
-  const lines: { text: string; bold?: boolean; large?: boolean; center?: boolean; rule?: boolean }[] = []
-
-  lines.push({ text: store.name || 'Yumi POS', bold: true, large: true, center: true })
-  if (store.address) lines.push({ text: store.address, center: true })
-  if (store.rut) lines.push({ text: `RUT: ${store.rut}`, center: true })
-  if (store.phone) lines.push({ text: `Tel: ${store.phone}`, center: true })
-  lines.push({ text: '', rule: true })
-  lines.push({ text: `Boleta N° ${sale.number}` })
-  lines.push({ text: date })
-  lines.push({ text: '', rule: true })
-
-  for (const it of sale.items) {
-    lines.push({ text: it.name_snapshot })
-    lines.push({
-      text: pad(`  ${it.qty} x ${formatCLP(it.price_snapshot)}`, formatCLP(it.line_total), width),
-    })
-  }
-  lines.push({ text: '', rule: true })
-  lines.push({ text: pad('Subtotal', formatCLP(sale.subtotal), width) })
-  if (sale.discount > 0) lines.push({ text: pad('Descuento', '-' + formatCLP(sale.discount), width) })
-  lines.push({ text: pad('TOTAL', formatCLP(sale.total), width), bold: true, large: true })
-  lines.push({ text: '', rule: true })
-  lines.push({
-    text: pad('Pago', PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method, width),
-  })
-  if (sale.payment_method === 'efectivo' && sale.cash_received != null) {
-    lines.push({ text: pad('Recibido', formatCLP(sale.cash_received), width) })
-    lines.push({ text: pad('Vuelto', formatCLP(sale.change_given ?? 0), width) })
-  }
-  if (store.receipt_footer) {
-    lines.push({ text: '' })
-    lines.push({ text: store.receipt_footer, center: true })
-  }
+  const lines = renderTemplate(template, sale, store, width)
 
   return (
     <div
       className={cn(
         'rounded-md bg-white text-black shadow-soft',
-        'mx-auto px-4 py-5 font-mono text-[12px] leading-[1.35]',
+        'mx-auto px-5 py-5 font-mono text-[12px] leading-[1.4]',
         className,
       )}
-      style={{ width: `${width * 8 + 32}px`, maxWidth: '100%' }}
+      style={{ width: `${width * 8 + 40}px`, maxWidth: '100%' }}
     >
-      {lines.map((l, i) =>
-        l.rule ? (
-          <div key={i} className="my-1 border-t border-dashed border-black/30" />
-        ) : (
-          <div
-            key={i}
-            className={cn(
-              'whitespace-pre',
-              l.center && 'text-center',
-              l.bold && 'font-bold',
-              l.large && 'text-[14px]',
-            )}
-          >
-            {l.text || ' '}
-          </div>
-        ),
+      {lines.map((l, i) => (
+        <Line key={i} line={l} width={width} />
+      ))}
+    </div>
+  )
+}
+
+function Line({ line, width }: { line: RenderedLine; width: number }) {
+  if (line.kind === 'sep') {
+    const ch = (line.char || '-').slice(0, 1) || '-'
+    return <div className="border-t border-dashed border-black/40 my-1" aria-hidden>
+      <span className="sr-only">{ch.repeat(width)}</span>
+    </div>
+  }
+  if (line.kind === 'spacer') {
+    return <div>&nbsp;</div>
+  }
+  const usableWidth = line.size === 'xl' ? Math.max(8, Math.floor(width / 2)) : width
+  const text =
+    line.right != null ? pad(line.left, line.right, usableWidth) : line.left
+  const sizeClass =
+    line.size === 'xl'
+      ? 'text-[18px] leading-[1.2]'
+      : line.size === 'large'
+        ? 'text-[14px] leading-[1.25]'
+        : ''
+  const alignClass =
+    line.align === 'center' ? 'text-center' : line.align === 'right' ? 'text-right' : ''
+  return (
+    <div
+      className={cn(
+        'whitespace-pre',
+        line.bold && 'font-bold',
+        sizeClass,
+        alignClass,
       )}
+    >
+      {text || ' '}
     </div>
   )
 }

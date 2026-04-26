@@ -1,6 +1,7 @@
 import { ThermalPrinter, PrinterTypes, CharacterSet } from 'node-thermal-printer'
 import type { PrinterSettings, SaleWithItems, StoreSettings } from '../../shared/types'
-import { formatReceipt, formatTestPage } from './receipt'
+import type { ReceiptTemplate } from '../../shared/template'
+import { formatReceiptFromTemplate, formatTestPage } from './receipt'
 
 let driver: unknown = null
 
@@ -54,6 +55,7 @@ export async function printReceipt(
   sale: SaleWithItems,
   store: StoreSettings,
   printer: PrinterSettings,
+  template: ReceiptTemplate,
 ): Promise<void> {
   if (!printer.enabled) throw new Error('Impresora deshabilitada en Ajustes')
   if (!printer.interface || printer.interface.trim() === '') {
@@ -61,7 +63,7 @@ export async function printReceipt(
   }
   const tp = buildPrinter(printer)
   await ensureConnected(tp)
-  formatReceipt(tp, sale, store, printer.width_chars)
+  formatReceiptFromTemplate(tp, sale, store, template, printer.width_chars)
   if (printer.open_drawer_on_cash && sale.payment_method === 'efectivo') {
     tp.openCashDrawer()
   }

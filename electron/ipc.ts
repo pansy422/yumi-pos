@@ -99,7 +99,7 @@ export function registerIpc(): void {
       const sale = sales.getById(saleId)
       if (!sale) throw new Error('Venta no encontrada')
       const s = settingsRepo.getAll()
-      await printReceiptHw(sale, s.store, s.printer)
+      await printReceiptHw(sale, s.store, s.printer, s.receipt_template)
     }),
   )
 

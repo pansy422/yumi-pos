@@ -1,3 +1,5 @@
+import type { ReceiptTemplate } from './template'
+
 export type PaymentMethod = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro'
 
 export type Product = {
@@ -132,6 +134,7 @@ export type Settings = {
   store: StoreSettings
   printer: PrinterSettings
   flags: AppFlags
+  receipt_template: ReceiptTemplate
 }
 
 export type DailyReport = {

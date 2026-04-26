@@ -1,44 +1,64 @@
 import type { ThermalPrinter } from 'node-thermal-printer'
+import type { Align, ReceiptTemplate, RenderedLine, Size } from '../../shared/template'
+import { DEFAULT_TEMPLATE, pad, renderTemplate } from '../../shared/template'
 import type { SaleWithItems, StoreSettings } from '../../shared/types'
-import { formatCLP } from '../../shared/money'
 
-const PAYMENT_LABEL: Record<string, string> = {
-  efectivo: 'EFECTIVO',
-  debito: 'DEBITO',
-  credito: 'CREDITO',
-  transferencia: 'TRANSFERENCIA',
-  otro: 'OTRO',
+function applyAlign(tp: ThermalPrinter, align: Align) {
+  if (align === 'center') tp.alignCenter()
+  else if (align === 'right') tp.alignRight()
+  else tp.alignLeft()
 }
 
-function visibleLength(s: string): number {
-  return s.length
+function applySize(tp: ThermalPrinter, size: Size) {
+  if (size === 'large') tp.setTextDoubleHeight()
+  else if (size === 'xl') tp.setTextQuadArea()
+  else tp.setTextNormal()
 }
 
-function pad(left: string, right: string, width: number): string {
-  const space = Math.max(1, width - visibleLength(left) - visibleLength(right))
-  return left + ' '.repeat(space) + right
-}
-
-function wrap(text: string, width: number): string[] {
-  if (text.length <= width) return [text]
-  const out: string[] = []
-  let cur = ''
-  for (const word of text.split(/\s+/)) {
-    if (!cur) {
-      cur = word
-    } else if (cur.length + 1 + word.length <= width) {
-      cur += ' ' + word
-    } else {
-      out.push(cur)
-      cur = word
-    }
-    while (cur.length > width) {
-      out.push(cur.slice(0, width))
-      cur = cur.slice(width)
-    }
+function emitLine(tp: ThermalPrinter, line: RenderedLine, width: number, lineCharFallback: string) {
+  if (line.kind === 'sep') {
+    tp.alignLeft()
+    tp.setTextNormal()
+    tp.bold(false)
+    const ch = (line.char || lineCharFallback).slice(0, 1) || '-'
+    tp.println(ch.repeat(width))
+    return
   }
-  if (cur) out.push(cur)
-  return out
+  if (line.kind === 'spacer') {
+    tp.newLine()
+    return
+  }
+  applyAlign(tp, line.align)
+  if (line.bold) tp.bold(true)
+  applySize(tp, line.size)
+
+  // Width adjustment for sized text: large/xl take more pixels per char.
+  // We pad based on logical width but then setTextDoubleHeight only doubles height,
+  // setTextQuadArea doubles both. For simplicity we use full width for normal+large,
+  // and half width for xl since chars are double width.
+  const usableWidth = line.size === 'xl' ? Math.max(8, Math.floor(width / 2)) : width
+
+  let text: string
+  if (line.right != null) {
+    text = pad(line.left, line.right, usableWidth)
+  } else {
+    text = line.left
+  }
+  tp.println(text)
+  if (line.bold) tp.bold(false)
+  tp.setTextNormal()
+}
+
+export function formatReceiptFromTemplate(
+  tp: ThermalPrinter,
+  sale: SaleWithItems,
+  store: StoreSettings,
+  template: ReceiptTemplate,
+  width: number,
+): void {
+  const w = width > 0 ? width : 42
+  const lines = renderTemplate(template, sale, store, w)
+  for (const l of lines) emitLine(tp, l, w, '-')
 }
 
 export function formatReceipt(
@@ -46,62 +66,9 @@ export function formatReceipt(
   sale: SaleWithItems,
   store: StoreSettings,
   width: number,
+  template?: ReceiptTemplate,
 ): void {
-  const w = width > 0 ? width : 42
-
-  tp.alignCenter()
-  tp.bold(true)
-  tp.setTextDoubleHeight()
-  tp.println(store.name || 'Yumi POS')
-  tp.setTextNormal()
-  tp.bold(false)
-  if (store.address) {
-    for (const line of wrap(store.address, w)) tp.println(line)
-  }
-  if (store.rut) tp.println(`RUT: ${store.rut}`)
-  if (store.phone) tp.println(`Tel: ${store.phone}`)
-  tp.drawLine()
-
-  tp.alignLeft()
-  const date = new Date(sale.completed_at).toLocaleString('es-CL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  tp.println(pad(`Boleta N° ${sale.number}`, date, w))
-  tp.drawLine()
-
-  for (const it of sale.items) {
-    for (const line of wrap(it.name_snapshot, w)) tp.println(line)
-    const qtyLine = `  ${it.qty} x ${formatCLP(it.price_snapshot)}`
-    tp.println(pad(qtyLine, formatCLP(it.line_total), w))
-  }
-
-  tp.drawLine()
-  tp.println(pad('Subtotal', formatCLP(sale.subtotal), w))
-  if (sale.discount > 0) tp.println(pad('Descuento', '-' + formatCLP(sale.discount), w))
-  tp.bold(true)
-  tp.setTextDoubleHeight()
-  tp.println(pad('TOTAL', formatCLP(sale.total), Math.floor(w / 2)))
-  tp.setTextNormal()
-  tp.bold(false)
-  tp.drawLine()
-
-  tp.println(pad('Pago', PAYMENT_LABEL[sale.payment_method] ?? sale.payment_method, w))
-  if (sale.payment_method === 'efectivo' && sale.cash_received != null) {
-    tp.println(pad('Recibido', formatCLP(sale.cash_received), w))
-    tp.println(pad('Vuelto', formatCLP(sale.change_given ?? 0), w))
-  }
-  tp.newLine()
-  tp.alignCenter()
-  if (store.receipt_footer) {
-    for (const line of wrap(store.receipt_footer, w)) tp.println(line)
-  }
-  tp.println(`#${sale.number}`)
-  tp.newLine()
-  tp.newLine()
+  formatReceiptFromTemplate(tp, sale, store, template ?? DEFAULT_TEMPLATE, width)
 }
 
 export function formatTestPage(tp: ThermalPrinter, store: StoreSettings, width: number): void {
@@ -118,13 +85,17 @@ export function formatTestPage(tp: ThermalPrinter, store: StoreSettings, width: 
   tp.println(pad('Ancho', `${w} chars`, w))
   tp.println(pad('Codepage', 'PC850', w))
   tp.println(
-    pad('Fecha', new Date().toLocaleString('es-CL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }), w),
+    pad(
+      'Fecha',
+      new Date().toLocaleString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      w,
+    ),
   )
   tp.println(pad('Estado', 'OK', w))
   tp.newLine()
