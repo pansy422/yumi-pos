@@ -11,6 +11,7 @@ import {
   Save,
   Sparkles,
   Store,
+  Tag,
   Upload,
   Usb,
 } from 'lucide-react'
@@ -31,6 +32,8 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ReceiptEditor } from '@/components/common/ReceiptEditor'
+import { PromotionsTab } from './SettingsPromotions'
+import { UsersTab } from './SettingsUsers'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
@@ -69,6 +72,12 @@ export function Settings() {
             <TabsTrigger value="receipt">
               <Receipt className="h-4 w-4" /> Boleta
             </TabsTrigger>
+            <TabsTrigger value="promotions">
+              <Tag className="h-4 w-4" /> Promociones
+            </TabsTrigger>
+            <TabsTrigger value="users">
+              <Sparkles className="h-4 w-4" /> Usuarios
+            </TabsTrigger>
             <TabsTrigger value="data">
               <Database className="h-4 w-4" /> Datos
             </TabsTrigger>
@@ -90,6 +99,12 @@ export function Settings() {
                 toast({ variant: 'success', title: 'Impresora guardada' })
               }}
             />
+          </TabsContent>
+          <TabsContent value="promotions">
+            <PromotionsTab />
+          </TabsContent>
+          <TabsContent value="users">
+            <UsersTab />
           </TabsContent>
           <TabsContent value="receipt">
             <ReceiptEditor

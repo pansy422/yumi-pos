@@ -13,6 +13,7 @@ export function sampleSale(): SaleWithItems {
     cash_received: 5000,
     change_given: 1010,
     cash_session_id: 'sample',
+    cashier_id: null,
     voided: 0,
     payments: [{ method: 'efectivo', amount: 3990, cash_received: 5000, change_given: 1010 }],
     items: [

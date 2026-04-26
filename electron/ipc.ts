@@ -6,6 +6,8 @@ import * as sales from './db/sales'
 import * as cash from './db/cashSessions'
 import * as reports from './db/reports'
 import * as settingsRepo from './db/settings'
+import * as promotions from './db/promotions'
+import * as users from './db/users'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
 import {
@@ -106,6 +108,25 @@ export function registerIpc(): void {
   handle(IPC.categoriesRename, (from: string, to: string) => ({
     updated: products.renameCategory(from, to),
   }))
+
+  handle(IPC.promotionsList, (includeInactive?: boolean) => promotions.list(!!includeInactive))
+  handle(IPC.promotionsSave, (input: Parameters<typeof promotions.save>[0]) =>
+    promotions.save(input),
+  )
+  handle(IPC.promotionsDelete, (id: string) => {
+    promotions.remove(id)
+  })
+  handle(IPC.promotionsCompute, (items: Parameters<typeof promotions.computeForCart>[0]) =>
+    promotions.computeForCart(items),
+  )
+
+  handle(IPC.usersList, (includeInactive?: boolean) => users.list(!!includeInactive))
+  handle(IPC.usersSave, (input: Parameters<typeof users.save>[0]) => users.save(input))
+  handle(IPC.usersDelete, (id: string) => {
+    users.remove(id)
+  })
+  handle(IPC.usersVerifyPin, (id: string, pin: string) => users.verifyPin(id, pin))
+  handle(IPC.usersCount, () => users.count())
 
   // Logging extra para sales:create — es el flujo crítico.
   ipcMain.handle(IPC.salesCreate, async (_e, input: Parameters<typeof sales.create>[0]) => {

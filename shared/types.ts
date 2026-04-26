@@ -44,6 +44,7 @@ export type CartItem = {
   stock: number
   surcharge: number
   is_weight: 0 | 1
+  category: string | null
 }
 
 export type SalePayment = {
@@ -58,6 +59,7 @@ export type SaleInput = {
   discount: number
   payments: SalePayment[]
   note?: string
+  cashier_id?: string | null
 }
 
 export type SaleItem = {
@@ -85,6 +87,7 @@ export type Sale = {
   cash_received: number | null
   change_given: number | null
   cash_session_id: string | null
+  cashier_id: string | null
   voided: 0 | 1
 }
 
@@ -109,6 +112,55 @@ export type CategoryStat = {
   count: number
   stock: number
   value: number
+}
+
+export type PromotionKind =
+  | 'percent_off_category'
+  | 'percent_off_product'
+  | 'percent_off_total'
+
+export type Promotion = {
+  id: string
+  name: string
+  kind: PromotionKind
+  /** Categoría o product_id según kind. null para percent_off_total. */
+  target: string | null
+  params: { percent?: number; min_amount?: number }
+  active: 0 | 1
+  created_at: string
+}
+
+export type PromotionInput = {
+  id?: string
+  name: string
+  kind: PromotionKind
+  target?: string | null
+  params: { percent?: number; min_amount?: number }
+  active?: boolean
+}
+
+export type AppliedPromotion = {
+  promo_id: string
+  name: string
+  amount: number
+}
+
+export type UserRole = 'admin' | 'cashier'
+
+export type User = {
+  id: string
+  name: string
+  role: UserRole
+  active: 0 | 1
+  created_at: string
+}
+
+export type UserInput = {
+  id?: string
+  name: string
+  pin?: string
+  role: UserRole
+  active?: boolean
 }
 
 export type CategoryRevenue = {
@@ -243,6 +295,19 @@ export type Api = {
   productsCritical: () => Promise<Product[]>
   categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
+
+  promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>
+  promotionsSave: (input: PromotionInput) => Promise<Promotion>
+  promotionsDelete: (id: string) => Promise<void>
+  promotionsCompute: (
+    items: (CartItem & { category?: string | null })[],
+  ) => Promise<{ total_discount: number; applied: AppliedPromotion[] }>
+
+  usersList: (includeInactive?: boolean) => Promise<User[]>
+  usersSave: (input: UserInput) => Promise<User>
+  usersDelete: (id: string) => Promise<void>
+  usersVerifyPin: (id: string, pin: string) => Promise<User | null>
+  usersCount: () => Promise<number>
 
   salesCreate: (input: SaleInput) => Promise<SaleWithItems>
   salesList: (q?: { from?: string; to?: string; limit?: number; cashSessionId?: string }) => Promise<Sale[]>

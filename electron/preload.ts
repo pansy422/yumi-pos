@@ -17,6 +17,17 @@ const api = {
   categoriesList: invoke(IPC.categoriesList),
   categoriesRename: invoke(IPC.categoriesRename),
 
+  promotionsList: invoke(IPC.promotionsList),
+  promotionsSave: invoke(IPC.promotionsSave),
+  promotionsDelete: invoke(IPC.promotionsDelete),
+  promotionsCompute: invoke(IPC.promotionsCompute),
+
+  usersList: invoke(IPC.usersList),
+  usersSave: invoke(IPC.usersSave),
+  usersDelete: invoke(IPC.usersDelete),
+  usersVerifyPin: invoke(IPC.usersVerifyPin),
+  usersCount: invoke(IPC.usersCount),
+
   salesCreate: invoke(IPC.salesCreate),
   salesList: invoke(IPC.salesList),
   salesGet: invoke(IPC.salesGet),

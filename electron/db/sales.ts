@@ -23,6 +23,7 @@ function rowToSale(r: Record<string, unknown> | undefined): Sale | null {
     cash_received: r.cash_received == null ? null : Number(r.cash_received),
     change_given: r.change_given == null ? null : Number(r.change_given),
     cash_session_id: (r.cash_session_id as string | null) ?? null,
+    cashier_id: (r.cashier_id as string | null) ?? null,
     voided: Number(r.voided) === 1 ? 1 : 0,
   }
 }
@@ -191,9 +192,9 @@ export function create(input: SaleInput): SaleWithItems {
 
     db.prepare(
       `INSERT INTO sales (id, number, started_at, completed_at, subtotal, discount, total,
-        payment_method, cash_received, change_given, cash_session_id, note)
+        payment_method, cash_received, change_given, cash_session_id, cashier_id, note)
        VALUES (@id, @number, @started_at, @completed_at, @subtotal, @discount, @total,
-        @pm, @cash_received, @change, @session, @note)`,
+        @pm, @cash_received, @change, @session, @cashier, @note)`,
     ).run({
       id: saleId,
       number: next.last_number,
@@ -206,6 +207,7 @@ export function create(input: SaleInput): SaleWithItems {
       cash_received: cashReceivedTotal,
       change: changeTotal,
       session: session?.id ?? null,
+      cashier: input.cashier_id ?? null,
       note: input.note ?? null,
     })
 

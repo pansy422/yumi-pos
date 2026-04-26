@@ -5,6 +5,7 @@ import {
   Box,
   DollarSign,
   DoorOpen,
+  LogOut,
   Minus,
   PauseCircle,
   Play,
@@ -17,6 +18,7 @@ import {
   ShoppingCart,
   Sparkles,
   Trash2,
+  User as UserIcon,
   X,
   Zap,
 } from 'lucide-react'
@@ -41,7 +43,7 @@ import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
 import { formatCLP, formatWeight, todayISO } from '@shared/money'
-import type { PaymentMethod, Product, SaleWithItems } from '@shared/types'
+import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
   DialogContent,
@@ -87,6 +89,8 @@ export function POS() {
   const holdTicket = useHeldTickets((s) => s.hold)
   const removeHeld = useHeldTickets((s) => s.remove)
   const cash = useSession((s) => s.cash)
+  const currentUser = useSession((s) => s.user)
+  const logout = useSession((s) => s.logout)
   const { toast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -105,6 +109,11 @@ export function POS() {
   const [inlineSearch, setInlineSearch] = useState('')
   const [inlineResults, setInlineResults] = useState<Product[]>([])
   const [inlineFocused, setInlineFocused] = useState(false)
+  const [appliedPromos, setAppliedPromos] = useState<AppliedPromotion[]>([])
+  const autoDiscount = useMemo(
+    () => appliedPromos.reduce((a, p) => a + p.amount, 0),
+    [appliedPromos],
+  )
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -126,6 +135,27 @@ export function POS() {
       cancelled = true
     }
   }, [payOpen])
+
+  // Recalcular promociones automáticas cada vez que cambian los items.
+  useEffect(() => {
+    if (items.length === 0) {
+      setAppliedPromos([])
+      return
+    }
+    let cancelled = false
+    api
+      .promotionsCompute(items)
+      .then((r) => {
+        if (cancelled) return
+        setAppliedPromos(r.applied)
+      })
+      .catch(() => {
+        if (!cancelled) setAppliedPromos([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [items])
 
   // Búscador inline: live results con debounce.
   useEffect(() => {
@@ -258,6 +288,22 @@ export function POS() {
           + navegación admin. Reemplaza al sidebar oculto en /pos. */}
       <div className="flex items-center gap-4 border-b border-border/60 bg-card/40 px-6 py-2.5 backdrop-blur-sm">
         <Wordmark />
+        {currentUser && (
+          <>
+            <span className="h-6 w-px bg-border" />
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs">
+              <UserIcon className="h-3 w-3 text-primary" />
+              <span className="font-medium">{currentUser.name}</span>
+              <button
+                onClick={logout}
+                className="ml-1 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Cerrar sesión"
+              >
+                <LogOut className="h-3 w-3" />
+              </button>
+            </div>
+          </>
+        )}
         <span className="h-6 w-px bg-border" />
         <div
           className={cn(
@@ -607,8 +653,29 @@ export function POS() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="num">{formatCLP(sub)}</span>
               </div>
+              {appliedPromos.length > 0 && (
+                <div className="space-y-1 rounded-md border border-success/30 bg-success/5 p-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-success">
+                      Promociones ({appliedPromos.length})
+                    </span>
+                    <span className="num font-semibold text-success">
+                      -{formatCLP(autoDiscount)}
+                    </span>
+                  </div>
+                  {appliedPromos.map((p) => (
+                    <div
+                      key={p.promo_id}
+                      className="flex items-center justify-between text-[10px] text-muted-foreground"
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="num">-{formatCLP(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="space-y-1.5">
-                <Label className="text-xs">Descuento</Label>
+                <Label className="text-xs">Descuento manual</Label>
                 <MoneyInput value={discount} onValueChange={setDiscount} />
               </div>
               <div className="border-t border-border/60 pt-3">
@@ -616,7 +683,7 @@ export function POS() {
                   Total a cobrar
                 </div>
                 <div className="num text-[64px] font-bold leading-none tracking-tight brand-text">
-                  {formatCLP(tot)}
+                  {formatCLP(Math.max(0, tot - autoDiscount))}
                 </div>
               </div>
               <Button
@@ -735,7 +802,13 @@ export function POS() {
         }}
       />
 
-      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
+      <PaymentDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        autoDiscount={autoDiscount}
+        appliedPromos={appliedPromos}
+        cashierId={currentUser?.id ?? null}
+      />
     </div>
   )
 }
@@ -1123,9 +1196,15 @@ type PaymentLine = {
 function PaymentDialog({
   open,
   onOpenChange,
+  autoDiscount,
+  appliedPromos,
+  cashierId,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
+  autoDiscount: number
+  appliedPromos: AppliedPromotion[]
+  cashierId: string | null
 }) {
   const { items, discount, total, clear } = useCart()
   const cash = useSession((s) => s.cash)
@@ -1136,7 +1215,7 @@ function PaymentDialog({
   const [submitting, setSubmitting] = useState(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const tot = total()
+  const tot = Math.max(0, total() - autoDiscount)
 
   useEffect(() => {
     if (!open) {
@@ -1201,6 +1280,10 @@ function PaymentDialog({
     if (!canSubmit) return
     setSubmitting(true)
     try {
+      const promoNote =
+        appliedPromos.length > 0
+          ? `Promos: ${appliedPromos.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
+          : undefined
       const sale = await api.salesCreate({
         items: items.map((i) => ({
           product_id: i.product_id,
@@ -1208,7 +1291,10 @@ function PaymentDialog({
           price: i.price,
           surcharge: i.surcharge,
         })),
-        discount,
+        // El descuento total que se persiste = manual + descuentos
+        // automáticos por promociones. Las promos se loggean en `note`
+        // para tener trazabilidad mientras no haya tabla dedicada.
+        discount: discount + autoDiscount,
         payments: lines
           .filter((l) => l.amount > 0)
           .map((l) => ({
@@ -1216,6 +1302,8 @@ function PaymentDialog({
             amount: l.amount,
             cash_received: l.method === 'efectivo' ? l.cash_received : undefined,
           })),
+        note: promoNote,
+        cashier_id: cashierId,
       })
       setLastSale(sale)
       clear()

@@ -12,6 +12,17 @@ export const IPC = {
   categoriesList: 'categories:list',
   categoriesRename: 'categories:rename',
 
+  promotionsList: 'promotions:list',
+  promotionsSave: 'promotions:save',
+  promotionsDelete: 'promotions:delete',
+  promotionsCompute: 'promotions:compute',
+
+  usersList: 'users:list',
+  usersSave: 'users:save',
+  usersDelete: 'users:delete',
+  usersVerifyPin: 'users:verifyPin',
+  usersCount: 'users:count',
+
   salesCreate: 'sales:create',
   salesList: 'sales:list',
   salesGet: 'sales:get',
