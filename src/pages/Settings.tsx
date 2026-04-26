@@ -113,36 +113,82 @@ function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => v
   const [form, setForm] = useState<StoreSettings>(settings.store)
   const [saving, setSaving] = useState(false)
   return (
-    <Card className="card-elev">
-      <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
-        <Field label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-        <Field label="RUT" value={form.rut} onChange={(v) => setForm({ ...form, rut: v })} />
-        <Field label="Dirección" value={form.address} onChange={(v) => setForm({ ...form, address: v })} className="sm:col-span-2" />
-        <Field label="Teléfono" value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} />
-        <Field
-          label="Pie de boleta"
-          value={form.receipt_footer}
-          onChange={(v) => setForm({ ...form, receipt_footer: v })}
-          className="sm:col-span-2"
-        />
-        <div className="sm:col-span-2 flex justify-end">
-          <Button
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true)
-              try {
-                await api.settingsSet({ store: form })
-                onSaved()
-              } finally {
-                setSaving(false)
+    <div className="space-y-4">
+      <Card className="card-elev">
+        <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+          <Field label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+          <Field label="RUT" value={form.rut} onChange={(v) => setForm({ ...form, rut: v })} />
+          <Field
+            label="Dirección"
+            value={form.address}
+            onChange={(v) => setForm({ ...form, address: v })}
+            className="sm:col-span-2"
+          />
+          <Field
+            label="Teléfono"
+            value={form.phone}
+            onChange={(v) => setForm({ ...form, phone: v })}
+          />
+          <Field
+            label="Pie de boleta"
+            value={form.receipt_footer}
+            onChange={(v) => setForm({ ...form, receipt_footer: v })}
+            className="sm:col-span-2"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="card-elev">
+        <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label className="flex items-center gap-2 text-sm text-foreground">Impuestos</Label>
+            <p className="text-[11px] text-muted-foreground">
+              Configura el IVA para que los bloques "Neto" e "IVA" de la boleta usen el porcentaje correcto.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <Label>Tasa IVA (%)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={50}
+              value={form.tax_rate ?? 19}
+              onChange={(e) =>
+                setForm({ ...form, tax_rate: Math.max(0, Math.min(50, Number(e.target.value) || 0)) })
               }
-            }}
-          >
-            <Save className="h-4 w-4" /> Guardar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+            />
+          </div>
+          <div className="flex items-end justify-between gap-3">
+            <div className="space-y-0.5">
+              <Label className="text-sm text-foreground">Precios incluyen IVA</Label>
+              <p className="text-[11px] text-muted-foreground">
+                ON: precio mostrado al cliente ya incluye IVA (boleta Chile). OFF: el IVA se suma encima (factura).
+              </p>
+            </div>
+            <Switch
+              checked={form.tax_inclusive ?? true}
+              onCheckedChange={(v) => setForm({ ...form, tax_inclusive: v })}
+            />
+          </div>
+          <div className="sm:col-span-2 flex justify-end">
+            <Button
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true)
+                try {
+                  await api.settingsSet({ store: form })
+                  onSaved()
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            >
+              <Save className="h-4 w-4" /> Guardar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 

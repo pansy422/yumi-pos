@@ -9,6 +9,8 @@ const DEFAULTS: Settings = {
     rut: '',
     phone: '',
     receipt_footer: '¡Gracias por tu compra!',
+    tax_rate: 19,
+    tax_inclusive: true,
   },
   printer: {
     enabled: false,

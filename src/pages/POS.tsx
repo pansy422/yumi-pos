@@ -5,6 +5,7 @@ import {
   PauseCircle,
   Play,
   Plus,
+  PlusSquare,
   Search,
   ShoppingCart,
   Sparkles,
@@ -55,6 +56,7 @@ export function POS() {
     items,
     add,
     setQty,
+    setSurcharge,
     remove,
     clear,
     discount,
@@ -274,7 +276,20 @@ export function POS() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right num">{formatCLP(it.price)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="num">{formatCLP(it.price + it.surcharge)}</div>
+                          {it.surcharge !== 0 && (
+                            <div
+                              className={cn(
+                                'mono text-[10px]',
+                                it.surcharge > 0 ? 'text-warning' : 'text-success',
+                              )}
+                            >
+                              {it.surcharge > 0 ? '+' : ''}
+                              {formatCLP(it.surcharge)} recargo
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
                             <Button
@@ -303,17 +318,23 @@ export function POS() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right num font-semibold">
-                          {formatCLP(it.price * it.qty)}
+                          {formatCLP((it.price + it.surcharge) * it.qty)}
                         </td>
                         <td className="px-2">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => remove(it.product_id)}
-                            className="text-muted-foreground hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <SurchargeButton
+                              value={it.surcharge}
+                              onChange={(n) => setSurcharge(it.product_id, n)}
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => remove(it.product_id)}
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -467,6 +488,80 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <span className="text-muted-foreground">{label}</span>
       {children}
     </div>
+  )
+}
+
+function SurchargeButton({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (n: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState(value !== 0 ? String(value) : '')
+  useEffect(() => {
+    setText(value !== 0 ? String(value) : '')
+  }, [value])
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <button
+        onClick={() => setOpen(true)}
+        title="Recargo o descuento por unidad"
+        className={cn(
+          'flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground',
+          value !== 0 && (value > 0 ? 'text-warning' : 'text-success'),
+        )}
+      >
+        <PlusSquare className="h-4 w-4" />
+      </button>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Recargo / descuento por unidad</DialogTitle>
+          <DialogDescription>
+            Cantidad fija sumada al precio de cada unidad. Usa negativo para descontar.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-1">
+          <Label>Monto por unidad</Label>
+          <Input
+            autoFocus
+            type="number"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="ej. 500 para sumar $500"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onChange(Number(text) || 0)
+                setOpen(false)
+              }
+            }}
+          />
+          <p className="text-[11px] text-muted-foreground">
+            Lo verás reflejado en la línea del producto y en el total.
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              onChange(0)
+              setOpen(false)
+            }}
+          >
+            Quitar recargo
+          </Button>
+          <Button
+            onClick={() => {
+              onChange(Number(text) || 0)
+              setOpen(false)
+            }}
+          >
+            Aplicar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -758,7 +853,12 @@ function PaymentDialog({
     setSubmitting(true)
     try {
       const sale = await api.salesCreate({
-        items: items.map((i) => ({ product_id: i.product_id, qty: i.qty, price: i.price })),
+        items: items.map((i) => ({
+          product_id: i.product_id,
+          qty: i.qty,
+          price: i.price,
+          surcharge: i.surcharge,
+        })),
         discount,
         payment_method: method,
         cash_received: method === 'efectivo' ? received : undefined,

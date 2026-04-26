@@ -11,10 +11,12 @@ type State = {
 type Actions = {
   add: (p: Product, qty?: number) => void
   setQty: (productId: string, qty: number) => void
+  setSurcharge: (productId: string, n: number) => void
   remove: (productId: string) => void
   clear: () => void
   setDiscount: (n: number) => void
   subtotal: () => number
+  surchargeTotal: () => number
   total: () => number
   loadItems: (items: CartItem[], discount: number) => void
 }
@@ -44,6 +46,7 @@ export const useCart = create<State & Actions>((set, get) => ({
             cost: p.cost,
             qty,
             stock: p.stock,
+            surcharge: 0,
           },
         ],
         lastAddedAt: stamp,
@@ -56,11 +59,25 @@ export const useCart = create<State & Actions>((set, get) => ({
         .map((i) => (i.product_id === productId ? { ...i, qty: Math.max(0, Math.round(qty)) } : i))
         .filter((i) => i.qty > 0),
     })),
+  setSurcharge: (productId, n) =>
+    set((s) => ({
+      items: s.items.map((i) =>
+        i.product_id === productId ? { ...i, surcharge: Math.round(n) } : i,
+      ),
+    })),
   remove: (productId) =>
     set((s) => ({ items: s.items.filter((i) => i.product_id !== productId) })),
   clear: () => set({ items: [], discount: 0, lastAddedId: null }),
   setDiscount: (n) => set({ discount: Math.max(0, Math.round(n)) }),
-  subtotal: () => get().items.reduce((acc, i) => acc + i.price * i.qty, 0),
+  subtotal: () =>
+    get().items.reduce((acc, i) => acc + (i.price + i.surcharge) * i.qty, 0),
+  surchargeTotal: () => get().items.reduce((acc, i) => acc + i.surcharge * i.qty, 0),
   total: () => Math.max(0, get().subtotal() - get().discount),
-  loadItems: (items, discount) => set({ items, discount, lastAddedId: null, lastAddedAt: 0 }),
+  loadItems: (items, discount) =>
+    set({
+      items: items.map((i) => ({ ...i, surcharge: i.surcharge ?? 0 })),
+      discount,
+      lastAddedId: null,
+      lastAddedAt: 0,
+    }),
 }))

@@ -36,10 +36,11 @@ export type CartItem = {
   cost: number
   qty: number
   stock: number
+  surcharge: number
 }
 
 export type SaleInput = {
-  items: { product_id: string; qty: number; price: number }[]
+  items: { product_id: string; qty: number; price: number; surcharge?: number }[]
   discount: number
   payment_method: PaymentMethod
   cash_received?: number
@@ -51,6 +52,7 @@ export type SaleItem = {
   name_snapshot: string
   price_snapshot: number
   cost_snapshot: number
+  surcharge: number
   qty: number
   line_total: number
 }
@@ -136,6 +138,8 @@ export type StoreSettings = {
   rut: string
   phone: string
   receipt_footer: string
+  tax_rate: number
+  tax_inclusive: boolean
 }
 
 export type PrinterConnection = 'usb' | 'network'
