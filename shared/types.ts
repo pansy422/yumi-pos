@@ -152,6 +152,7 @@ export type User = {
   name: string
   role: UserRole
   active: 0 | 1
+  font_scale: number
   created_at: string
 }
 
@@ -161,6 +162,7 @@ export type UserInput = {
   pin?: string
   role: UserRole
   active?: boolean
+  font_scale?: number
 }
 
 export type CategoryRevenue = {
@@ -227,6 +229,7 @@ export type PrinterSettings = {
 
 export type AppFlags = {
   onboarded: boolean
+  theme: 'light' | 'dark'
 }
 
 export type BackupSettings = {

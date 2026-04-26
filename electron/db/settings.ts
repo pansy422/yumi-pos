@@ -29,6 +29,7 @@ const DEFAULTS: Settings = {
   },
   flags: {
     onboarded: false,
+    theme: 'light',
   },
   backup: {
     auto_daily: true,

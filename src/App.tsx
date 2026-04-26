@@ -6,6 +6,7 @@ import { ShortcutsDialog } from '@/components/common/ShortcutsDialog'
 import { FirstRunWizard } from '@/components/common/FirstRunWizard'
 import { LoginDialog } from '@/components/common/LoginDialog'
 import { useSession } from '@/stores/session'
+import { useThemeAndScale } from '@/hooks/useThemeAndScale'
 import { POS } from '@/pages/POS'
 import { Inventory } from '@/pages/Inventory'
 import { InventoryScan } from '@/pages/InventoryScan'
@@ -19,6 +20,7 @@ export default function App() {
   useEffect(() => {
     refresh()
   }, [refresh])
+  useThemeAndScale()
 
   return (
     <ToasterProvider>

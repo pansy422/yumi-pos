@@ -153,6 +153,11 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
     `)
     db.exec(`ALTER TABLE sales ADD COLUMN cashier_id TEXT REFERENCES users(id)`)
   },
+  (db) => {
+    // Preferencia de tamaño de letra por usuario para accesibilidad
+    // (1.0 = normal). El front aplica html { font-size: 16px * scale }.
+    db.exec(`ALTER TABLE users ADD COLUMN font_scale REAL NOT NULL DEFAULT 1.0`)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

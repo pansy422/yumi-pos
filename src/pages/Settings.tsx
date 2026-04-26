@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Database,
   Download,
+  Moon,
   Network,
   Printer,
   Receipt,
@@ -11,6 +12,7 @@ import {
   Save,
   Sparkles,
   Store,
+  Sun,
   Tag,
   Upload,
   Usb,
@@ -128,8 +130,52 @@ export function Settings() {
 function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => void }) {
   const [form, setForm] = useState<StoreSettings>(settings.store)
   const [saving, setSaving] = useState(false)
+  const refresh = useSession((s) => s.refresh)
+  const { toast } = useToast()
   return (
     <div className="space-y-4">
+      <Card className="card-elev">
+        <CardContent className="flex items-center justify-between gap-3 p-4">
+          <div className="flex items-start gap-2">
+            {settings.flags.theme === 'dark' ? (
+              <Moon className="mt-0.5 h-4 w-4 text-primary" />
+            ) : (
+              <Sun className="mt-0.5 h-4 w-4 text-primary" />
+            )}
+            <div>
+              <Label className="text-sm text-foreground">Apariencia</Label>
+              <p className="text-[11px] text-muted-foreground">
+                {settings.flags.theme === 'dark' ? 'Tema oscuro' : 'Tema claro'} — afecta a todas
+                las pantallas. El tamaño de letra se configura por usuario.
+              </p>
+            </div>
+          </div>
+          <div className="flex overflow-hidden rounded-md border border-border">
+            {(['light', 'dark'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={async () => {
+                  await api.settingsSet({
+                    flags: { ...settings.flags, theme: t },
+                  })
+                  await refresh()
+                  toast({ variant: 'success', title: t === 'dark' ? 'Tema oscuro' : 'Tema claro' })
+                }}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',
+                  settings.flags.theme === t
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card text-muted-foreground hover:bg-accent',
+                )}
+              >
+                {t === 'light' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {t === 'light' ? 'Claro' : 'Oscuro'}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       <Card className="card-elev">
         <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
           <Field label="Nombre" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
