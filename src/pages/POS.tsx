@@ -84,11 +84,21 @@ export function POS() {
   const [results, setResults] = useState<Product[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const cartScrollRef = useRef<HTMLDivElement>(null)
+  const lastRowRef = useRef<HTMLTableRowElement>(null)
   const [payOpen, setPayOpen] = useState(false)
   const [multiplier, setMultiplier] = useState(1)
   const [heldOpen, setHeldOpen] = useState(false)
   const [holdNameOpen, setHoldNameOpen] = useState(false)
   const [holdName, setHoldName] = useState('')
+
+  // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
+  // para que la cajera siempre vea la última lectura aunque el ticket sea
+  // largo.
+  useEffect(() => {
+    if (!lastAddedAt) return
+    lastRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [lastAddedAt])
 
   const addWithMultiplier = useCallback(
     (p: Product) => {
@@ -301,7 +311,7 @@ export function POS() {
                 description="Cada lectura agrega al ticket automáticamente. También puedes buscar manualmente con Ctrl+B."
               />
             ) : (
-              <div className="flex-1 overflow-auto scrollfade-y">
+              <div ref={cartScrollRef} className="flex-1 overflow-auto scrollfade-y">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
                     <tr>
@@ -313,22 +323,41 @@ export function POS() {
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((it) => (
+                    {items.map((it) => {
+                      const isLast = lastAddedId === it.product_id
+                      const overstock = it.qty > it.stock
+                      return (
                       <tr
                         key={it.product_id}
+                        ref={isLast ? lastRowRef : undefined}
                         className={cn(
                           'border-t border-border/40 transition-colors',
-                          lastAddedId === it.product_id && 'flash-row',
+                          isLast && 'flash-row outline outline-2 outline-success/60',
                         )}
                         data-flash={lastAddedAt}
                       >
                         <td className="px-4 py-3">
-                          <div className="font-medium">{it.name}</div>
-                          {it.barcode && (
-                            <div className="mono text-[11px] text-muted-foreground">
-                              {it.barcode}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{it.name}</span>
+                            {isLast && (
+                              <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">
+                                + Recién
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                            {it.barcode && <span className="mono">{it.barcode}</span>}
+                            <span
+                              className={cn(
+                                'mono',
+                                overstock && 'text-warning font-semibold',
+                                it.stock <= 0 && 'text-destructive font-semibold',
+                              )}
+                            >
+                              stock: {it.stock}
+                              {overstock ? ` · pediste ${it.qty}` : ''}
+                            </span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="num">{formatCLP(it.price + it.surcharge)}</div>
@@ -391,7 +420,8 @@ export function POS() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
