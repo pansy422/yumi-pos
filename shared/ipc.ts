@@ -8,6 +8,8 @@ export const IPC = {
   productsScanIn: 'products:scanIn',
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',
+  categoriesList: 'categories:list',
+  categoriesRename: 'categories:rename',
 
   salesCreate: 'sales:create',
   salesList: 'sales:list',

@@ -163,10 +163,13 @@ function DailyView() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-4">
-          <PaymentBreakdown items={report?.by_payment ?? []} loading={loading} />
-          <TopProducts items={report?.top_products ?? []} loading={loading} />
-        </div>
+        <>
+          <div className="grid grid-cols-2 gap-4">
+            <PaymentBreakdown items={report?.by_payment ?? []} loading={loading} />
+            <TopProducts items={report?.top_products ?? []} loading={loading} />
+          </div>
+          <CategoryBreakdown items={report?.by_category ?? []} loading={loading} />
+        </>
       )}
     </div>
   )
@@ -260,6 +263,7 @@ function RangeView() {
             <PaymentBreakdown items={report?.by_payment ?? []} loading={loading} />
             <TopProducts items={report?.top_products ?? []} loading={loading} />
           </div>
+          <CategoryBreakdown items={report?.by_category ?? []} loading={loading} />
           <Card className="card-elev">
             <CardContent className="p-0">
               <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -328,6 +332,67 @@ function PaymentBreakdown({
             />
           )}
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function CategoryBreakdown({
+  items,
+  loading,
+}: {
+  items: { name: string | null; qty: number; revenue: number; profit: number; count: number }[]
+  loading?: boolean
+}) {
+  const totalRevenue = items.reduce((a, i) => a + i.revenue, 0)
+  return (
+    <Card className="card-elev">
+      <CardContent className="p-0">
+        <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          Por categoría
+        </div>
+        {loading ? (
+          <div className="space-y-2 p-4">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-7" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Sin datos</p>
+        ) : (
+          <ul className="divide-y divide-border/40">
+            {items.map((it, idx) => {
+              const pct = totalRevenue > 0 ? (it.revenue / totalRevenue) * 100 : 0
+              return (
+                <li key={idx} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium">
+                      {it.name ?? <span className="italic text-muted-foreground">Sin categoría</span>}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="num">{it.qty} u</span>
+                      <span className="num text-success">{formatCLP(it.profit)}</span>
+                      <span className="num font-semibold text-foreground">
+                        {formatCLP(it.revenue)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full brand-gradient"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="num min-w-[36px] text-right text-[10px] text-muted-foreground">
+                      {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </CardContent>
     </Card>
   )

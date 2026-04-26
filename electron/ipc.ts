@@ -61,6 +61,10 @@ export function registerIpc(): void {
   handle(IPC.productsImport, (rows: Parameters<typeof products.importMany>[0]) =>
     products.importMany(rows),
   )
+  handle(IPC.categoriesList, () => products.categories())
+  handle(IPC.categoriesRename, (from: string, to: string) => ({
+    updated: products.renameCategory(from, to),
+  }))
 
   handle(IPC.salesCreate, (input: Parameters<typeof sales.create>[0]) => sales.create(input))
   handle(IPC.salesList, (q?: Parameters<typeof sales.list>[0]) => sales.list(q ?? {}))

@@ -1,5 +1,10 @@
 import { getDb } from './index'
-import type { DailyReport, PaymentMethod, RangeReport } from '../../shared/types'
+import type {
+  CategoryRevenue,
+  DailyReport,
+  PaymentMethod,
+  RangeReport,
+} from '../../shared/types'
 
 function dayBounds(date: string): { from: string; to: string } {
   return { from: `${date} 00:00:00`, to: `${date} 23:59:59.999` }
@@ -34,6 +39,33 @@ function byPayment(from: string, to: string) {
     .all(from, to) as { method: PaymentMethod; count: number; total: number }[]
 }
 
+function byCategory(from: string, to: string): CategoryRevenue[] {
+  const db = getDb()
+  const rows = db
+    .prepare(
+      `SELECT
+         COALESCE(NULLIF(TRIM(p.category), ''), '__none__') AS cat,
+         COUNT(DISTINCT s.id) AS sale_count,
+         SUM(si.qty) AS qty,
+         SUM(si.line_total) AS revenue,
+         SUM((si.price_snapshot - si.cost_snapshot) * si.qty) AS profit
+       FROM sale_items si
+       JOIN sales s ON s.id = si.sale_id
+       JOIN products p ON p.id = si.product_id
+       WHERE s.completed_at BETWEEN ? AND ? AND s.voided = 0
+       GROUP BY cat
+       ORDER BY revenue DESC`,
+    )
+    .all(from, to) as { cat: string; sale_count: number; qty: number; revenue: number; profit: number }[]
+  return rows.map((r) => ({
+    name: r.cat === '__none__' ? null : r.cat,
+    count: Number(r.sale_count),
+    qty: Number(r.qty),
+    revenue: Number(r.revenue),
+    profit: Number(r.profit),
+  }))
+}
+
 function totals(from: string, to: string): { sales_count: number; revenue: number; profit: number } {
   const db = getDb()
   const r = db
@@ -56,6 +88,7 @@ export function daily(date: string): DailyReport {
     profit: t.profit,
     by_payment: byPayment(from, to),
     top_products: topProducts(from, to),
+    by_category: byCategory(from, to),
   }
 }
 
@@ -82,6 +115,7 @@ export function range(fromDate: string, toDate: string): RangeReport {
     profit: t.profit,
     by_payment: byPayment(from, to),
     top_products: topProducts(from, to),
+    by_category: byCategory(from, to),
     daily: dailyRows.map((r) => ({
       date: r.d,
       revenue: Number(r.rev),
