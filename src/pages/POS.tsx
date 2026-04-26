@@ -91,6 +91,7 @@ export function POS() {
   const [heldOpen, setHeldOpen] = useState(false)
   const [holdNameOpen, setHoldNameOpen] = useState(false)
   const [holdName, setHoldName] = useState('')
+  const [nextSaleNumber, setNextSaleNumber] = useState<number | null>(null)
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -99,6 +100,19 @@ export function POS() {
     if (!lastAddedAt) return
     lastRowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }, [lastAddedAt])
+
+  // Próxima boleta: lo recargamos al montar y cuando se cierra el modal
+  // de pago (que es cuando se acaba de cobrar y el número avanza).
+  useEffect(() => {
+    if (payOpen) return
+    let cancelled = false
+    api.salesNextNumber().then((n) => {
+      if (!cancelled) setNextSaleNumber(n)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [payOpen])
 
   const addWithMultiplier = useCallback(
     (p: Product) => {
@@ -225,7 +239,14 @@ export function POS() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 bg-card/20 px-6 py-3">
         <div>
-          <div className="text-2xl font-semibold tracking-tight">Vender</div>
+          <div className="flex items-baseline gap-3">
+            <div className="text-2xl font-semibold tracking-tight">Vender</div>
+            {nextSaleNumber != null && (
+              <div className="text-xs text-muted-foreground">
+                Próxima boleta <span className="num font-semibold text-foreground">#{nextSaleNumber}</span>
+              </div>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Pasa el código por el lector. El escáner está siempre activo.
           </p>

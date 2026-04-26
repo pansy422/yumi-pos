@@ -132,6 +132,7 @@ export function registerIpc(): void {
   handle(IPC.salesVoid, (id: string, reason: string) => {
     sales.voidSale(id, reason)
   })
+  handle(IPC.salesNextNumber, () => sales.nextNumber())
 
   handle(IPC.cashCurrent, () => cash.current())
   handle(IPC.cashOpen, (amt: number, notes?: string) => cash.open(amt, notes))
