@@ -15,8 +15,8 @@
     "preview": "vite preview",
     "start": "concurrently -k -s first -n VITE,ELECTRON \"npm:dev\" \"wait-on http://localhost:5173 && npm run dev:electron\"",
     "dist": "npm run build && electron-builder --win --x64",
-    "rebuild": "electron-rebuild -f -w better-sqlite3 -w @thiagoelg/node-printer",
-    "postinstall": "electron-builder install-app-deps",
+    "rebuild": "node scripts/patch-deps.cjs && electron-rebuild -f -w better-sqlite3 -w @thiagoelg/node-printer",
+    "postinstall": "node scripts/patch-deps.cjs && electron-builder install-app-deps",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p electron/tsconfig.json --noEmit"
   },
   "dependencies": {
