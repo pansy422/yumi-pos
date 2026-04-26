@@ -13,7 +13,9 @@ export function sampleSale(): SaleWithItems {
     cash_received: 5000,
     change_given: 1010,
     cash_session_id: 'sample',
+    cashier_id: null,
     voided: 0,
+    payments: [{ method: 'efectivo', amount: 3990, cash_received: 5000, change_given: 1010 }],
     items: [
       {
         product_id: 'p1',
@@ -23,6 +25,8 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 2,
         line_total: 2580,
+        is_weight: 0,
+        returned_qty: 0,
       },
       {
         product_id: 'p2',
@@ -32,6 +36,8 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 4,
         line_total: 1400,
+        is_weight: 0,
+        returned_qty: 0,
       },
       {
         product_id: 'p3',
@@ -41,6 +47,8 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 1,
         line_total: 510,
+        is_weight: 0,
+        returned_qty: 0,
       },
     ],
   }

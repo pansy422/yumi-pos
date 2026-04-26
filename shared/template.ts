@@ -1,5 +1,5 @@
 import type { SaleWithItems, StoreSettings } from './types'
-import { formatCLP } from './money'
+import { formatCLP, formatWeight } from './money'
 
 export type Align = 'left' | 'center' | 'right'
 export type Size = 'normal' | 'large' | 'xl'
@@ -212,6 +212,8 @@ export function paymentLabel(m: string): string {
       return 'CREDITO'
     case 'transferencia':
       return 'TRANSFERENCIA'
+    case 'mixto':
+      return 'MIXTO'
     default:
       return m.toUpperCase()
   }
@@ -338,13 +340,23 @@ export function renderTemplate(
           for (const l of wrap(it.name_snapshot, w)) {
             out.push(baseLine({ ...b, align: 'left' }, l))
           }
-          out.push(
-            baseLine(
-              { ...b, align: 'left' },
-              `  ${it.qty} x ${formatCLP(it.price_snapshot)}`,
-              formatCLP(it.line_total),
-            ),
-          )
+          if (it.is_weight === 1) {
+            out.push(
+              baseLine(
+                { ...b, align: 'left' },
+                `  ${formatWeight(it.qty)} x ${formatCLP(it.price_snapshot)}/kg`,
+                formatCLP(it.line_total),
+              ),
+            )
+          } else {
+            out.push(
+              baseLine(
+                { ...b, align: 'left' },
+                `  ${it.qty} x ${formatCLP(it.price_snapshot)}`,
+                formatCLP(it.line_total),
+              ),
+            )
+          }
         }
         break
       case 'subtotal':
@@ -369,7 +381,21 @@ export function renderTemplate(
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'TOTAL', vars.total))
         break
       case 'payment_method':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', vars.payment))
+        if (sale.payments && sale.payments.length > 1) {
+          // Pago dividido: mostramos "Pago: MIXTO" + una línea por método
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', 'MIXTO'))
+          for (const p of sale.payments) {
+            out.push(
+              baseLine(
+                { ...b, align: b.align ?? 'left' },
+                `  ${paymentLabel(p.method)}`,
+                formatCLP(p.amount),
+              ),
+            )
+          }
+        } else {
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Pago', vars.payment))
+        }
         break
       case 'cash_received':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Recibido', vars.received))

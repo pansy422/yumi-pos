@@ -5,17 +5,20 @@ import {
   Box,
   DollarSign,
   DoorOpen,
+  LogOut,
   Minus,
   PauseCircle,
   Play,
   Plus,
   PlusSquare,
   Receipt as ReceiptIcon,
+  Scale,
   Search,
   Settings as Cog,
   ShoppingCart,
   Sparkles,
   Trash2,
+  User as UserIcon,
   X,
   Zap,
 } from 'lucide-react'
@@ -30,16 +33,17 @@ import { AnimatedCheck } from '@/components/common/AnimatedCheck'
 import { ReceiptPreview } from '@/components/common/ReceiptPreview'
 import { EmptyState, CartEmptyArt } from '@/components/common/EmptyState'
 import { Kbd } from '@/components/common/Kbd'
-import { useCart } from '@/stores/cart'
+import { cartLineTotal, useCart } from '@/stores/cart'
 import { useHeldTickets, type HeldTicket } from '@/stores/heldTickets'
 import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
+import { WeightDialog } from '@/components/common/WeightDialog'
 import { useSession } from '@/stores/session'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, todayISO } from '@shared/money'
-import type { PaymentMethod, Product, SaleWithItems } from '@shared/types'
+import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
   DialogContent,
@@ -48,6 +52,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
 const PAY_METHODS: { id: PaymentMethod; label: string; hint?: string }[] = [
@@ -78,6 +89,8 @@ export function POS() {
   const holdTicket = useHeldTickets((s) => s.hold)
   const removeHeld = useHeldTickets((s) => s.remove)
   const cash = useSession((s) => s.cash)
+  const currentUser = useSession((s) => s.user)
+  const logout = useSession((s) => s.logout)
   const { toast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -92,6 +105,15 @@ export function POS() {
   const [holdNameOpen, setHoldNameOpen] = useState(false)
   const [holdName, setHoldName] = useState('')
   const [nextSaleNumber, setNextSaleNumber] = useState<number | null>(null)
+  const [weightProduct, setWeightProduct] = useState<Product | null>(null)
+  const [inlineSearch, setInlineSearch] = useState('')
+  const [inlineResults, setInlineResults] = useState<Product[]>([])
+  const [inlineFocused, setInlineFocused] = useState(false)
+  const [appliedPromos, setAppliedPromos] = useState<AppliedPromotion[]>([])
+  const autoDiscount = useMemo(
+    () => appliedPromos.reduce((a, p) => a + p.amount, 0),
+    [appliedPromos],
+  )
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -114,12 +136,67 @@ export function POS() {
     }
   }, [payOpen])
 
+  // Recalcular promociones automáticas cada vez que cambian los items.
+  useEffect(() => {
+    if (items.length === 0) {
+      setAppliedPromos([])
+      return
+    }
+    let cancelled = false
+    api
+      .promotionsCompute(items)
+      .then((r) => {
+        if (cancelled) return
+        setAppliedPromos(r.applied)
+      })
+      .catch(() => {
+        if (!cancelled) setAppliedPromos([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [items])
+
+  // Búscador inline: live results con debounce.
+  useEffect(() => {
+    const q = inlineSearch.trim()
+    if (q.length === 0) {
+      setInlineResults([])
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const list = await api.productsList({ search: q })
+      if (!cancelled) setInlineResults(list.slice(0, 12))
+    }, 120)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [inlineSearch])
+
   const addWithMultiplier = useCallback(
     (p: Product) => {
       add(p, multiplier)
       if (multiplier !== 1) setMultiplier(1)
     },
     [add, multiplier],
+  )
+
+  /**
+   * Punto único para agregar un producto al ticket. Si el producto es por
+   * peso, abre el diálogo de peso y el agregado real ocurre en su onConfirm.
+   * Si es por unidad, agrega con el multiplicador actual.
+   */
+  const tryAddProduct = useCallback(
+    (p: Product) => {
+      if (p.is_weight === 1) {
+        setWeightProduct(p)
+        return
+      }
+      addWithMultiplier(p)
+    },
+    [addWithMultiplier],
   )
 
   const handleScan = useCallback(
@@ -131,6 +208,11 @@ export function POS() {
           title: 'Código no encontrado',
           description: `${code} no está en el inventario.`,
         })
+        return
+      }
+      // Si es por peso, abre el diálogo (el toast lo muestra el flujo de peso).
+      if (p.is_weight === 1) {
+        setWeightProduct(p)
         return
       }
       addWithMultiplier(p)
@@ -160,7 +242,10 @@ export function POS() {
     [addWithMultiplier, multiplier, items, toast],
   )
 
-  useScanner({ enabled: !payOpen && !searchOpen, onScan: handleScan })
+  useScanner({
+    enabled: !payOpen && !searchOpen && !weightProduct,
+    onScan: handleScan,
+  })
 
   useShortcut({ key: 'b', ctrl: true }, () => {
     setSearchOpen(true)
@@ -203,6 +288,22 @@ export function POS() {
           + navegación admin. Reemplaza al sidebar oculto en /pos. */}
       <div className="flex items-center gap-4 border-b border-border/60 bg-card/40 px-6 py-2.5 backdrop-blur-sm">
         <Wordmark />
+        {currentUser && (
+          <>
+            <span className="h-6 w-px bg-border" />
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs">
+              <UserIcon className="h-3 w-3 text-primary" />
+              <span className="font-medium">{currentUser.name}</span>
+              <button
+                onClick={logout}
+                className="ml-1 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="Cerrar sesión"
+              >
+                <LogOut className="h-3 w-3" />
+              </button>
+            </div>
+          </>
+        )}
         <span className="h-6 w-px bg-border" />
         <div
           className={cn(
@@ -299,17 +400,81 @@ export function POS() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden p-6">
+      <div className="grid flex-1 grid-cols-[1fr_320px] gap-4 overflow-hidden p-6">
         <div className="flex min-h-0 flex-col gap-4">
         <Card className="card-elev flex-1 overflow-hidden">
           <CardContent className="flex h-full flex-col p-0">
-            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+            {/* Búscador inline: siempre visible. Resultados aparecen en
+                dropdown sobrepuesto al carrito mientras se escribe. */}
+            <div className="relative border-b border-border/60 p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={inlineSearch}
+                  onChange={(e) => setInlineSearch(e.target.value)}
+                  onFocus={() => setInlineFocused(true)}
+                  onBlur={() => setTimeout(() => setInlineFocused(false), 150)}
+                  placeholder="Buscar producto por nombre, código o SKU…"
+                  className="h-11 pl-9"
+                  data-scanner-scope="capture"
+                />
+              </div>
+              {inlineFocused && inlineSearch.trim().length > 0 && (
+                <div className="absolute left-3 right-3 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-border bg-popover shadow-lg">
+                  {inlineResults.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-muted-foreground">
+                      Sin resultados para "{inlineSearch}"
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border/40">
+                      {inlineResults.map((p) => (
+                        <li
+                          key={p.id}
+                          onMouseDown={(e) => {
+                            // mouseDown evita el blur antes del pick
+                            e.preventDefault()
+                            tryAddProduct(p)
+                            setInlineSearch('')
+                          }}
+                          className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent/60"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-medium">{p.name}</span>
+                              {p.is_weight === 1 && (
+                                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">
+                                  kg
+                                </span>
+                              )}
+                            </div>
+                            <div className="mono text-[11px] text-muted-foreground">
+                              {p.barcode ?? 'sin código'} ·{' '}
+                              {p.is_weight === 1
+                                ? formatWeight(p.stock)
+                                : `stock ${p.stock}`}
+                            </div>
+                          </div>
+                          <div className="num shrink-0 font-semibold">
+                            {formatCLP(p.price)}
+                            {p.is_weight === 1 && (
+                              <span className="ml-0.5 text-[10px] text-muted-foreground">/kg</span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 Ticket actual
                 {items.length > 0 && (
                   <Badge variant="secondary" className="num">
-                    {totalUnits} {totalUnits === 1 ? 'unidad' : 'unidades'}
+                    {items.length} {items.length === 1 ? 'producto' : 'productos'}
                   </Badge>
                 )}
                 <MultiplierControl value={multiplier} onChange={setMultiplier} />
@@ -347,6 +512,7 @@ export function POS() {
                     {items.map((it) => {
                       const isLast = lastAddedId === it.product_id
                       const overstock = it.qty > it.stock
+                      const isWeight = it.is_weight === 1
                       return (
                       <tr
                         key={it.product_id}
@@ -359,7 +525,13 @@ export function POS() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{it.name}</span>
+                            <span className="text-base font-medium">{it.name}</span>
+                            {isWeight && (
+                              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                                <Scale className="inline h-2.5 w-2.5 mr-0.5" />
+                                kg
+                              </span>
+                            )}
                             {isLast && (
                               <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">
                                 + Recién
@@ -375,13 +547,20 @@ export function POS() {
                                 it.stock <= 0 && 'text-destructive font-semibold',
                               )}
                             >
-                              stock: {it.stock}
-                              {overstock ? ` · pediste ${it.qty}` : ''}
+                              stock: {isWeight ? formatWeight(it.stock) : it.stock}
+                              {overstock
+                                ? ` · pediste ${isWeight ? formatWeight(it.qty) : it.qty}`
+                                : ''}
                             </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="num">{formatCLP(it.price + it.surcharge)}</div>
+                          <div className="num">
+                            {formatCLP(it.price + it.surcharge)}
+                            {isWeight && (
+                              <span className="ml-0.5 text-[10px] text-muted-foreground">/kg</span>
+                            )}
+                          </div>
                           {it.surcharge !== 0 && (
                             <div
                               className={cn(
@@ -395,34 +574,47 @@ export function POS() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => setQty(it.product_id, it.qty - 1)}
+                          {isWeight ? (
+                            <button
+                              onClick={async () => {
+                                const fresh = await api.productsGet(it.product_id)
+                                if (fresh) setWeightProduct(fresh)
+                              }}
+                              className="mx-auto flex h-9 w-32 items-center justify-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 num font-semibold transition-colors hover:bg-accent hover:border-primary/40"
                             >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Input
-                              value={it.qty}
-                              onChange={(e) =>
-                                setQty(it.product_id, Number(e.target.value) || 0)
-                              }
-                              className="h-8 w-12 text-center num"
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => setQty(it.product_id, it.qty + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                              <Scale className="h-3.5 w-3.5 text-primary" />
+                              {formatWeight(it.qty)}
+                            </button>
+                          ) : (
+                            <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-9 w-9"
+                                onClick={() => setQty(it.product_id, it.qty - 1)}
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                              <Input
+                                value={it.qty}
+                                onChange={(e) =>
+                                  setQty(it.product_id, Number(e.target.value) || 0)
+                                }
+                                className="h-9 w-12 text-center num text-base"
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-9 w-9"
+                                onClick={() => setQty(it.product_id, it.qty + 1)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-right num font-semibold">
-                          {formatCLP((it.price + it.surcharge) * it.qty)}
+                        <td className="px-4 py-3 text-right num text-base font-semibold">
+                          {formatCLP(cartLineTotal(it))}
                         </td>
                         <td className="px-2">
                           <div className="flex items-center gap-0.5">
@@ -449,7 +641,7 @@ export function POS() {
             )}
           </CardContent>
         </Card>
-        <QuickKeysPanel onPick={addWithMultiplier} />
+        <QuickKeysPanel onPick={tryAddProduct} />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -461,8 +653,29 @@ export function POS() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span className="num">{formatCLP(sub)}</span>
               </div>
+              {appliedPromos.length > 0 && (
+                <div className="space-y-1 rounded-md border border-success/30 bg-success/5 p-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-success">
+                      Promociones ({appliedPromos.length})
+                    </span>
+                    <span className="num font-semibold text-success">
+                      -{formatCLP(autoDiscount)}
+                    </span>
+                  </div>
+                  {appliedPromos.map((p) => (
+                    <div
+                      key={p.promo_id}
+                      className="flex items-center justify-between text-[10px] text-muted-foreground"
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="num">-{formatCLP(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="space-y-1.5">
-                <Label className="text-xs">Descuento</Label>
+                <Label className="text-xs">Descuento manual</Label>
                 <MoneyInput value={discount} onValueChange={setDiscount} />
               </div>
               <div className="border-t border-border/60 pt-3">
@@ -470,7 +683,7 @@ export function POS() {
                   Total a cobrar
                 </div>
                 <div className="num text-[64px] font-bold leading-none tracking-tight brand-text">
-                  {formatCLP(tot)}
+                  {formatCLP(Math.max(0, tot - autoDiscount))}
                 </div>
               </div>
               <Button
@@ -531,11 +744,29 @@ export function POS() {
         setSearch={setSearch}
         results={results}
         onPick={(p) => {
-          addWithMultiplier(p)
+          tryAddProduct(p)
           setSearchOpen(false)
           setSearch('')
         }}
         searchInputRef={searchInputRef}
+      />
+
+      <WeightDialog
+        open={!!weightProduct}
+        onOpenChange={(v) => {
+          if (!v) setWeightProduct(null)
+        }}
+        product={weightProduct}
+        onConfirm={(grams) => {
+          if (!weightProduct) return
+          add(weightProduct, grams)
+          toast({
+            variant: 'success',
+            title: weightProduct.name,
+            description: `${formatWeight(grams)} · ${formatCLP(Math.round((weightProduct.price * grams) / 1000))}`,
+          })
+          setWeightProduct(null)
+        }}
       />
 
       <HoldNameDialog
@@ -571,7 +802,13 @@ export function POS() {
         }}
       />
 
-      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} />
+      <PaymentDialog
+        open={payOpen}
+        onOpenChange={setPayOpen}
+        autoDiscount={autoDiscount}
+        appliedPromos={appliedPromos}
+        cashierId={currentUser?.id ?? null}
+      />
     </div>
   )
 }
@@ -949,53 +1186,104 @@ function SearchDialog({
   )
 }
 
+type PaymentLine = {
+  id: number
+  method: PaymentMethod
+  amount: number
+  cash_received: number
+}
+
 function PaymentDialog({
   open,
   onOpenChange,
+  autoDiscount,
+  appliedPromos,
+  cashierId,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
+  autoDiscount: number
+  appliedPromos: AppliedPromotion[]
+  cashierId: string | null
 }) {
   const { items, discount, total, clear } = useCart()
   const cash = useSession((s) => s.cash)
   const settings = useSession((s) => s.settings)
   const { toast } = useToast()
 
-  const [method, setMethod] = useState<PaymentMethod>('efectivo')
-  const [received, setReceived] = useState(0)
+  const [lines, setLines] = useState<PaymentLine[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
-  const tot = total()
+  const tot = Math.max(0, total() - autoDiscount)
 
   useEffect(() => {
     if (!open) {
-      setMethod('efectivo')
-      setReceived(0)
+      setLines([])
       setLastSale(null)
       setShowPreview(false)
     } else {
-      setReceived(tot)
+      // Por defecto una línea efectivo cubriendo todo el total
+      setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
     }
   }, [open, tot])
 
-  const change = method === 'efectivo' ? Math.max(0, received - tot) : 0
-  const insufficient = method === 'efectivo' && received < tot
-  const needsCashOpen = method === 'efectivo' && !cash
+  const totalAssigned = lines.reduce((a, l) => a + (l.amount || 0), 0)
+  const remaining = tot - totalAssigned
+  const hasCash = lines.some((l) => l.method === 'efectivo' && l.amount > 0)
+  const cashShortage = lines.some(
+    (l) => l.method === 'efectivo' && l.cash_received < l.amount,
+  )
+  const needsCashOpen = hasCash && !cash
+  const cashChange = lines
+    .filter((l) => l.method === 'efectivo')
+    .reduce((a, l) => a + Math.max(0, (l.cash_received || 0) - l.amount), 0)
+  const canSubmit =
+    !submitting && remaining === 0 && !cashShortage && !needsCashOpen && lines.length > 0
 
-  const quickAmounts = useMemo(() => {
-    const round = (n: number) => Math.ceil(n / 1000) * 1000
-    return Array.from(
-      new Set([round(tot), round(tot) + 1000, round(tot) + 5000, round(tot) + 10000, round(tot) + 20000]),
+  const updateLine = (id: number, patch: Partial<PaymentLine>) =>
+    setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))
+
+  const removeLine = (id: number) =>
+    setLines((cur) => cur.filter((l) => l.id !== id))
+
+  const addLine = () => {
+    const id = (lines.at(-1)?.id ?? 0) + 1
+    const fillAmount = Math.max(0, remaining)
+    setLines((cur) => [
+      ...cur,
+      {
+        id,
+        method: cur.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+        amount: fillAmount,
+        cash_received: fillAmount,
+      },
+    ])
+  }
+
+  const fillRemainingTo = (id: number) => {
+    setLines((cur) =>
+      cur.map((l) => {
+        if (l.id !== id) return l
+        const others = cur.filter((o) => o.id !== id).reduce((a, o) => a + o.amount, 0)
+        const target = Math.max(0, tot - others)
+        return {
+          ...l,
+          amount: target,
+          cash_received: l.method === 'efectivo' ? Math.max(l.cash_received, target) : 0,
+        }
+      }),
     )
-      .filter((n) => n >= tot)
-      .slice(0, 5)
-  }, [tot])
+  }
 
   const submit = async () => {
-    if (submitting || insufficient || needsCashOpen) return
+    if (!canSubmit) return
     setSubmitting(true)
     try {
+      const promoNote =
+        appliedPromos.length > 0
+          ? `Promos: ${appliedPromos.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
+          : undefined
       const sale = await api.salesCreate({
         items: items.map((i) => ({
           product_id: i.product_id,
@@ -1003,9 +1291,19 @@ function PaymentDialog({
           price: i.price,
           surcharge: i.surcharge,
         })),
-        discount,
-        payment_method: method,
-        cash_received: method === 'efectivo' ? received : undefined,
+        // El descuento total que se persiste = manual + descuentos
+        // automáticos por promociones. Las promos se loggean en `note`
+        // para tener trazabilidad mientras no haya tabla dedicada.
+        discount: discount + autoDiscount,
+        payments: lines
+          .filter((l) => l.amount > 0)
+          .map((l) => ({
+            method: l.method,
+            amount: l.amount,
+            cash_received: l.method === 'efectivo' ? l.cash_received : undefined,
+          })),
+        note: promoNote,
+        cashier_id: cashierId,
       })
       setLastSale(sale)
       clear()
@@ -1058,95 +1356,152 @@ function PaymentDialog({
               </div>
             </div>
 
-            <div className="grid gap-6 px-6 py-5 sm:grid-cols-[1fr_220px]">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Método de pago</Label>
-                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                    {PAY_METHODS.map((m) => (
-                      <button
-                        key={m.id}
-                        onClick={() => setMethod(m.id)}
-                        className={cn(
-                          'flex flex-col items-center justify-center rounded-lg border px-2 py-2.5 text-xs font-medium transition-all',
-                          method === m.id
-                            ? 'border-primary bg-primary/10 text-primary shadow-glow'
-                            : 'border-border bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                        )}
-                      >
-                        {m.label}
-                        {m.hint && (
-                          <span className="text-[9px] uppercase tracking-wider opacity-70">
-                            {m.hint}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs">Pagos</Label>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">Pendiente</span>
+                  <span
+                    className={cn(
+                      'num font-semibold',
+                      remaining === 0
+                        ? 'text-success'
+                        : remaining > 0
+                          ? 'text-warning'
+                          : 'text-destructive',
+                    )}
+                  >
+                    {formatCLP(remaining)}
+                  </span>
                 </div>
+              </div>
 
-                {method === 'efectivo' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Recibido</Label>
-                      <MoneyInput value={received} onValueChange={setReceived} autoFocus className="h-12 text-2xl" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {quickAmounts.map((n) => (
-                          <Button
-                            key={n}
-                            type="button"
-                            size="sm"
-                            variant={received === n ? 'secondary' : 'outline'}
-                            onClick={() => setReceived(n)}
-                            className="num text-xs"
-                          >
-                            {formatCLP(n)}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
+              <div className="space-y-2">
+                {lines.map((line) => {
+                  const isCash = line.method === 'efectivo'
+                  const overshort = isCash && line.cash_received < line.amount
+                  return (
                     <div
+                      key={line.id}
                       className={cn(
-                        'rounded-lg border p-4 transition-colors',
-                        insufficient
+                        'rounded-lg border p-3 transition-colors',
+                        overshort
                           ? 'border-destructive/40 bg-destructive/10'
-                          : 'border-success/30 bg-success/5',
+                          : 'border-border/60 bg-card/30',
                       )}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                          Vuelto
-                        </span>
-                        <span
-                          className={cn(
-                            'num text-3xl font-bold',
-                            insufficient ? 'text-destructive' : 'text-success',
+                      <div className="grid gap-2 sm:grid-cols-[140px_1fr_auto]">
+                        <div className="grid grid-cols-3 gap-1 sm:col-span-1">
+                          {(['efectivo', 'debito', 'credito'] as PaymentMethod[]).map((m) => (
+                            <button
+                              key={m}
+                              onClick={() => updateLine(line.id, { method: m })}
+                              className={cn(
+                                'rounded-md border px-1 py-1 text-[10px] uppercase font-medium transition-colors',
+                                line.method === m
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border bg-card hover:bg-accent',
+                              )}
+                            >
+                              {m === 'efectivo' ? 'Efec' : m === 'debito' ? 'Déb' : 'Créd'}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <MoneyInput
+                            value={line.amount}
+                            onValueChange={(n) =>
+                              updateLine(line.id, {
+                                amount: n,
+                                cash_received: isCash ? Math.max(line.cash_received, n) : 0,
+                              })
+                            }
+                            placeholder="Monto"
+                          />
+                          {isCash ? (
+                            <MoneyInput
+                              value={line.cash_received}
+                              onValueChange={(n) => updateLine(line.id, { cash_received: n })}
+                              placeholder="Recibido"
+                            />
+                          ) : (
+                            <Select
+                              value={line.method === 'transferencia' ? 'transferencia' : 'otro'}
+                              onValueChange={(v) =>
+                                updateLine(line.id, { method: v as PaymentMethod })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="transferencia">Transferencia</SelectItem>
+                                <SelectItem value="otro">Otro</SelectItem>
+                              </SelectContent>
+                            </Select>
                           )}
-                        >
-                          {insufficient ? '—' : formatCLP(change)}
-                        </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {remaining !== 0 && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => fillRemainingTo(line.id)}
+                              className="text-[10px]"
+                            >
+                              Cubrir saldo
+                            </Button>
+                          )}
+                          {lines.length > 1 && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeLine(line.id)}
+                              className="h-8 w-8 text-destructive"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      {insufficient && (
-                        <div className="mt-1 text-xs text-destructive">
-                          Faltan {formatCLP(tot - received)}
+                      {isCash && line.amount > 0 && (
+                        <div className="mt-2 flex items-center justify-between text-[11px]">
+                          <span className="text-muted-foreground">
+                            Vuelto de esta línea
+                          </span>
+                          <span
+                            className={cn(
+                              'num font-semibold',
+                              overshort ? 'text-destructive' : 'text-success',
+                            )}
+                          >
+                            {overshort
+                              ? `Faltan ${formatCLP(line.amount - line.cash_received)}`
+                              : formatCLP(line.cash_received - line.amount)}
+                          </span>
                         </div>
                       )}
                     </div>
-                  </>
-                )}
+                  )
+                })}
+              </div>
 
-                {needsCashOpen && (
-                  <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
-                    Debes abrir la caja antes de cobrar en efectivo. Ve a Caja{' '}
-                    <Kbd className="border-warning/40 text-warning">F3</Kbd>.
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <Button size="sm" variant="outline" onClick={addLine} disabled={lines.length >= 4}>
+                  <Plus className="h-3 w-3" /> Otro método
+                </Button>
+                {hasCash && cashChange > 0 && (
+                  <div className="rounded-md border border-success/30 bg-success/10 px-3 py-1 text-xs">
+                    <span className="uppercase tracking-wider text-success/80">Vuelto total</span>{' '}
+                    <span className="num font-bold text-success">{formatCLP(cashChange)}</span>
                   </div>
                 )}
               </div>
 
-              {method === 'efectivo' && (
-                <div>
-                  <Label className="mb-1.5 block text-xs">Numpad</Label>
-                  <Numpad value={received} onChange={setReceived} />
+              {needsCashOpen && (
+                <div className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning">
+                  Debes abrir la caja antes de cobrar en efectivo. Ve a Caja{' '}
+                  <Kbd className="border-warning/40 text-warning">F3</Kbd>.
                 </div>
               )}
             </div>
@@ -1159,14 +1514,17 @@ function PaymentDialog({
                 variant="success"
                 size="lg"
                 onClick={submit}
-                disabled={submitting || insufficient || needsCashOpen}
+                disabled={!canSubmit}
                 className="shadow-glow"
               >
                 {submitting ? (
                   'Cobrando…'
                 ) : (
                   <>
-                    Confirmar <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">Enter</Kbd>
+                    Confirmar{' '}
+                    <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                      Enter
+                    </Kbd>
                   </>
                 )}
               </Button>

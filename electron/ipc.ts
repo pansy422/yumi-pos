@@ -6,10 +6,13 @@ import * as sales from './db/sales'
 import * as cash from './db/cashSessions'
 import * as reports from './db/reports'
 import * as settingsRepo from './db/settings'
+import * as promotions from './db/promotions'
+import * as users from './db/users'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
 import {
   openDrawer,
+  printLowStockHw,
   printReceipt as printReceiptHw,
   printTest,
   printZReportHw,
@@ -100,10 +103,30 @@ export function registerIpc(): void {
   handle(IPC.productsImport, (rows: Parameters<typeof products.importMany>[0]) =>
     products.importMany(rows),
   )
+  handle(IPC.productsCritical, () => products.critical())
   handle(IPC.categoriesList, () => products.categories())
   handle(IPC.categoriesRename, (from: string, to: string) => ({
     updated: products.renameCategory(from, to),
   }))
+
+  handle(IPC.promotionsList, (includeInactive?: boolean) => promotions.list(!!includeInactive))
+  handle(IPC.promotionsSave, (input: Parameters<typeof promotions.save>[0]) =>
+    promotions.save(input),
+  )
+  handle(IPC.promotionsDelete, (id: string) => {
+    promotions.remove(id)
+  })
+  handle(IPC.promotionsCompute, (items: Parameters<typeof promotions.computeForCart>[0]) =>
+    promotions.computeForCart(items),
+  )
+
+  handle(IPC.usersList, (includeInactive?: boolean) => users.list(!!includeInactive))
+  handle(IPC.usersSave, (input: Parameters<typeof users.save>[0]) => users.save(input))
+  handle(IPC.usersDelete, (id: string) => {
+    users.remove(id)
+  })
+  handle(IPC.usersVerifyPin, (id: string, pin: string) => users.verifyPin(id, pin))
+  handle(IPC.usersCount, () => users.count())
 
   // Logging extra para sales:create — es el flujo crítico.
   ipcMain.handle(IPC.salesCreate, async (_e, input: Parameters<typeof sales.create>[0]) => {
@@ -116,8 +139,7 @@ export function registerIpc(): void {
       console.log('[sales:create] payload', {
         items: itemsBrief,
         discount: input.discount,
-        payment_method: input.payment_method,
-        cash_received: input.cash_received,
+        payments: input.payments,
       })
       const result = sales.create(input)
       console.log('[sales:create] ok', { id: result.id, number: result.number, total: result.total })
@@ -133,6 +155,11 @@ export function registerIpc(): void {
     sales.voidSale(id, reason)
   })
   handle(IPC.salesNextNumber, () => sales.nextNumber())
+  handle(
+    IPC.salesReturnItems,
+    (saleId: string, returns: { product_id: string; qty: number }[], reason: string) =>
+      sales.returnItems(saleId, returns, reason),
+  )
 
   handle(IPC.cashCurrent, () => cash.current())
   handle(IPC.cashOpen, (amt: number, notes?: string) => cash.open(amt, notes))
@@ -180,9 +207,27 @@ export function registerIpc(): void {
       await printReceiptHw(sale, s.store, s.printer, s.receipt_template)
     }),
   )
+  ipcMain.handle(IPC.printLowStock, () =>
+    safe(async () => {
+      const list = products.critical()
+      const s = settingsRepo.getAll()
+      await printLowStockHw(list, s.store, s.printer)
+    }),
+  )
 
   handle(IPC.backupExport, () => exportBackup())
   handle(IPC.backupImport, () => importBackup())
+  ipcMain.handle(IPC.backupRunAuto, () =>
+    safe(async () => {
+      const r = await import('./utils/autoBackup')
+      const result = await r.maybeRunAutoBackup()
+      return result
+    }),
+  )
+  handle(IPC.backupAutoDir, async () => {
+    const r = await import('./utils/autoBackup')
+    return r.getAutoBackupDir()
+  })
 
   handle(IPC.appInfo, () => ({
     version: app.getVersion(),

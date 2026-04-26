@@ -3,6 +3,7 @@ import path from 'node:path'
 import { setupCSP } from './utils/csp'
 import { initDb, closeDb, getDbPath } from './db'
 import { registerIpc } from './ipc'
+import { scheduleAutoBackup } from './utils/autoBackup'
 
 const isDev = !app.isPackaged
 const DEV_URL = 'http://localhost:5173'
@@ -99,6 +100,7 @@ if (!app.requestSingleInstanceLock()) {
       return
     }
     registerIpc()
+    scheduleAutoBackup()
     if (!isDev) Menu.setApplicationMenu(null)
     createWindow()
 

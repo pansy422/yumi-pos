@@ -10,7 +10,10 @@ export type Product = {
   cost: number
   price: number
   stock: number
+  stock_min: number
+  stock_max: number
   category: string | null
+  is_weight: 0 | 1
   archived: 0 | 1
   created_at: string
   updated_at: string
@@ -23,7 +26,10 @@ export type ProductInput = {
   cost: number
   price: number
   stock?: number
+  stock_min?: number
+  stock_max?: number
   category?: string | null
+  is_weight?: 0 | 1
 }
 
 export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
@@ -37,14 +43,23 @@ export type CartItem = {
   qty: number
   stock: number
   surcharge: number
+  is_weight: 0 | 1
+  category: string | null
+}
+
+export type SalePayment = {
+  method: PaymentMethod
+  amount: number
+  cash_received?: number
+  change_given?: number
 }
 
 export type SaleInput = {
   items: { product_id: string; qty: number; price: number; surcharge?: number }[]
   discount: number
-  payment_method: PaymentMethod
-  cash_received?: number
+  payments: SalePayment[]
   note?: string
+  cashier_id?: string | null
 }
 
 export type SaleItem = {
@@ -55,6 +70,8 @@ export type SaleItem = {
   surcharge: number
   qty: number
   line_total: number
+  is_weight: 0 | 1
+  returned_qty: number
 }
 
 export type Sale = {
@@ -65,14 +82,19 @@ export type Sale = {
   subtotal: number
   discount: number
   total: number
-  payment_method: PaymentMethod
+  /** Si hay un solo método, ese. Si hay varios, "mixto". */
+  payment_method: PaymentMethod | 'mixto'
   cash_received: number | null
   change_given: number | null
   cash_session_id: string | null
+  cashier_id: string | null
   voided: 0 | 1
 }
 
-export type SaleWithItems = Sale & { items: SaleItem[] }
+export type SaleWithItems = Sale & {
+  items: SaleItem[]
+  payments: SalePayment[]
+}
 
 export type CashSession = {
   id: string
@@ -90,6 +112,55 @@ export type CategoryStat = {
   count: number
   stock: number
   value: number
+}
+
+export type PromotionKind =
+  | 'percent_off_category'
+  | 'percent_off_product'
+  | 'percent_off_total'
+
+export type Promotion = {
+  id: string
+  name: string
+  kind: PromotionKind
+  /** Categoría o product_id según kind. null para percent_off_total. */
+  target: string | null
+  params: { percent?: number; min_amount?: number }
+  active: 0 | 1
+  created_at: string
+}
+
+export type PromotionInput = {
+  id?: string
+  name: string
+  kind: PromotionKind
+  target?: string | null
+  params: { percent?: number; min_amount?: number }
+  active?: boolean
+}
+
+export type AppliedPromotion = {
+  promo_id: string
+  name: string
+  amount: number
+}
+
+export type UserRole = 'admin' | 'cashier'
+
+export type User = {
+  id: string
+  name: string
+  role: UserRole
+  active: 0 | 1
+  created_at: string
+}
+
+export type UserInput = {
+  id?: string
+  name: string
+  pin?: string
+  role: UserRole
+  active?: boolean
 }
 
 export type CategoryRevenue = {
@@ -158,10 +229,19 @@ export type AppFlags = {
   onboarded: boolean
 }
 
+export type BackupSettings = {
+  auto_daily: boolean
+  /** ISO timestamp del último respaldo automático correcto. */
+  last_run: string | null
+  /** Cuántos respaldos antiguos conservar antes de borrar. */
+  keep_last: number
+}
+
 export type Settings = {
   store: StoreSettings
   printer: PrinterSettings
   flags: AppFlags
+  backup: BackupSettings
   receipt_template: ReceiptTemplate
 }
 
@@ -212,14 +292,33 @@ export type Api = {
   productsScanIn: (barcode: string, opts?: { newProduct?: ProductInput }) => Promise<ScanInResult>
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
+  productsCritical: () => Promise<Product[]>
   categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
+
+  promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>
+  promotionsSave: (input: PromotionInput) => Promise<Promotion>
+  promotionsDelete: (id: string) => Promise<void>
+  promotionsCompute: (
+    items: (CartItem & { category?: string | null })[],
+  ) => Promise<{ total_discount: number; applied: AppliedPromotion[] }>
+
+  usersList: (includeInactive?: boolean) => Promise<User[]>
+  usersSave: (input: UserInput) => Promise<User>
+  usersDelete: (id: string) => Promise<void>
+  usersVerifyPin: (id: string, pin: string) => Promise<User | null>
+  usersCount: () => Promise<number>
 
   salesCreate: (input: SaleInput) => Promise<SaleWithItems>
   salesList: (q?: { from?: string; to?: string; limit?: number; cashSessionId?: string }) => Promise<Sale[]>
   salesGet: (id: string) => Promise<SaleWithItems | null>
   salesVoid: (id: string, reason: string) => Promise<void>
   salesNextNumber: () => Promise<number>
+  salesReturnItems: (
+    saleId: string,
+    returns: { product_id: string; qty: number }[],
+    reason: string,
+  ) => Promise<{ refunded_total: number; sale: SaleWithItems }>
 
   cashCurrent: () => Promise<CashSession | null>
   cashOpen: (openingAmount: number, notes?: string) => Promise<CashSession>
@@ -229,6 +328,7 @@ export type Api = {
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>
   printZReport: (sessionId: string) => Promise<Result<void>>
+  printLowStock: () => Promise<Result<void>>
 
   reportDaily: (date: string) => Promise<DailyReport>
   reportRange: (from: string, to: string) => Promise<RangeReport>
@@ -243,6 +343,8 @@ export type Api = {
 
   backupExport: () => Promise<{ path: string } | null>
   backupImport: () => Promise<{ path: string } | null>
+  backupRunAuto: () => Promise<Result<{ ran: boolean; path?: string; reason?: string }>>
+  backupAutoDir: () => Promise<string>
 
   appInfo: () => Promise<{ version: string; dbPath: string; userDataPath: string }>
 }

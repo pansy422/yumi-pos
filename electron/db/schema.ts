@@ -94,6 +94,65 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
   (db) => {
     db.exec(`ALTER TABLE sale_items ADD COLUMN surcharge INTEGER NOT NULL DEFAULT 0`)
   },
+  (db) => {
+    // Productos al peso (verduras, frutas). is_weight=1 indica que el
+    // precio es por kg y la cantidad se interpreta como gramos
+    // (entero) tanto en stock como en sale_items.qty.
+    db.exec(`ALTER TABLE products ADD COLUMN is_weight INTEGER NOT NULL DEFAULT 0`)
+    db.exec(`ALTER TABLE sale_items ADD COLUMN is_weight INTEGER NOT NULL DEFAULT 0`)
+  },
+  (db) => {
+    // Umbrales de reposición: 0 = sin alerta. Para productos al peso
+    // están en gramos (igual que stock).
+    db.exec(`ALTER TABLE products ADD COLUMN stock_min INTEGER NOT NULL DEFAULT 0`)
+    db.exec(`ALTER TABLE products ADD COLUMN stock_max INTEGER NOT NULL DEFAULT 0`)
+    // Devoluciones parciales por línea de venta.
+    db.exec(`ALTER TABLE sale_items ADD COLUMN returned_qty INTEGER NOT NULL DEFAULT 0`)
+    // Pago dividido: cada venta puede tener múltiples métodos de pago.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS sale_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id TEXT NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        method TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        cash_received INTEGER,
+        change_given INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_sale_payments_sale ON sale_payments(sale_id);
+    `)
+    // Migrar pagos existentes: una fila sale_payments por cada sales.
+    db.exec(`
+      INSERT INTO sale_payments (sale_id, method, amount, cash_received, change_given)
+      SELECT id, payment_method, total, cash_received, change_given
+      FROM sales
+      WHERE NOT EXISTS (SELECT 1 FROM sale_payments WHERE sale_id = sales.id)
+    `)
+    // Promociones automáticas (catálogo simple).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS promotions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL, -- 'percent_off_category' | 'percent_off_product' | 'buy_n_get_m_free'
+        target TEXT,         -- nombre de categoría o id de producto según kind
+        params TEXT NOT NULL DEFAULT '{}', -- JSON con percent / n / m
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    // Cajeros con PIN.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        pin TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'cashier', -- 'admin' | 'cashier'
+        active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `)
+    db.exec(`ALTER TABLE sales ADD COLUMN cashier_id TEXT REFERENCES users(id)`)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

@@ -8,14 +8,27 @@ export const IPC = {
   productsScanIn: 'products:scanIn',
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',
+  productsCritical: 'products:critical',
   categoriesList: 'categories:list',
   categoriesRename: 'categories:rename',
+
+  promotionsList: 'promotions:list',
+  promotionsSave: 'promotions:save',
+  promotionsDelete: 'promotions:delete',
+  promotionsCompute: 'promotions:compute',
+
+  usersList: 'users:list',
+  usersSave: 'users:save',
+  usersDelete: 'users:delete',
+  usersVerifyPin: 'users:verifyPin',
+  usersCount: 'users:count',
 
   salesCreate: 'sales:create',
   salesList: 'sales:list',
   salesGet: 'sales:get',
   salesVoid: 'sales:void',
   salesNextNumber: 'sales:nextNumber',
+  salesReturnItems: 'sales:returnItems',
 
   cashCurrent: 'cash:current',
   cashOpen: 'cash:open',
@@ -25,6 +38,7 @@ export const IPC = {
   cashSummary: 'cash:summary',
   cashZReport: 'cash:zreport',
   printZReport: 'printer:zreport',
+  printLowStock: 'printer:lowStock',
 
   reportDaily: 'report:daily',
   reportRange: 'report:range',
@@ -39,6 +53,8 @@ export const IPC = {
 
   backupExport: 'backup:export',
   backupImport: 'backup:import',
+  backupRunAuto: 'backup:runAuto',
+  backupAutoDir: 'backup:autoDir',
 
   appInfo: 'app:info',
 } as const

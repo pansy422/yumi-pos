@@ -1,5 +1,11 @@
 import { getDb } from './index'
-import type { AppFlags, PrinterSettings, Settings, StoreSettings } from '../../shared/types'
+import type {
+  AppFlags,
+  BackupSettings,
+  PrinterSettings,
+  Settings,
+  StoreSettings,
+} from '../../shared/types'
 import { DEFAULT_TEMPLATE, isValidTemplate, type ReceiptTemplate } from '../../shared/template'
 
 const DEFAULTS: Settings = {
@@ -23,6 +29,11 @@ const DEFAULTS: Settings = {
   },
   flags: {
     onboarded: false,
+  },
+  backup: {
+    auto_daily: true,
+    last_run: null,
+    keep_last: 30,
   },
   receipt_template: DEFAULT_TEMPLATE,
 }
@@ -55,6 +66,7 @@ export function getAll(): Settings {
     store: { ...DEFAULTS.store, ...readKey<Partial<StoreSettings>>('store', {}) },
     printer: { ...DEFAULTS.printer, ...readKey<Partial<PrinterSettings>>('printer', {}) },
     flags: { ...DEFAULTS.flags, ...readKey<Partial<AppFlags>>('flags', {}) },
+    backup: { ...DEFAULTS.backup, ...readKey<Partial<BackupSettings>>('backup', {}) },
     receipt_template,
   }
 }
@@ -63,6 +75,7 @@ export function setPatch(patch: Partial<Settings>): Settings {
   if (patch.store) writeKey('store', { ...getAll().store, ...patch.store })
   if (patch.printer) writeKey('printer', { ...getAll().printer, ...patch.printer })
   if (patch.flags) writeKey('flags', { ...getAll().flags, ...patch.flags })
+  if (patch.backup) writeKey('backup', { ...getAll().backup, ...patch.backup })
   if (patch.receipt_template) {
     if (!isValidTemplate(patch.receipt_template)) {
       throw new Error('Plantilla de boleta inválida')

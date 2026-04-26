@@ -1,7 +1,18 @@
 import { ThermalPrinter, PrinterTypes, CharacterSet } from 'node-thermal-printer'
-import type { PrinterSettings, SaleWithItems, StoreSettings, ZReport } from '../../shared/types'
+import type {
+  PrinterSettings,
+  Product,
+  SaleWithItems,
+  StoreSettings,
+  ZReport,
+} from '../../shared/types'
 import type { ReceiptTemplate } from '../../shared/template'
-import { formatReceiptFromTemplate, formatTestPage, formatZReport } from './receipt'
+import {
+  formatLowStockReport,
+  formatReceiptFromTemplate,
+  formatTestPage,
+  formatZReport,
+} from './receipt'
 
 let driver: unknown = null
 
@@ -109,6 +120,22 @@ export async function printZReportHw(
   const tp = buildPrinter(printer)
   await ensureConnected(tp)
   formatZReport(tp, z, store, printer.width_chars)
+  tp.cut()
+  await tp.execute()
+}
+
+export async function printLowStockHw(
+  products: Product[],
+  store: StoreSettings,
+  printer: PrinterSettings,
+): Promise<void> {
+  if (!printer.enabled) throw new Error('Impresora deshabilitada en Ajustes')
+  if (!printer.interface || printer.interface.trim() === '') {
+    throw new Error('Configura la impresora antes de imprimir')
+  }
+  const tp = buildPrinter(printer)
+  await ensureConnected(tp)
+  formatLowStockReport(tp, products, store, printer.width_chars)
   tp.cut()
   await tp.execute()
 }

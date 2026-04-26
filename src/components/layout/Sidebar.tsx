@@ -4,9 +4,11 @@ import {
   Box,
   DollarSign,
   HelpCircle,
+  LogOut,
   Receipt,
   Settings as Cog,
   ShoppingCart,
+  User as UserIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/stores/session'
@@ -24,6 +26,8 @@ const ITEMS = [
 
 export function Sidebar() {
   const cash = useSession((s) => s.cash)
+  const user = useSession((s) => s.user)
+  const logout = useSession((s) => s.logout)
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border/70 bg-card/40 backdrop-blur-sm">
       <div className="flex h-16 items-center px-4">
@@ -90,6 +94,26 @@ export function Sidebar() {
         </div>
       </div>
 
+      {user && (
+        <div className="flex items-center justify-between border-t border-border/60 px-4 py-2 text-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+            <div className="min-w-0">
+              <div className="truncate font-medium">{user.name}</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                {user.role === 'admin' ? 'Admin' : 'Cajero'}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={logout}
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <HelpCircle className="h-3.5 w-3.5" />
