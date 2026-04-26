@@ -15,6 +15,7 @@ out/
 .parcel-cache/
 .turbo/
 .vite/
+*.tsbuildinfo
 
 # Logs
 *.log

@@ -1,0 +1,186 @@
+export type PaymentMethod = 'efectivo' | 'debito' | 'credito' | 'transferencia' | 'otro'
+
+export type Product = {
+  id: string
+  barcode: string | null
+  name: string
+  sku: string | null
+  cost: number
+  price: number
+  stock: number
+  category: string | null
+  archived: 0 | 1
+  created_at: string
+  updated_at: string
+}
+
+export type ProductInput = {
+  barcode?: string | null
+  name: string
+  sku?: string | null
+  cost: number
+  price: number
+  stock?: number
+  category?: string | null
+}
+
+export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
+
+export type CartItem = {
+  product_id: string
+  barcode: string | null
+  name: string
+  price: number
+  cost: number
+  qty: number
+  stock: number
+}
+
+export type SaleInput = {
+  items: { product_id: string; qty: number; price: number }[]
+  discount: number
+  payment_method: PaymentMethod
+  cash_received?: number
+  note?: string
+}
+
+export type SaleItem = {
+  product_id: string
+  name_snapshot: string
+  price_snapshot: number
+  cost_snapshot: number
+  qty: number
+  line_total: number
+}
+
+export type Sale = {
+  id: string
+  number: number
+  started_at: string
+  completed_at: string
+  subtotal: number
+  discount: number
+  total: number
+  payment_method: PaymentMethod
+  cash_received: number | null
+  change_given: number | null
+  cash_session_id: string | null
+  voided: 0 | 1
+}
+
+export type SaleWithItems = Sale & { items: SaleItem[] }
+
+export type CashSession = {
+  id: string
+  opened_at: string
+  closed_at: string | null
+  opening_amount: number
+  expected_close: number | null
+  counted_close: number | null
+  difference: number | null
+  notes: string | null
+}
+
+export type CashMovementKind = 'sale' | 'withdraw' | 'deposit' | 'adjustment'
+
+export type CashMovement = {
+  id: string
+  cash_session_id: string
+  kind: CashMovementKind
+  amount: number
+  note: string | null
+  created_at: string
+  sale_id: string | null
+}
+
+export type StoreSettings = {
+  name: string
+  address: string
+  rut: string
+  phone: string
+  receipt_footer: string
+}
+
+export type PrinterConnection = 'usb' | 'network'
+
+export type PrinterSettings = {
+  enabled: boolean
+  connection: PrinterConnection
+  interface: string
+  width_chars: number
+  auto_print: boolean
+  open_drawer_on_cash: boolean
+}
+
+export type Settings = {
+  store: StoreSettings
+  printer: PrinterSettings
+}
+
+export type DailyReport = {
+  date: string
+  sales_count: number
+  revenue: number
+  profit: number
+  by_payment: { method: PaymentMethod; total: number; count: number }[]
+  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+}
+
+export type RangeReport = {
+  from: string
+  to: string
+  sales_count: number
+  revenue: number
+  profit: number
+  by_payment: { method: PaymentMethod; total: number; count: number }[]
+  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+  daily: { date: string; revenue: number; profit: number; count: number }[]
+}
+
+export type DetectedPrinter = { name: string; isDefault: boolean; status?: string }
+
+export type ScanInResult =
+  | { kind: 'created'; product: Product }
+  | { kind: 'incremented'; product: Product }
+  | { kind: 'needs_info'; barcode: string }
+
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
+
+export type Api = {
+  productsList: (q?: { search?: string; includeArchived?: boolean }) => Promise<Product[]>
+  productsGet: (id: string) => Promise<Product | null>
+  productsByBarcode: (barcode: string) => Promise<Product | null>
+  productsCreate: (input: ProductInput) => Promise<Product>
+  productsUpdate: (id: string, patch: ProductPatch) => Promise<Product>
+  productsArchive: (id: string, archived: boolean) => Promise<void>
+  productsScanIn: (barcode: string, opts?: { newProduct?: ProductInput }) => Promise<ScanInResult>
+  productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
+  productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
+
+  salesCreate: (input: SaleInput) => Promise<SaleWithItems>
+  salesList: (q?: { from?: string; to?: string; limit?: number }) => Promise<Sale[]>
+  salesGet: (id: string) => Promise<SaleWithItems | null>
+  salesVoid: (id: string, reason: string) => Promise<void>
+
+  cashCurrent: () => Promise<CashSession | null>
+  cashOpen: (openingAmount: number, notes?: string) => Promise<CashSession>
+  cashClose: (countedAmount: number, notes?: string) => Promise<CashSession>
+  cashMove: (kind: 'withdraw' | 'deposit' | 'adjustment', amount: number, note: string) => Promise<CashMovement>
+  cashMovements: (sessionId: string) => Promise<CashMovement[]>
+
+  reportDaily: (date: string) => Promise<DailyReport>
+  reportRange: (from: string, to: string) => Promise<RangeReport>
+
+  settingsGet: () => Promise<Settings>
+  settingsSet: (patch: Partial<Settings>) => Promise<Settings>
+
+  printerList: () => Promise<DetectedPrinter[]>
+  printerTest: () => Promise<Result<void>>
+  printerOpenDrawer: () => Promise<Result<void>>
+  printReceipt: (saleId: string) => Promise<Result<void>>
+
+  backupExport: () => Promise<{ path: string } | null>
+  backupImport: () => Promise<{ path: string } | null>
+
+  appInfo: () => Promise<{ version: string; dbPath: string; userDataPath: string }>
+}
