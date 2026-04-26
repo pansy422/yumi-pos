@@ -11,6 +11,7 @@ import {
   Plus,
   PlusSquare,
   Receipt as ReceiptIcon,
+  Scale,
   Search,
   Settings as Cog,
   ShoppingCart,
@@ -30,9 +31,10 @@ import { AnimatedCheck } from '@/components/common/AnimatedCheck'
 import { ReceiptPreview } from '@/components/common/ReceiptPreview'
 import { EmptyState, CartEmptyArt } from '@/components/common/EmptyState'
 import { Kbd } from '@/components/common/Kbd'
-import { useCart } from '@/stores/cart'
+import { cartLineTotal, useCart } from '@/stores/cart'
 import { useHeldTickets, type HeldTicket } from '@/stores/heldTickets'
 import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
+import { WeightDialog } from '@/components/common/WeightDialog'
 import { useSession } from '@/stores/session'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
@@ -92,6 +94,10 @@ export function POS() {
   const [holdNameOpen, setHoldNameOpen] = useState(false)
   const [holdName, setHoldName] = useState('')
   const [nextSaleNumber, setNextSaleNumber] = useState<number | null>(null)
+  const [weightProduct, setWeightProduct] = useState<Product | null>(null)
+  const [inlineSearch, setInlineSearch] = useState('')
+  const [inlineResults, setInlineResults] = useState<Product[]>([])
+  const [inlineFocused, setInlineFocused] = useState(false)
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -114,12 +120,46 @@ export function POS() {
     }
   }, [payOpen])
 
+  // Búscador inline: live results con debounce.
+  useEffect(() => {
+    const q = inlineSearch.trim()
+    if (q.length === 0) {
+      setInlineResults([])
+      return
+    }
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const list = await api.productsList({ search: q })
+      if (!cancelled) setInlineResults(list.slice(0, 12))
+    }, 120)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [inlineSearch])
+
   const addWithMultiplier = useCallback(
     (p: Product) => {
       add(p, multiplier)
       if (multiplier !== 1) setMultiplier(1)
     },
     [add, multiplier],
+  )
+
+  /**
+   * Punto único para agregar un producto al ticket. Si el producto es por
+   * peso, abre el diálogo de peso y el agregado real ocurre en su onConfirm.
+   * Si es por unidad, agrega con el multiplicador actual.
+   */
+  const tryAddProduct = useCallback(
+    (p: Product) => {
+      if (p.is_weight === 1) {
+        setWeightProduct(p)
+        return
+      }
+      addWithMultiplier(p)
+    },
+    [addWithMultiplier],
   )
 
   const handleScan = useCallback(
@@ -131,6 +171,11 @@ export function POS() {
           title: 'Código no encontrado',
           description: `${code} no está en el inventario.`,
         })
+        return
+      }
+      // Si es por peso, abre el diálogo (el toast lo muestra el flujo de peso).
+      if (p.is_weight === 1) {
+        setWeightProduct(p)
         return
       }
       addWithMultiplier(p)
@@ -160,7 +205,10 @@ export function POS() {
     [addWithMultiplier, multiplier, items, toast],
   )
 
-  useScanner({ enabled: !payOpen && !searchOpen, onScan: handleScan })
+  useScanner({
+    enabled: !payOpen && !searchOpen && !weightProduct,
+    onScan: handleScan,
+  })
 
   useShortcut({ key: 'b', ctrl: true }, () => {
     setSearchOpen(true)
@@ -299,17 +347,81 @@ export function POS() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-[1fr_360px] gap-4 overflow-hidden p-6">
+      <div className="grid flex-1 grid-cols-[1fr_320px] gap-4 overflow-hidden p-6">
         <div className="flex min-h-0 flex-col gap-4">
         <Card className="card-elev flex-1 overflow-hidden">
           <CardContent className="flex h-full flex-col p-0">
-            <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+            {/* Búscador inline: siempre visible. Resultados aparecen en
+                dropdown sobrepuesto al carrito mientras se escribe. */}
+            <div className="relative border-b border-border/60 p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={inlineSearch}
+                  onChange={(e) => setInlineSearch(e.target.value)}
+                  onFocus={() => setInlineFocused(true)}
+                  onBlur={() => setTimeout(() => setInlineFocused(false), 150)}
+                  placeholder="Buscar producto por nombre, código o SKU…"
+                  className="h-11 pl-9"
+                  data-scanner-scope="capture"
+                />
+              </div>
+              {inlineFocused && inlineSearch.trim().length > 0 && (
+                <div className="absolute left-3 right-3 top-full z-30 mt-1 max-h-72 overflow-auto rounded-md border border-border bg-popover shadow-lg">
+                  {inlineResults.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-muted-foreground">
+                      Sin resultados para "{inlineSearch}"
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-border/40">
+                      {inlineResults.map((p) => (
+                        <li
+                          key={p.id}
+                          onMouseDown={(e) => {
+                            // mouseDown evita el blur antes del pick
+                            e.preventDefault()
+                            tryAddProduct(p)
+                            setInlineSearch('')
+                          }}
+                          className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm transition-colors hover:bg-accent/60"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate font-medium">{p.name}</span>
+                              {p.is_weight === 1 && (
+                                <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-primary">
+                                  kg
+                                </span>
+                              )}
+                            </div>
+                            <div className="mono text-[11px] text-muted-foreground">
+                              {p.barcode ?? 'sin código'} ·{' '}
+                              {p.is_weight === 1
+                                ? `${(p.stock / 1000).toFixed(3)} kg`
+                                : `stock ${p.stock}`}
+                            </div>
+                          </div>
+                          <div className="num shrink-0 font-semibold">
+                            {formatCLP(p.price)}
+                            {p.is_weight === 1 && (
+                              <span className="ml-0.5 text-[10px] text-muted-foreground">/kg</span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-b border-border/60 px-4 py-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <ShoppingCart className="h-4 w-4 text-primary" />
                 Ticket actual
                 {items.length > 0 && (
                   <Badge variant="secondary" className="num">
-                    {totalUnits} {totalUnits === 1 ? 'unidad' : 'unidades'}
+                    {items.length} {items.length === 1 ? 'producto' : 'productos'}
                   </Badge>
                 )}
                 <MultiplierControl value={multiplier} onChange={setMultiplier} />
@@ -347,6 +459,7 @@ export function POS() {
                     {items.map((it) => {
                       const isLast = lastAddedId === it.product_id
                       const overstock = it.qty > it.stock
+                      const isWeight = it.is_weight === 1
                       return (
                       <tr
                         key={it.product_id}
@@ -359,7 +472,13 @@ export function POS() {
                       >
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">{it.name}</span>
+                            <span className="text-base font-medium">{it.name}</span>
+                            {isWeight && (
+                              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                                <Scale className="inline h-2.5 w-2.5 mr-0.5" />
+                                kg
+                              </span>
+                            )}
                             {isLast && (
                               <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">
                                 + Recién
@@ -375,13 +494,23 @@ export function POS() {
                                 it.stock <= 0 && 'text-destructive font-semibold',
                               )}
                             >
-                              stock: {it.stock}
-                              {overstock ? ` · pediste ${it.qty}` : ''}
+                              stock:{' '}
+                              {isWeight
+                                ? `${(it.stock / 1000).toFixed(3)} kg`
+                                : it.stock}
+                              {overstock
+                                ? ` · pediste ${isWeight ? `${(it.qty / 1000).toFixed(3)} kg` : it.qty}`
+                                : ''}
                             </span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <div className="num">{formatCLP(it.price + it.surcharge)}</div>
+                          <div className="num">
+                            {formatCLP(it.price + it.surcharge)}
+                            {isWeight && (
+                              <span className="ml-0.5 text-[10px] text-muted-foreground">/kg</span>
+                            )}
+                          </div>
                           {it.surcharge !== 0 && (
                             <div
                               className={cn(
@@ -395,34 +524,47 @@ export function POS() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => setQty(it.product_id, it.qty - 1)}
+                          {isWeight ? (
+                            <button
+                              onClick={async () => {
+                                const fresh = await api.productsGet(it.product_id)
+                                if (fresh) setWeightProduct(fresh)
+                              }}
+                              className="mx-auto flex h-9 w-32 items-center justify-center gap-1.5 rounded-md border border-border/60 bg-muted/30 px-2 num font-semibold transition-colors hover:bg-accent hover:border-primary/40"
                             >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <Input
-                              value={it.qty}
-                              onChange={(e) =>
-                                setQty(it.product_id, Number(e.target.value) || 0)
-                              }
-                              className="h-8 w-12 text-center num"
-                            />
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              className="h-8 w-8"
-                              onClick={() => setQty(it.product_id, it.qty + 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
+                              <Scale className="h-3.5 w-3.5 text-primary" />
+                              {(it.qty / 1000).toFixed(3)} kg
+                            </button>
+                          ) : (
+                            <div className="mx-auto flex w-32 items-center justify-center gap-1.5">
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-9 w-9"
+                                onClick={() => setQty(it.product_id, it.qty - 1)}
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </Button>
+                              <Input
+                                value={it.qty}
+                                onChange={(e) =>
+                                  setQty(it.product_id, Number(e.target.value) || 0)
+                                }
+                                className="h-9 w-12 text-center num text-base"
+                              />
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-9 w-9"
+                                onClick={() => setQty(it.product_id, it.qty + 1)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </td>
-                        <td className="px-4 py-3 text-right num font-semibold">
-                          {formatCLP((it.price + it.surcharge) * it.qty)}
+                        <td className="px-4 py-3 text-right num text-base font-semibold">
+                          {formatCLP(cartLineTotal(it))}
                         </td>
                         <td className="px-2">
                           <div className="flex items-center gap-0.5">
@@ -449,7 +591,7 @@ export function POS() {
             )}
           </CardContent>
         </Card>
-        <QuickKeysPanel onPick={addWithMultiplier} />
+        <QuickKeysPanel onPick={tryAddProduct} />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -531,11 +673,29 @@ export function POS() {
         setSearch={setSearch}
         results={results}
         onPick={(p) => {
-          addWithMultiplier(p)
+          tryAddProduct(p)
           setSearchOpen(false)
           setSearch('')
         }}
         searchInputRef={searchInputRef}
+      />
+
+      <WeightDialog
+        open={!!weightProduct}
+        onOpenChange={(v) => {
+          if (!v) setWeightProduct(null)
+        }}
+        product={weightProduct}
+        onConfirm={(grams) => {
+          if (!weightProduct) return
+          add(weightProduct, grams)
+          toast({
+            variant: 'success',
+            title: weightProduct.name,
+            description: `${(grams / 1000).toFixed(3)} kg · ${formatCLP(Math.round((weightProduct.price * grams) / 1000))}`,
+          })
+          setWeightProduct(null)
+        }}
       />
 
       <HoldNameDialog

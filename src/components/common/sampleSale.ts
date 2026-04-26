@@ -23,6 +23,7 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 2,
         line_total: 2580,
+        is_weight: 0,
       },
       {
         product_id: 'p2',
@@ -32,6 +33,7 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 4,
         line_total: 1400,
+        is_weight: 0,
       },
       {
         product_id: 'p3',
@@ -41,6 +43,7 @@ export function sampleSale(): SaleWithItems {
         surcharge: 0,
         qty: 1,
         line_total: 510,
+        is_weight: 0,
       },
     ],
   }

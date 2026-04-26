@@ -94,6 +94,13 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
   (db) => {
     db.exec(`ALTER TABLE sale_items ADD COLUMN surcharge INTEGER NOT NULL DEFAULT 0`)
   },
+  (db) => {
+    // Productos al peso (verduras, frutas). is_weight=1 indica que el
+    // precio es por kg y la cantidad se interpreta como gramos
+    // (entero) tanto en stock como en sale_items.qty.
+    db.exec(`ALTER TABLE products ADD COLUMN is_weight INTEGER NOT NULL DEFAULT 0`)
+    db.exec(`ALTER TABLE sale_items ADD COLUMN is_weight INTEGER NOT NULL DEFAULT 0`)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

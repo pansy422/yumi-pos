@@ -11,6 +11,7 @@ export type Product = {
   price: number
   stock: number
   category: string | null
+  is_weight: 0 | 1
   archived: 0 | 1
   created_at: string
   updated_at: string
@@ -24,6 +25,7 @@ export type ProductInput = {
   price: number
   stock?: number
   category?: string | null
+  is_weight?: 0 | 1
 }
 
 export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
@@ -37,6 +39,7 @@ export type CartItem = {
   qty: number
   stock: number
   surcharge: number
+  is_weight: 0 | 1
 }
 
 export type SaleInput = {
@@ -55,6 +58,7 @@ export type SaleItem = {
   surcharge: number
   qty: number
   line_total: number
+  is_weight: 0 | 1
 }
 
 export type Sale = {

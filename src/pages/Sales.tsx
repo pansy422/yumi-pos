@@ -95,11 +95,7 @@ export function Sales() {
   const load = async () => {
     setLoading(true)
     try {
-      const list = await api.salesList({
-        from: `${from} 00:00:00`,
-        to: `${to} 23:59:59.999`,
-        limit: 1000,
-      })
+      const list = await api.salesList({ from, to, limit: 1000 })
       setItems(list)
     } finally {
       setLoading(false)

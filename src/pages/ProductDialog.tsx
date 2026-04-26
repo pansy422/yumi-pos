@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Scale } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { MoneyInput } from '@/components/common/MoneyInput'
 import { CategoryCombobox } from '@/components/common/CategoryCombobox'
 import { useToast } from '@/hooks/useToast'
@@ -23,9 +25,22 @@ type Form = {
   cost: number
   price: number
   stock: number
+  is_weight: boolean
+  /** Stock en kg cuando is_weight=true (para edición; al guardar se convierte a gramos). */
+  stock_kg: string
 }
 
-const empty: Form = { barcode: '', name: '', sku: '', category: '', cost: 0, price: 0, stock: 0 }
+const empty: Form = {
+  barcode: '',
+  name: '',
+  sku: '',
+  category: '',
+  cost: 0,
+  price: 0,
+  stock: 0,
+  is_weight: false,
+  stock_kg: '0',
+}
 
 export function ProductDialog({
   open,
@@ -56,6 +71,9 @@ export function ProductDialog({
         cost: product.cost,
         price: product.price,
         stock: product.stock,
+        is_weight: product.is_weight === 1,
+        stock_kg:
+          product.is_weight === 1 ? (product.stock / 1000).toFixed(3) : String(product.stock),
       })
       setArchived(product.archived === 1)
     } else {
@@ -71,6 +89,9 @@ export function ProductDialog({
     }
     setSaving(true)
     try {
+      const stockGrams = form.is_weight
+        ? Math.round(parseFloat(form.stock_kg.replace(',', '.')) * 1000) || 0
+        : Math.round(form.stock) || 0
       const input: ProductInput = {
         barcode: form.barcode.trim() || null,
         name: form.name.trim(),
@@ -78,7 +99,8 @@ export function ProductDialog({
         category: form.category.trim() || null,
         cost: form.cost,
         price: form.price,
-        stock: form.stock,
+        stock: stockGrams,
+        is_weight: form.is_weight ? 1 : 0,
       }
       const saved = product
         ? await api.productsUpdate(product.id, { ...input, archived: archived ? 1 : 0 })
@@ -112,6 +134,24 @@ export function ProductDialog({
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
+
+          <div className="sm:col-span-2 flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 p-3">
+            <div className="flex items-start gap-2">
+              <Scale className="mt-0.5 h-4 w-4 text-primary" />
+              <div>
+                <Label className="text-sm text-foreground">Vendido por peso (kg)</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Para verduras, frutas, carnes. El precio se cobra por kilo y al
+                  vender se ingresa el peso.
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={form.is_weight}
+              onCheckedChange={(v) => setForm({ ...form, is_weight: v })}
+            />
+          </div>
+
           <div className="space-y-1">
             <Label>Código de barras</Label>
             <Input
@@ -122,10 +162,7 @@ export function ProductDialog({
           </div>
           <div className="space-y-1">
             <Label>SKU</Label>
-            <Input
-              value={form.sku}
-              onChange={(e) => setForm({ ...form, sku: e.target.value })}
-            />
+            <Input value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
           </div>
           <div className="space-y-1">
             <Label>Categoría</Label>
@@ -134,20 +171,35 @@ export function ProductDialog({
               onChange={(v) => setForm({ ...form, category: v })}
             />
           </div>
+          {form.is_weight ? (
+            <div className="space-y-1">
+              <Label>Stock (kg)</Label>
+              <Input
+                inputMode="decimal"
+                value={form.stock_kg}
+                onChange={(e) => setForm({ ...form, stock_kg: e.target.value })}
+                placeholder="ej. 12.500"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Acepta decimales. Internamente se guarda en gramos.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <Label>Stock</Label>
+              <Input
+                type="number"
+                value={form.stock}
+                onChange={(e) => setForm({ ...form, stock: Number(e.target.value) || 0 })}
+              />
+            </div>
+          )}
           <div className="space-y-1">
-            <Label>Stock</Label>
-            <Input
-              type="number"
-              value={form.stock}
-              onChange={(e) => setForm({ ...form, stock: Number(e.target.value) || 0 })}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label>Costo</Label>
+            <Label>Costo {form.is_weight ? 'por kg' : ''}</Label>
             <MoneyInput value={form.cost} onValueChange={(n) => setForm({ ...form, cost: n })} />
           </div>
           <div className="space-y-1">
-            <Label>Precio venta *</Label>
+            <Label>Precio venta {form.is_weight ? 'por kg' : ''} *</Label>
             <MoneyInput value={form.price} onValueChange={(n) => setForm({ ...form, price: n })} />
           </div>
           {product && (

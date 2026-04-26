@@ -18,6 +18,7 @@ function row(r: Record<string, unknown> | undefined): Product | null {
     price: Number(r.price),
     stock: Number(r.stock),
     category: (r.category as string | null) ?? null,
+    is_weight: Number(r.is_weight ?? 0) === 1 ? 1 : 0,
     archived: Number(r.archived) === 1 ? 1 : 0,
     created_at: r.created_at as string,
     updated_at: r.updated_at as string,
@@ -70,8 +71,8 @@ export function create(input: ProductInput): Product {
     if (exists) throw new Error(`Ya existe un producto con el código ${input.barcode}`)
   }
   db.prepare(
-    `INSERT INTO products (id, barcode, name, sku, cost, price, stock, category)
-     VALUES (@id, @barcode, @name, @sku, @cost, @price, @stock, @category)`,
+    `INSERT INTO products (id, barcode, name, sku, cost, price, stock, category, is_weight)
+     VALUES (@id, @barcode, @name, @sku, @cost, @price, @stock, @category, @is_weight)`,
   ).run({
     id,
     barcode: input.barcode ?? null,
@@ -81,6 +82,7 @@ export function create(input: ProductInput): Product {
     price: Math.round(input.price),
     stock: Math.round(input.stock ?? 0),
     category: input.category ?? null,
+    is_weight: input.is_weight === 1 ? 1 : 0,
   })
   return get(id)!
 }
@@ -103,11 +105,13 @@ export function update(id: string, patch: ProductPatch): Product {
     price: Math.round(patch.price ?? current.price),
     stock: Math.round(patch.stock ?? current.stock),
     category: patch.category ?? current.category,
+    is_weight: (patch.is_weight ?? current.is_weight) === 1 ? 1 : 0,
     archived: patch.archived ?? current.archived,
   }
   db.prepare(
     `UPDATE products SET barcode=@barcode, name=@name, sku=@sku, cost=@cost, price=@price,
-     stock=@stock, category=@category, archived=@archived, updated_at=datetime('now') WHERE id=@id`,
+     stock=@stock, category=@category, is_weight=@is_weight, archived=@archived,
+     updated_at=datetime('now') WHERE id=@id`,
   ).run({ id, ...next })
   return get(id)!
 }
@@ -138,6 +142,11 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
   if (!code) throw new Error('Código vacío')
   const existing = byBarcode(code, { includeArchived: true })
   if (existing) {
+    if (existing.is_weight === 1) {
+      throw new Error(
+        `"${existing.name}" se vende por peso. Ajusta su stock manualmente desde Inventario (en kg).`,
+      )
+    }
     db.prepare(
       `UPDATE products SET stock = stock + 1, archived = 0, updated_at = datetime('now') WHERE id = ?`,
     ).run(existing.id)

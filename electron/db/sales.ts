@@ -50,12 +50,14 @@ export function create(input: SaleInput): SaleWithItems {
       cost: number
       name: string
       stock: number
+      is_weight: 0 | 1
+      lineTotal: number
     }[] = []
     let subtotal = 0
-    const oversold: { name: string; qty: number; stock: number }[] = []
+    const oversold: { name: string; qty: number; stock: number; is_weight: 0 | 1 }[] = []
 
     const fetchProduct = db.prepare(
-      `SELECT id, name, cost, price, stock, archived FROM products WHERE id = ?`,
+      `SELECT id, name, cost, price, stock, archived, is_weight FROM products WHERE id = ?`,
     )
     for (const it of input.items) {
       const p = fetchProduct.get(it.product_id) as
@@ -66,19 +68,27 @@ export function create(input: SaleInput): SaleWithItems {
             price: number
             stock: number
             archived: number
+            is_weight: number
           }
         | undefined
       if (!p) throw new Error('Uno de los productos del ticket ya no existe')
       if (p.archived === 1) {
         throw new Error(`No se puede vender "${p.name}" porque está archivado`)
       }
-      const qty = Math.max(1, Math.round(it.qty))
+      const isWeight: 0 | 1 = p.is_weight === 1 ? 1 : 0
+      const qty = isWeight ? Math.max(1, Math.round(it.qty)) : Math.max(1, Math.round(it.qty))
       const price = Math.round(it.price)
       const surcharge = Math.round(it.surcharge ?? 0)
       if (qty > p.stock) {
-        oversold.push({ name: p.name, qty, stock: p.stock })
+        oversold.push({ name: p.name, qty, stock: p.stock, is_weight: isWeight })
       }
-      subtotal += (price + surcharge) * qty
+      // Para productos al peso: precio es por kg, qty es gramos
+      // → line_total = (price + surcharge) × qty / 1000
+      // Para productos por unidad: line_total = (price + surcharge) × qty
+      const lineTotal = isWeight
+        ? Math.round(((price + surcharge) * qty) / 1000)
+        : (price + surcharge) * qty
+      subtotal += lineTotal
       itemsResolved.push({
         id: p.id,
         qty,
@@ -87,12 +97,18 @@ export function create(input: SaleInput): SaleWithItems {
         cost: Number(p.cost),
         name: p.name,
         stock: Number(p.stock),
+        is_weight: isWeight,
+        lineTotal,
       })
     }
 
     if (oversold.length > 0) {
       const detail = oversold
-        .map((o) => `${o.name} (pediste ${o.qty}, hay ${o.stock})`)
+        .map((o) => {
+          const want = o.is_weight ? `${(o.qty / 1000).toFixed(3)} kg` : `${o.qty}`
+          const has = o.is_weight ? `${(o.stock / 1000).toFixed(3)} kg` : `${o.stock}`
+          return `${o.name} (pediste ${want}, hay ${has})`
+        })
         .join('; ')
       throw new Error(`Stock insuficiente: ${detail}`)
     }
@@ -131,14 +147,23 @@ export function create(input: SaleInput): SaleWithItems {
     })
 
     const insItem = db.prepare(
-      `INSERT INTO sale_items (sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sale_items (sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total, is_weight)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     const decStock = db.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`)
     for (const it of itemsResolved) {
-      const lineTotal = (it.price + it.surcharge) * it.qty
       // sale_id = saleId (NO it.id — eso es product_id y rompe la FK)
-      insItem.run(saleId, it.id, it.name, it.price, it.cost, it.surcharge, it.qty, lineTotal)
+      insItem.run(
+        saleId,
+        it.id,
+        it.name,
+        it.price,
+        it.cost,
+        it.surcharge,
+        it.qty,
+        it.lineTotal,
+        it.is_weight,
+      )
       decStock.run(it.qty, it.id)
     }
 
@@ -163,10 +188,10 @@ export function getById(id: string): SaleWithItems | null {
   if (!sale) return null
   const items = db
     .prepare(
-      `SELECT product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total
+      `SELECT product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total, is_weight
        FROM sale_items WHERE sale_id = ? ORDER BY id ASC`,
     )
-    .all(id) as SaleItem[]
+    .all(id) as (SaleItem & { is_weight?: number })[]
   return {
     ...sale,
     items: items.map((r) => ({
@@ -177,6 +202,7 @@ export function getById(id: string): SaleWithItems | null {
       surcharge: Number(r.surcharge ?? 0),
       qty: Number(r.qty),
       line_total: Number(r.line_total),
+      is_weight: Number(r.is_weight ?? 0) === 1 ? 1 : 0,
     })),
   }
 }
@@ -187,12 +213,15 @@ export function list(
   const db = getDb()
   const where: string[] = []
   const params: Record<string, unknown> = {}
+  // Las fechas q.from / q.to son YYYY-MM-DD interpretadas en hora local.
+  // completed_at se guarda en UTC ISO, así que usamos date(..., 'localtime')
+  // para que los rangos calcen con la fecha que ve la cajera en pantalla.
   if (q.from) {
-    where.push('completed_at >= @from')
+    where.push("date(completed_at, 'localtime') >= @from")
     params.from = q.from
   }
   if (q.to) {
-    where.push('completed_at < @to')
+    where.push("date(completed_at, 'localtime') <= @to")
     params.to = q.to
   }
   if (q.cashSessionId) {

@@ -22,72 +22,103 @@ type Actions = {
   loadItems: (items: CartItem[], discount: number) => void
 }
 
+/**
+ * Para productos al peso (is_weight=1):
+ *   - qty representa GRAMOS (entero)
+ *   - price es por kg
+ *   - line_total = (price + surcharge) × qty / 1000  (redondeado a CLP)
+ * Para productos por unidad:
+ *   - qty representa unidades enteras
+ *   - line_total = (price + surcharge) × qty
+ */
+function lineTotal(item: CartItem): number {
+  const unit = item.price + item.surcharge
+  return item.is_weight === 1
+    ? Math.round((unit * item.qty) / 1000)
+    : unit * item.qty
+}
+
 export const useCart = create<State & Actions>()(
   persist(
     (set, get) => ({
-  items: [],
-  discount: 0,
-  lastAddedAt: 0,
-  lastAddedId: null,
-  add: (p, qty = 1) =>
-    set((s) => {
-      const idx = s.items.findIndex((i) => i.product_id === p.id)
-      const stamp = Date.now()
-      if (idx >= 0) {
-        const copy = [...s.items]
-        copy[idx] = { ...copy[idx], qty: copy[idx].qty + qty }
-        return { items: copy, lastAddedAt: stamp, lastAddedId: p.id }
-      }
-      return {
-        items: [
-          ...s.items,
-          {
-            product_id: p.id,
-            barcode: p.barcode,
-            name: p.name,
-            price: p.price,
-            cost: p.cost,
-            qty,
-            stock: p.stock,
-            surcharge: 0,
-          },
-        ],
-        lastAddedAt: stamp,
-        lastAddedId: p.id,
-      }
-    }),
-  setQty: (productId, qty) =>
-    set((s) => ({
-      items: s.items
-        .map((i) => (i.product_id === productId ? { ...i, qty: Math.max(0, Math.round(qty)) } : i))
-        .filter((i) => i.qty > 0),
-    })),
-  setSurcharge: (productId, n) =>
-    set((s) => ({
-      items: s.items.map((i) =>
-        i.product_id === productId ? { ...i, surcharge: Math.round(n) } : i,
-      ),
-    })),
-  remove: (productId) =>
-    set((s) => ({ items: s.items.filter((i) => i.product_id !== productId) })),
-  clear: () => set({ items: [], discount: 0, lastAddedId: null }),
-  setDiscount: (n) => set({ discount: Math.max(0, Math.round(n)) }),
-  subtotal: () =>
-    get().items.reduce((acc, i) => acc + (i.price + i.surcharge) * i.qty, 0),
-  surchargeTotal: () => get().items.reduce((acc, i) => acc + i.surcharge * i.qty, 0),
-  total: () => Math.max(0, get().subtotal() - get().discount),
-  loadItems: (items, discount) =>
-    set({
-      items: items.map((i) => ({ ...i, surcharge: i.surcharge ?? 0 })),
-      discount,
-      lastAddedId: null,
+      items: [],
+      discount: 0,
       lastAddedAt: 0,
-    }),
+      lastAddedId: null,
+      add: (p, qty = 1) =>
+        set((s) => {
+          const idx = s.items.findIndex((i) => i.product_id === p.id)
+          const stamp = Date.now()
+          // Para productos al peso, en lugar de acumular reemplazamos la
+          // cantidad — porque cada pesada del producto en la balanza es un
+          // valor único, no se incrementa.
+          if (idx >= 0) {
+            const copy = [...s.items]
+            const existing = copy[idx]
+            copy[idx] = {
+              ...existing,
+              qty: existing.is_weight === 1 ? qty : existing.qty + qty,
+            }
+            return { items: copy, lastAddedAt: stamp, lastAddedId: p.id }
+          }
+          return {
+            items: [
+              ...s.items,
+              {
+                product_id: p.id,
+                barcode: p.barcode,
+                name: p.name,
+                price: p.price,
+                cost: p.cost,
+                qty,
+                stock: p.stock,
+                surcharge: 0,
+                is_weight: p.is_weight === 1 ? 1 : 0,
+              },
+            ],
+            lastAddedAt: stamp,
+            lastAddedId: p.id,
+          }
+        }),
+      setQty: (productId, qty) =>
+        set((s) => ({
+          items: s.items
+            .map((i) =>
+              i.product_id === productId ? { ...i, qty: Math.max(0, Math.round(qty)) } : i,
+            )
+            .filter((i) => i.qty > 0),
+        })),
+      setSurcharge: (productId, n) =>
+        set((s) => ({
+          items: s.items.map((i) =>
+            i.product_id === productId ? { ...i, surcharge: Math.round(n) } : i,
+          ),
+        })),
+      remove: (productId) =>
+        set((s) => ({ items: s.items.filter((i) => i.product_id !== productId) })),
+      clear: () => set({ items: [], discount: 0, lastAddedId: null }),
+      setDiscount: (n) => set({ discount: Math.max(0, Math.round(n)) }),
+      subtotal: () => get().items.reduce((acc, i) => acc + lineTotal(i), 0),
+      surchargeTotal: () =>
+        get().items.reduce((acc, i) => {
+          if (i.is_weight === 1) return acc + Math.round((i.surcharge * i.qty) / 1000)
+          return acc + i.surcharge * i.qty
+        }, 0),
+      total: () => Math.max(0, get().subtotal() - get().discount),
+      loadItems: (items, discount) =>
+        set({
+          items: items.map((i) => ({
+            ...i,
+            surcharge: i.surcharge ?? 0,
+            is_weight: i.is_weight === 1 ? 1 : 0,
+          })),
+          discount,
+          lastAddedId: null,
+          lastAddedAt: 0,
+        }),
     }),
     {
       name: 'yumi-cart-current',
-      // Solo persistir el contenido del ticket. Los flags transitorios de
-      // "recién agregado" se descartan tras un refresh.
       partialize: (s) => ({ items: s.items, discount: s.discount }),
       merge: (persisted, current) => ({
         ...current,
@@ -95,6 +126,7 @@ export const useCart = create<State & Actions>()(
         items: ((persisted as { items?: CartItem[] }).items ?? []).map((i) => ({
           ...i,
           surcharge: i.surcharge ?? 0,
+          is_weight: i.is_weight === 1 ? 1 : 0,
         })),
         lastAddedAt: 0,
         lastAddedId: null,
@@ -102,3 +134,5 @@ export const useCart = create<State & Actions>()(
     },
   ),
 )
+
+export { lineTotal as cartLineTotal }

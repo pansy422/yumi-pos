@@ -338,13 +338,24 @@ export function renderTemplate(
           for (const l of wrap(it.name_snapshot, w)) {
             out.push(baseLine({ ...b, align: 'left' }, l))
           }
-          out.push(
-            baseLine(
-              { ...b, align: 'left' },
-              `  ${it.qty} x ${formatCLP(it.price_snapshot)}`,
-              formatCLP(it.line_total),
-            ),
-          )
+          if (it.is_weight === 1) {
+            const kg = (it.qty / 1000).toFixed(3)
+            out.push(
+              baseLine(
+                { ...b, align: 'left' },
+                `  ${kg} kg x ${formatCLP(it.price_snapshot)}/kg`,
+                formatCLP(it.line_total),
+              ),
+            )
+          } else {
+            out.push(
+              baseLine(
+                { ...b, align: 'left' },
+                `  ${it.qty} x ${formatCLP(it.price_snapshot)}`,
+                formatCLP(it.line_total),
+              ),
+            )
+          }
         }
         break
       case 'subtotal':
