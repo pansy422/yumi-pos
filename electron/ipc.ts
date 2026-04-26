@@ -8,7 +8,12 @@ import * as reports from './db/reports'
 import * as settingsRepo from './db/settings'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
-import { openDrawer, printReceipt as printReceiptHw, printTest } from './printer/thermal'
+import {
+  openDrawer,
+  printReceipt as printReceiptHw,
+  printTest,
+  printZReportHw,
+} from './printer/thermal'
 import { getDbPath } from './db'
 
 function safe<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
@@ -72,6 +77,14 @@ export function registerIpc(): void {
   )
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
+  handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))
+  ipcMain.handle(IPC.printZReport, (_e, sessionId: string) =>
+    safe(async () => {
+      const z = cash.buildZReport(sessionId)
+      const s = settingsRepo.getAll()
+      await printZReportHw(z, s.store, s.printer)
+    }),
+  )
 
   handle(IPC.reportDaily, (date: string) => reports.daily(date))
   handle(IPC.reportRange, (from: string, to: string) => reports.range(from, to))

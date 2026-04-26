@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
-import type { CashMovement, CashSession, CashSummary } from '../../shared/types'
+import type {
+  CashMovement,
+  CashSession,
+  CashSummary,
+  PaymentMethod,
+  ZReport,
+} from '../../shared/types'
 
 function rowToSession(r: Record<string, unknown> | undefined): CashSession | null {
   if (!r) return null
@@ -86,6 +92,41 @@ export function summary(sessionId: string): CashSummary {
 
 export function expectedClose(sessionId: string): number {
   return summary(sessionId).expected
+}
+
+export function getById(sessionId: string): CashSession | null {
+  const db = getDb()
+  const r = db.prepare(`SELECT * FROM cash_sessions WHERE id = ?`).get(sessionId) as
+    | Record<string, unknown>
+    | undefined
+  return rowToSession(r)
+}
+
+export function buildZReport(sessionId: string): ZReport {
+  const db = getDb()
+  const session = getById(sessionId)
+  if (!session) throw new Error('Sesión de caja no encontrada')
+  const sum = summary(sessionId)
+  const byPayment = db
+    .prepare(
+      `SELECT payment_method AS method, COUNT(*) AS count, COALESCE(SUM(total),0) AS total
+       FROM sales WHERE cash_session_id = ? AND voided = 0
+       GROUP BY payment_method`,
+    )
+    .all(sessionId) as { method: PaymentMethod; count: number; total: number }[]
+  const voided = db
+    .prepare(
+      `SELECT COUNT(*) AS count, COALESCE(SUM(total),0) AS total
+       FROM sales WHERE cash_session_id = ? AND voided = 1`,
+    )
+    .get(sessionId) as { count: number; total: number }
+  return {
+    session,
+    summary: sum,
+    by_payment: byPayment,
+    voided_count: Number(voided.count),
+    voided_total: Number(voided.total),
+  }
 }
 
 export function close(countedAmount: number, notes?: string): CashSession {

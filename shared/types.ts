@@ -83,6 +83,14 @@ export type CashSession = {
   notes: string | null
 }
 
+export type ZReport = {
+  session: CashSession
+  summary: CashSummary
+  by_payment: { method: PaymentMethod; count: number; total: number }[]
+  voided_count: number
+  voided_total: number
+}
+
 export type CashSummary = {
   session_id: string
   opening: number
@@ -194,6 +202,8 @@ export type Api = {
   cashMove: (kind: 'withdraw' | 'deposit' | 'adjustment', amount: number, note: string) => Promise<CashMovement>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
+  cashZReport: (sessionId: string) => Promise<ZReport>
+  printZReport: (sessionId: string) => Promise<Result<void>>
 
   reportDaily: (date: string) => Promise<DailyReport>
   reportRange: (from: string, to: string) => Promise<RangeReport>

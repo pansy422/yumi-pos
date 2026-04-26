@@ -8,6 +8,7 @@ export function Layout() {
   useShortcut({ key: 'F2' }, () => navigate('/inventario'))
   useShortcut({ key: 'F3' }, () => navigate('/caja'))
   useShortcut({ key: 'F4' }, () => navigate('/reportes'))
+  useShortcut({ key: 'F6' }, () => navigate('/ventas'))
   useShortcut({ key: 'F9' }, () => navigate('/ajustes'))
 
   return (

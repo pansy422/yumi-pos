@@ -44,11 +44,12 @@ export function get(id: string): Product | null {
   return row(db.prepare(`SELECT * FROM products WHERE id = ?`).get(id) as Record<string, unknown>)
 }
 
-export function byBarcode(barcode: string): Product | null {
+export function byBarcode(barcode: string, opts: { includeArchived?: boolean } = {}): Product | null {
   const db = getDb()
-  return row(
-    db.prepare(`SELECT * FROM products WHERE barcode = ?`).get(barcode) as Record<string, unknown>,
-  )
+  const sql = opts.includeArchived
+    ? `SELECT * FROM products WHERE barcode = ?`
+    : `SELECT * FROM products WHERE barcode = ? AND archived = 0`
+  return row(db.prepare(sql).get(barcode) as Record<string, unknown>)
 }
 
 export function create(input: ProductInput): Product {
@@ -125,7 +126,7 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
   const db = getDb()
   const code = barcode.trim()
   if (!code) throw new Error('Código vacío')
-  const existing = byBarcode(code)
+  const existing = byBarcode(code, { includeArchived: true })
   if (existing) {
     db.prepare(
       `UPDATE products SET stock = stock + 1, archived = 0, updated_at = datetime('now') WHERE id = ?`,
@@ -145,7 +146,7 @@ export function importMany(rows: ProductInput[]): { created: number; updated: nu
   let updated = 0
   const tx = db.transaction(() => {
     for (const r of rows) {
-      const existing = r.barcode ? byBarcode(r.barcode) : null
+      const existing = r.barcode ? byBarcode(r.barcode, { includeArchived: true }) : null
       if (existing) {
         update(existing.id, r)
         updated++

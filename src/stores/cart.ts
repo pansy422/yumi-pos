@@ -16,6 +16,7 @@ type Actions = {
   setDiscount: (n: number) => void
   subtotal: () => number
   total: () => number
+  loadItems: (items: CartItem[], discount: number) => void
 }
 
 export const useCart = create<State & Actions>((set, get) => ({
@@ -61,4 +62,5 @@ export const useCart = create<State & Actions>((set, get) => ({
   setDiscount: (n) => set({ discount: Math.max(0, Math.round(n)) }),
   subtotal: () => get().items.reduce((acc, i) => acc + i.price * i.qty, 0),
   total: () => Math.max(0, get().subtotal() - get().discount),
+  loadItems: (items, discount) => set({ items, discount, lastAddedId: null, lastAddedAt: 0 }),
 }))
