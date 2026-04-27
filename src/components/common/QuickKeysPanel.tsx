@@ -54,12 +54,13 @@ export function QuickKeysPanel({
   }
 
   return (
-    <Card className="card-elev">
-      <CardContent className="p-3">
-        <div className="mb-2 flex items-center justify-between px-1">
+    <Card className="card-elev shrink-0">
+      <CardContent className="p-2">
+        <div className="mb-1.5 flex items-center justify-between px-1">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
             <Zap className="h-3 w-3 text-primary" />
             Acceso rápido
+            <span className="opacity-60">— productos sin código</span>
           </div>
           <button
             onClick={() => setEditing((v) => !v)}
@@ -119,9 +120,9 @@ function SlotButton({
     return (
       <button
         onClick={onClick}
-        className="group relative flex aspect-[4/3] items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/20 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
+        className="group relative flex h-14 items-center justify-center rounded-md border border-dashed border-border/60 bg-muted/20 text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-primary"
       >
-        <Plus className="h-5 w-5 opacity-50 group-hover:opacity-100" />
+        <Plus className="h-4 w-4 opacity-50 group-hover:opacity-100" />
       </button>
     )
   }
@@ -130,7 +131,7 @@ function SlotButton({
     <div className="relative">
       <button
         onClick={onClick}
-        className="group relative flex aspect-[4/3] w-full flex-col items-center justify-center overflow-hidden rounded-md border border-border/40 px-2 py-1.5 text-center transition-all hover:scale-[1.02] active:scale-95"
+        className="group relative flex h-14 w-full flex-col items-center justify-center overflow-hidden rounded-md border border-border/40 px-2 py-1 text-center transition-all hover:scale-[1.02] active:scale-95"
         style={{
           background: `linear-gradient(140deg, ${color}26 0%, ${color}10 100%)`,
           borderColor: `${color}50`,
@@ -141,15 +142,15 @@ function SlotButton({
           style={{ background: color }}
           aria-hidden
         />
-        <div className="line-clamp-2 text-[12px] font-semibold leading-tight">{data.name}</div>
-        <div className="num mt-1 text-[11px] text-muted-foreground">{formatCLP(data.price)}</div>
+        <div className="line-clamp-1 text-[12px] font-semibold leading-tight">{data.name}</div>
+        <div className="num text-[10px] text-muted-foreground">{formatCLP(data.price)}</div>
       </button>
       {editing && (
         <button
           onClick={onRemove}
-          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md hover:scale-110"
+          className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md hover:scale-110"
         >
-          <X className="h-3 w-3" />
+          <X className="h-2.5 w-2.5" />
         </button>
       )}
     </div>

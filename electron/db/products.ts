@@ -129,6 +129,36 @@ export function archive(id: string, archived: boolean): void {
   ).run(archived ? 1 : 0, id)
 }
 
+/**
+ * Eliminación dura. Solo se permite si el producto no tiene ventas
+ * asociadas (sale_items) ni promociones. Si las tiene, hay que archivar
+ * para preservar la integridad histórica.
+ */
+export function deleteHard(id: string): void {
+  const db = getDb()
+  const product = get(id)
+  if (!product) throw new Error('El producto no existe')
+  const inSales = db
+    .prepare(`SELECT 1 FROM sale_items WHERE product_id = ? LIMIT 1`)
+    .get(id)
+  if (inSales) {
+    throw new Error(
+      `"${product.name}" tiene ventas asociadas. Para mantener el historial, archívalo en vez de eliminarlo (se oculta del POS).`,
+    )
+  }
+  const inPromos = db
+    .prepare(
+      `SELECT 1 FROM promotions WHERE kind = 'percent_off_product' AND target = ? LIMIT 1`,
+    )
+    .get(id)
+  if (inPromos) {
+    throw new Error(
+      `"${product.name}" tiene una promoción configurada. Elimina o cambia la promoción antes de borrar el producto.`,
+    )
+  }
+  db.prepare(`DELETE FROM products WHERE id = ?`).run(id)
+}
+
 export function adjustStock(id: string, delta: number, _note?: string): Product {
   const db = getDb()
   const tx = db.transaction(() => {
