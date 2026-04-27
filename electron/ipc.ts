@@ -97,6 +97,9 @@ export function registerIpc(): void {
   handle(IPC.productsDelete, (id: string) => {
     products.deleteHard(id)
   })
+  handle(IPC.productsReactivate, (id: string, addOneToStock?: boolean) =>
+    products.reactivate(id, addOneToStock !== false),
+  )
   handle(IPC.productsScanIn, (barcode: string, opts?: Parameters<typeof products.scanIn>[1]) =>
     products.scanIn(barcode, opts),
   )

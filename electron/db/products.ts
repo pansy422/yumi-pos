@@ -176,23 +176,48 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
   const db = getDb()
   const code = barcode.trim()
   if (!code) throw new Error('Código vacío')
-  const existing = byBarcode(code, { includeArchived: true })
-  if (existing) {
-    if (existing.is_weight === 1) {
+  // Solo detectamos automáticamente productos ACTIVOS. Si solo hay
+  // match archivado, lo informamos al frontend como "needs_info" con
+  // archived_match para que la UI pregunte explícitamente antes de
+  // reactivar (evita resucitar productos archivados sin que la cajera
+  // se entere y vea el inventario "sumado" misteriosamente).
+  const active = byBarcode(code, { includeArchived: false })
+  if (active) {
+    if (active.is_weight === 1) {
       throw new Error(
-        `"${existing.name}" se vende por peso. Ajusta su stock manualmente desde Inventario (en kg).`,
+        `"${active.name}" se vende por peso. Ajusta su stock manualmente desde Inventario (en kg).`,
       )
     }
     db.prepare(
-      `UPDATE products SET stock = stock + 1, archived = 0, updated_at = datetime('now') WHERE id = ?`,
-    ).run(existing.id)
-    return { kind: 'incremented', product: get(existing.id)! }
+      `UPDATE products SET stock = stock + 1, updated_at = datetime('now') WHERE id = ?`,
+    ).run(active.id)
+    return { kind: 'incremented', product: get(active.id)! }
   }
   if (opts?.newProduct) {
     const created = create({ ...opts.newProduct, barcode: code, stock: opts.newProduct.stock ?? 1 })
     return { kind: 'created', product: created }
   }
-  return { kind: 'needs_info', barcode: code }
+  const archived = byBarcode(code, { includeArchived: true })
+  return {
+    kind: 'needs_info',
+    barcode: code,
+    archived_match: archived ?? undefined,
+  }
+}
+
+/**
+ * Reactiva un producto archivado, opcionalmente sumando 1 al stock
+ * (uso típico desde el flujo de pistoleo).
+ */
+export function reactivate(id: string, addOneToStock = true): Product {
+  const db = getDb()
+  const stmt = addOneToStock
+    ? `UPDATE products SET archived = 0, stock = stock + 1, updated_at = datetime('now') WHERE id = ?`
+    : `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`
+  db.prepare(stmt).run(id)
+  const p = get(id)
+  if (!p) throw new Error('Producto no encontrado')
+  return p
 }
 
 export type CategoryStat = { name: string; count: number; stock: number; value: number }

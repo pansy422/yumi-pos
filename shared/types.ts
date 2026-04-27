@@ -281,7 +281,7 @@ export type DetectedPrinter = {
 export type ScanInResult =
   | { kind: 'created'; product: Product }
   | { kind: 'incremented'; product: Product }
-  | { kind: 'needs_info'; barcode: string }
+  | { kind: 'needs_info'; barcode: string; archived_match?: Product }
 
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
 
@@ -293,6 +293,7 @@ export type Api = {
   productsUpdate: (id: string, patch: ProductPatch) => Promise<Product>
   productsArchive: (id: string, archived: boolean) => Promise<void>
   productsDelete: (id: string) => Promise<void>
+  productsReactivate: (id: string, addOneToStock?: boolean) => Promise<Product>
   productsScanIn: (barcode: string, opts?: { newProduct?: ProductInput }) => Promise<ScanInResult>
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
