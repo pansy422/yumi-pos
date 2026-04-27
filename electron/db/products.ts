@@ -206,15 +206,22 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
 }
 
 /**
- * Reactiva un producto archivado, opcionalmente sumando 1 al stock
- * (uso típico desde el flujo de pistoleo).
+ * Reactiva un producto archivado. Si se pasa newStock, fija el stock a
+ * ese valor (el caso típico cuando la cajera vuelve a recibir
+ * mercadería y quiere indicar la cantidad real). Si se omite, mantiene
+ * el stock que tenía al archivar.
  */
-export function reactivate(id: string, addOneToStock = true): Product {
+export function reactivate(id: string, opts?: { newStock?: number }): Product {
   const db = getDb()
-  const stmt = addOneToStock
-    ? `UPDATE products SET archived = 0, stock = stock + 1, updated_at = datetime('now') WHERE id = ?`
-    : `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`
-  db.prepare(stmt).run(id)
+  if (opts?.newStock != null) {
+    db.prepare(
+      `UPDATE products SET archived = 0, stock = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).run(Math.max(0, Math.round(opts.newStock)), id)
+  } else {
+    db.prepare(
+      `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`,
+    ).run(id)
+  }
   const p = get(id)
   if (!p) throw new Error('Producto no encontrado')
   return p
