@@ -10,6 +10,7 @@ const api = {
   productsCreate: invoke(IPC.productsCreate),
   productsUpdate: invoke(IPC.productsUpdate),
   productsArchive: invoke(IPC.productsArchive),
+  productsDelete: invoke(IPC.productsDelete),
   productsScanIn: invoke(IPC.productsScanIn),
   productsAdjustStock: invoke(IPC.productsAdjustStock),
   productsImport: invoke(IPC.productsImport),

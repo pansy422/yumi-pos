@@ -341,13 +341,59 @@ export function ProductDialog({
         )}
 
         {step === 'form' && (
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-              Cancelar
-            </Button>
-            <Button onClick={save} disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar'}
-            </Button>
+          <DialogFooter className="sm:justify-between">
+            {product ? (
+              <Button
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={saving}
+                onClick={async () => {
+                  if (!confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`)) return
+                  setSaving(true)
+                  try {
+                    await api.productsDelete(product.id)
+                    toast({ variant: 'success', title: 'Producto eliminado' })
+                    onSaved(product)
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    if (
+                      msg.includes('ventas asociadas') &&
+                      confirm(
+                        `${msg}\n\n¿Quieres archivarlo en su lugar? El producto se ocultará del POS pero queda disponible en reportes.`,
+                      )
+                    ) {
+                      try {
+                        await api.productsArchive(product.id, true)
+                        toast({ variant: 'success', title: 'Producto archivado' })
+                        onSaved(product)
+                      } catch (e2) {
+                        toast({
+                          variant: 'destructive',
+                          title: 'No se pudo archivar',
+                          description: e2 instanceof Error ? e2.message : String(e2),
+                        })
+                      }
+                    } else {
+                      toast({ variant: 'destructive', title: 'No se pudo eliminar', description: msg })
+                    }
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
+              >
+                Eliminar
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button onClick={save} disabled={saving}>
+                {saving ? 'Guardando…' : 'Guardar'}
+              </Button>
+            </div>
           </DialogFooter>
         )}
       </DialogContent>

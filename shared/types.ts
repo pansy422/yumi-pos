@@ -292,6 +292,7 @@ export type Api = {
   productsCreate: (input: ProductInput) => Promise<Product>
   productsUpdate: (id: string, patch: ProductPatch) => Promise<Product>
   productsArchive: (id: string, archived: boolean) => Promise<void>
+  productsDelete: (id: string) => Promise<void>
   productsScanIn: (barcode: string, opts?: { newProduct?: ProductInput }) => Promise<ScanInResult>
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
