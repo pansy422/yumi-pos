@@ -63,7 +63,9 @@ export type SaleInput = {
 }
 
 export type SaleItem = {
-  product_id: string
+  /** null si el producto fue borrado después de la venta. El nombre,
+   * precio y costo siguen disponibles en los snapshots. */
+  product_id: string | null
   name_snapshot: string
   price_snapshot: number
   cost_snapshot: number
@@ -122,13 +124,6 @@ export type CategoryInput = {
   name: string
   color?: string | null
   default_margin?: number | null
-}
-
-export type CategoryStat = {
-  name: string
-  count: number
-  stock: number
-  value: number
 }
 
 export type HeldTicket = {
@@ -280,7 +275,7 @@ export type DailyReport = {
   revenue: number
   profit: number
   by_payment: { method: PaymentMethod; total: number; count: number }[]
-  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+  top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
 }
 
@@ -291,7 +286,7 @@ export type RangeReport = {
   revenue: number
   profit: number
   by_payment: { method: PaymentMethod; total: number; count: number }[]
-  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+  top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
   daily: { date: string; revenue: number; profit: number; count: number }[]
 }
@@ -329,7 +324,6 @@ export type Api = {
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
   productsCritical: () => Promise<Product[]>
-  categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
   categoriesCrud: () => Promise<Category[]>
   categoriesSaveMeta: (input: CategoryInput) => Promise<Category>

@@ -10,22 +10,42 @@ import type {
 // porque completed_at se almacena en UTC ISO y los rangos vienen de la UI
 // como YYYY-MM-DD interpretados en hora local del PC.
 
+/**
+ * Costo total de una línea de venta. Para productos al peso (is_weight=1)
+ * la qty está en gramos y cost_snapshot es por kg, así que dividimos por
+ * 1000. Para productos por unidad es cost*qty directo. Sin esta corrección
+ * los reportes de ganancia mostraban valores absurdos (ej. 250g de tomate
+ * a $1.500/kg salía como $375.000 de costo en vez de $375).
+ */
+const COST_LINE_SQL = `(CASE WHEN is_weight = 1
+                              THEN ROUND(cost_snapshot * qty / 1000.0)
+                              ELSE cost_snapshot * qty
+                         END)`
+
 function topProducts(fromDate: string, toDate: string) {
   const db = getDb()
+  // Agrupamos por (product_id, name_snapshot) para que productos
+  // borrados (product_id NULL) no se colapsen todos en una sola fila
+  // confusa: cada producto borrado aparece con su nombre histórico.
   return db
     .prepare(
       `SELECT si.product_id AS product_id,
-              MAX(si.name_snapshot) AS name,
+              si.name_snapshot AS name,
               SUM(si.qty) AS qty,
               SUM(si.line_total) AS revenue
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
        WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
-       GROUP BY si.product_id
+       GROUP BY si.product_id, si.name_snapshot
        ORDER BY qty DESC
        LIMIT 10`,
     )
-    .all(fromDate, toDate) as { product_id: string; name: string; qty: number; revenue: number }[]
+    .all(fromDate, toDate) as {
+    product_id: string | null
+    name: string
+    qty: number
+    revenue: number
+  }[]
 }
 
 function byPayment(fromDate: string, toDate: string) {
@@ -48,6 +68,9 @@ function byPayment(fromDate: string, toDate: string) {
 
 function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
   const db = getDb()
+  // LEFT JOIN para que las ventas de productos borrados también cuenten.
+  // Caen en la categoría "Sin categoría" (__none__) — están en el
+  // histórico pero ya no podemos saber a qué categoría pertenecían.
   const rows = db
     .prepare(
       `SELECT
@@ -55,10 +78,12 @@ function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
          COUNT(DISTINCT s.id) AS sale_count,
          SUM(si.qty) AS qty,
          SUM(si.line_total) AS revenue,
-         SUM((si.price_snapshot - si.cost_snapshot) * si.qty) AS profit
+         SUM(si.line_total - (CASE WHEN si.is_weight = 1
+                                   THEN ROUND(si.cost_snapshot * si.qty / 1000.0)
+                                   ELSE si.cost_snapshot * si.qty END)) AS profit
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
-       JOIN products p ON p.id = si.product_id
+       LEFT JOIN products p ON p.id = si.product_id
        WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
        GROUP BY cat
        ORDER BY revenue DESC`,
@@ -87,7 +112,7 @@ function totals(
   const r = db
     .prepare(
       `SELECT COUNT(*) AS c, COALESCE(SUM(total),0) AS rev,
-              COALESCE(SUM((SELECT SUM((price_snapshot - cost_snapshot) * qty) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
+              COALESCE(SUM((SELECT SUM(line_total - ${COST_LINE_SQL}) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
        FROM sales
        WHERE date(completed_at, 'localtime') BETWEEN ? AND ? AND voided = 0`,
     )
@@ -116,7 +141,7 @@ export function range(fromDate: string, toDate: string): RangeReport {
       `SELECT date(completed_at, 'localtime') AS d,
               COUNT(*) AS c,
               COALESCE(SUM(total),0) AS rev,
-              COALESCE(SUM((SELECT SUM((price_snapshot - cost_snapshot) * qty) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
+              COALESCE(SUM((SELECT SUM(line_total - ${COST_LINE_SQL}) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
        FROM sales
        WHERE date(completed_at, 'localtime') BETWEEN ? AND ? AND voided = 0
        GROUP BY d ORDER BY d ASC`,

@@ -55,16 +55,13 @@ function humanize(err: unknown): string {
   return raw
 }
 
-function safe<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
-  return Promise.resolve()
-    .then(fn)
-    .then((data) => ({ ok: true as const, data }))
-    .catch((err: unknown) => {
-      console.error('[IPC safe] error:', err)
-      return { ok: false as const, error: humanize(err) }
-    })
-}
-
+/**
+ * Handler estándar: lanza el error humanizado si la función falla. El
+ * frontend lo recibe en su try/catch y muestra el toast. Usalo para
+ * todo lo que no sea hardware externo (impresora, drawer, backup) —
+ * cuando la operación falla, casi siempre es un bug que querés que se
+ * loggee y propague.
+ */
 function handle<TArgs extends unknown[], TResult>(
   channel: string,
   fn: (...args: TArgs) => TResult | Promise<TResult>,
@@ -75,6 +72,29 @@ function handle<TArgs extends unknown[], TResult>(
     } catch (err) {
       console.error(`[IPC ${channel}] error:`, err)
       throw new Error(humanize(err))
+    }
+  })
+}
+
+/**
+ * Handler "seguro": atrapa los errores y los devuelve como `Result<T>`
+ * (`{ ok: true, data }` o `{ ok: false, error }`). El frontend NO
+ * necesita try/catch — ya recibe un objeto que puede mostrar
+ * directamente. Usalo para operaciones donde el fallo es esperable
+ * (impresora desconectada, archivo no encontrado en backup) y la app
+ * sigue funcionando normal aunque falle.
+ */
+function handleSafe<TArgs extends unknown[], TResult>(
+  channel: string,
+  fn: (...args: TArgs) => TResult | Promise<TResult>,
+) {
+  ipcMain.handle(channel, async (_e, ...args: unknown[]): Promise<Result<TResult>> => {
+    try {
+      const data = await fn(...(args as TArgs))
+      return { ok: true, data }
+    } catch (err) {
+      console.error(`[IPC ${channel}] error:`, err)
+      return { ok: false, error: humanize(err) }
     }
   })
 }
@@ -112,7 +132,6 @@ export function registerIpc(): void {
     products.importMany(rows),
   )
   handle(IPC.productsCritical, () => products.critical())
-  handle(IPC.categoriesList, () => products.categories())
   handle(IPC.categoriesRename, (from: string, to: string) => ({
     updated: products.renameCategory(from, to),
   }))
@@ -157,26 +176,26 @@ export function registerIpc(): void {
   handle(IPC.usersVerifyPin, (id: string, pin: string) => users.verifyPin(id, pin))
   handle(IPC.usersCount, () => users.count())
 
-  // Logging extra para sales:create — es el flujo crítico.
-  ipcMain.handle(IPC.salesCreate, async (_e, input: Parameters<typeof sales.create>[0]) => {
-    try {
-      const itemsBrief = input.items.map((i) => ({
+  // sales:create es el flujo crítico — agregamos logging breve en
+  // entrada/salida para diagnosticar problemas en producción. El error
+  // humanization sale por handle() como cualquier otro.
+  handle(IPC.salesCreate, (input: Parameters<typeof sales.create>[0]) => {
+    console.log('[sales:create] payload', {
+      items: input.items.map((i) => ({
         product_id: i.product_id,
         qty: i.qty,
         price: i.price,
-      }))
-      console.log('[sales:create] payload', {
-        items: itemsBrief,
-        discount: input.discount,
-        payments: input.payments,
-      })
-      const result = sales.create(input)
-      console.log('[sales:create] ok', { id: result.id, number: result.number, total: result.total })
-      return result
-    } catch (err) {
-      console.error('[sales:create] failed:', err)
-      throw new Error(humanize(err))
-    }
+      })),
+      discount: input.discount,
+      payments: input.payments,
+    })
+    const result = sales.create(input)
+    console.log('[sales:create] ok', {
+      id: result.id,
+      number: result.number,
+      total: result.total,
+    })
+    return result
   })
   handle(IPC.salesList, (q?: Parameters<typeof sales.list>[0]) => sales.list(q ?? {}))
   handle(IPC.salesGet, (id: string) => sales.getById(id))
@@ -199,13 +218,11 @@ export function registerIpc(): void {
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
   handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))
-  ipcMain.handle(IPC.printZReport, (_e, sessionId: string) =>
-    safe(async () => {
-      const z = cash.buildZReport(sessionId)
-      const s = settingsRepo.getAll()
-      await printZReportHw(z, s.store, s.printer)
-    }),
-  )
+  handleSafe(IPC.printZReport, async (sessionId: string) => {
+    const z = cash.buildZReport(sessionId)
+    const s = settingsRepo.getAll()
+    await printZReportHw(z, s.store, s.printer)
+  })
 
   handle(IPC.reportDaily, (date: string) => reports.daily(date))
   handle(IPC.reportRange, (from: string, to: string) => reports.range(from, to))
@@ -216,43 +233,32 @@ export function registerIpc(): void {
   )
 
   handle(IPC.printerList, () => listSystemPrinters())
-  ipcMain.handle(IPC.printerTest, () =>
-    safe(async () => {
-      const s = settingsRepo.getAll()
-      await printTest(s.printer, s.store)
-    }),
-  )
-  ipcMain.handle(IPC.printerOpenDrawer, () =>
-    safe(async () => {
-      const s = settingsRepo.getAll()
-      await openDrawer(s.printer)
-    }),
-  )
-  ipcMain.handle(IPC.printReceipt, (_e, saleId: string) =>
-    safe(async () => {
-      const sale = sales.getById(saleId)
-      if (!sale) throw new Error('Venta no encontrada')
-      const s = settingsRepo.getAll()
-      await printReceiptHw(sale, s.store, s.printer, s.receipt_template)
-    }),
-  )
-  ipcMain.handle(IPC.printLowStock, () =>
-    safe(async () => {
-      const list = products.critical()
-      const s = settingsRepo.getAll()
-      await printLowStockHw(list, s.store, s.printer)
-    }),
-  )
+  handleSafe(IPC.printerTest, async () => {
+    const s = settingsRepo.getAll()
+    await printTest(s.printer, s.store)
+  })
+  handleSafe(IPC.printerOpenDrawer, async () => {
+    const s = settingsRepo.getAll()
+    await openDrawer(s.printer)
+  })
+  handleSafe(IPC.printReceipt, async (saleId: string) => {
+    const sale = sales.getById(saleId)
+    if (!sale) throw new Error('Venta no encontrada')
+    const s = settingsRepo.getAll()
+    await printReceiptHw(sale, s.store, s.printer, s.receipt_template)
+  })
+  handleSafe(IPC.printLowStock, async () => {
+    const list = products.critical()
+    const s = settingsRepo.getAll()
+    await printLowStockHw(list, s.store, s.printer)
+  })
 
   handle(IPC.backupExport, () => exportBackup())
   handle(IPC.backupImport, () => importBackup())
-  ipcMain.handle(IPC.backupRunAuto, () =>
-    safe(async () => {
-      const r = await import('./utils/autoBackup')
-      const result = await r.maybeRunAutoBackup()
-      return result
-    }),
-  )
+  handleSafe(IPC.backupRunAuto, async () => {
+    const r = await import('./utils/autoBackup')
+    return r.maybeRunAutoBackup()
+  })
   handle(IPC.backupAutoDir, async () => {
     const r = await import('./utils/autoBackup')
     return r.getAutoBackupDir()

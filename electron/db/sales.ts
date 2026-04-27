@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { lineTotal } from '../../shared/money'
 import type {
   PaymentMethod,
   Sale,
@@ -106,22 +107,17 @@ export function create(input: SaleInput): SaleWithItems {
         )
       }
       if (p.archived === 1) {
-        throw new Error(`No se puede vender "${p.name}" porque está archivado`)
+        throw new Error(`No se puede vender "${p.name}" porque está inactivo`)
       }
       const isWeight: 0 | 1 = p.is_weight === 1 ? 1 : 0
-      const qty = isWeight ? Math.max(1, Math.round(it.qty)) : Math.max(1, Math.round(it.qty))
+      const qty = Math.max(1, Math.round(it.qty))
       const price = Math.round(it.price)
       const surcharge = Math.round(it.surcharge ?? 0)
       if (qty > p.stock) {
         oversold.push({ name: p.name, qty, stock: p.stock, is_weight: isWeight })
       }
-      // Para productos al peso: precio es por kg, qty es gramos
-      // → line_total = (price + surcharge) × qty / 1000
-      // Para productos por unidad: line_total = (price + surcharge) × qty
-      const lineTotal = isWeight
-        ? Math.round(((price + surcharge) * qty) / 1000)
-        : (price + surcharge) * qty
-      subtotal += lineTotal
+      const lt = lineTotal({ price, surcharge, qty, is_weight: isWeight })
+      subtotal += lt
       itemsResolved.push({
         id: p.id,
         qty,
@@ -131,7 +127,7 @@ export function create(input: SaleInput): SaleWithItems {
         name: p.name,
         stock: Number(p.stock),
         is_weight: isWeight,
-        lineTotal,
+        lineTotal: lt,
       })
     }
 
@@ -397,10 +393,12 @@ export function returnItems(
           `No puedes devolver más de lo pendiente: ${it.name_snapshot} (quedan ${available})`,
         )
       }
-      const unitPrice = it.price_snapshot + it.surcharge
-      const lineRefund = it.is_weight === 1
-        ? Math.round((unitPrice * toReturn) / 1000)
-        : unitPrice * toReturn
+      const lineRefund = lineTotal({
+        price: it.price_snapshot,
+        surcharge: it.surcharge,
+        qty: toReturn,
+        is_weight: it.is_weight,
+      })
       refunded += lineRefund
       updateReturned.run(toReturn, saleId, r.product_id)
       restoreStock.run(toReturn, r.product_id)

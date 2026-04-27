@@ -1558,10 +1558,11 @@ function PaymentDialog({
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {lines.map((line) => {
+              <div className="space-y-3">
+                {lines.map((line, idx) => {
                   const isCash = line.method === 'efectivo'
                   const overshort = isCash && line.cash_received < line.amount
+                  const change = isCash ? Math.max(0, line.cash_received - line.amount) : 0
                   return (
                     <div
                       key={line.id}
@@ -1572,64 +1573,18 @@ function PaymentDialog({
                           : 'border-border/60 bg-card/30',
                       )}
                     >
-                      <div className="grid gap-2 sm:grid-cols-[140px_1fr_auto]">
-                        <div className="grid grid-cols-3 gap-1 sm:col-span-1">
-                          {(['efectivo', 'debito', 'credito'] as PaymentMethod[]).map((m) => (
-                            <button
-                              key={m}
-                              onClick={() => updateLine(line.id, { method: m })}
-                              className={cn(
-                                'rounded-md border px-1 py-1 text-[10px] uppercase font-medium transition-colors',
-                                line.method === m
-                                  ? 'border-primary bg-primary/10 text-primary'
-                                  : 'border-border bg-card hover:bg-accent',
-                              )}
-                            >
-                              {m === 'efectivo' ? 'Efec' : m === 'debito' ? 'Déb' : 'Créd'}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <MoneyInput
-                            value={line.amount}
-                            onValueChange={(n) =>
-                              updateLine(line.id, {
-                                amount: n,
-                                cash_received: isCash ? Math.max(line.cash_received, n) : 0,
-                              })
-                            }
-                            placeholder="Monto"
-                          />
-                          {isCash ? (
-                            <MoneyInput
-                              value={line.cash_received}
-                              onValueChange={(n) => updateLine(line.id, { cash_received: n })}
-                              placeholder="Recibido"
-                            />
-                          ) : (
-                            <Select
-                              value={line.method === 'transferencia' ? 'transferencia' : 'otro'}
-                              onValueChange={(v) =>
-                                updateLine(line.id, { method: v as PaymentMethod })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="transferencia">Transferencia</SelectItem>
-                                <SelectItem value="otro">Otro</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          )}
+                      <div className="mb-2 flex items-center justify-between">
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          Pago {idx + 1}
                         </div>
                         <div className="flex items-center gap-1">
-                          {remaining !== 0 && (
+                          {remaining > 0 && (
                             <Button
                               size="sm"
                               variant="ghost"
                               onClick={() => fillRemainingTo(line.id)}
-                              className="text-[10px]"
+                              className="h-7 text-[10px]"
+                              title="Asignar el saldo restante a esta línea"
                             >
                               Cubrir saldo
                             </Button>
@@ -1639,30 +1594,105 @@ function PaymentDialog({
                               size="icon"
                               variant="ghost"
                               onClick={() => removeLine(line.id)}
-                              className="h-8 w-8 text-destructive"
+                              className="h-7 w-7 text-destructive"
+                              title="Quitar este pago"
                             >
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
                       </div>
-                      {isCash && line.amount > 0 && (
-                        <div className="mt-2 flex items-center justify-between text-[11px]">
-                          <span className="text-muted-foreground">
-                            Vuelto de esta línea
-                          </span>
-                          <span
+
+                      <div className="space-y-2">
+                        <div>
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Método
+                          </Label>
+                          <div className="mt-1 grid grid-cols-5 gap-1">
+                            {(
+                              [
+                                { v: 'efectivo' as PaymentMethod, label: 'Efectivo' },
+                                { v: 'debito' as PaymentMethod, label: 'Débito' },
+                                { v: 'credito' as PaymentMethod, label: 'Crédito' },
+                                { v: 'transferencia' as PaymentMethod, label: 'Transf.' },
+                                { v: 'otro' as PaymentMethod, label: 'Otro' },
+                              ]
+                            ).map((m) => (
+                              <button
+                                key={m.v}
+                                onClick={() => updateLine(line.id, { method: m.v })}
+                                className={cn(
+                                  'rounded-md border px-1 py-1.5 text-[11px] font-medium transition-colors',
+                                  line.method === m.v
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border bg-card hover:bg-accent',
+                                )}
+                              >
+                                {m.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className={cn('grid gap-2', isCash ? 'sm:grid-cols-2' : 'sm:grid-cols-1')}>
+                          <div>
+                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              Monto a cobrar
+                            </Label>
+                            <MoneyInput
+                              value={line.amount}
+                              onValueChange={(n) =>
+                                updateLine(line.id, {
+                                  amount: n,
+                                  cash_received: isCash ? Math.max(line.cash_received, n) : 0,
+                                })
+                              }
+                              className="mt-1 text-lg"
+                            />
+                          </div>
+                          {isCash && (
+                            <div>
+                              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                Efectivo recibido
+                              </Label>
+                              <MoneyInput
+                                value={line.cash_received}
+                                onValueChange={(n) =>
+                                  updateLine(line.id, { cash_received: n })
+                                }
+                                className="mt-1 text-lg"
+                                autoFocus={idx === 0}
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {isCash && line.amount > 0 && (
+                          <div
                             className={cn(
-                              'num font-semibold',
-                              overshort ? 'text-destructive' : 'text-success',
+                              'flex items-center justify-between rounded-md px-2 py-1.5 text-xs',
+                              overshort
+                                ? 'bg-destructive/10 text-destructive'
+                                : change > 0
+                                  ? 'bg-success/10 text-success'
+                                  : 'bg-muted/50 text-muted-foreground',
                             )}
                           >
-                            {overshort
-                              ? `Faltan ${formatCLP(line.amount - line.cash_received)}`
-                              : formatCLP(line.cash_received - line.amount)}
-                          </span>
-                        </div>
-                      )}
+                            <span className="font-medium">
+                              {overshort
+                                ? 'Falta efectivo'
+                                : change > 0
+                                  ? 'Vuelto a entregar'
+                                  : 'Pago exacto'}
+                            </span>
+                            <span className="num font-bold">
+                              {overshort
+                                ? formatCLP(line.amount - line.cash_received)
+                                : formatCLP(change)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}

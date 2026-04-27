@@ -38,7 +38,6 @@ const api = {
   productsAdjustStock: invoke(IPC.productsAdjustStock),
   productsImport: invoke(IPC.productsImport),
   productsCritical: invoke(IPC.productsCritical),
-  categoriesList: invoke(IPC.categoriesList),
   categoriesRename: invoke(IPC.categoriesRename),
   categoriesCrud: invoke(IPC.categoriesCrud),
   categoriesSaveMeta: invoke(IPC.categoriesSaveMeta),

@@ -200,6 +200,46 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
       CREATE INDEX IF NOT EXISTS idx_held_tickets_created ON held_tickets(created_at);
     `)
   },
+  (db) => {
+    // Permitir borrar productos definitivamente aunque tengan ventas.
+    // Antes el FK sale_items.product_id era NOT NULL → no se podía
+    // borrar el producto (la cajera quedaba trabada y solo podía
+    // archivar). Ahora es nullable + ON DELETE SET NULL: el delete
+    // funciona y las boletas históricas siguen mostrándose perfectas
+    // porque ya guardamos name/price/cost en snapshots por línea.
+    //
+    // SQLite no soporta cambiar la FK con ALTER, así que recreamos la
+    // tabla con la dance estándar (CREATE → INSERT SELECT → DROP →
+    // RENAME). Como nada FK-referencia a sale_items (es el lado
+    // "child"), es seguro hacerlo dentro de la transacción de la
+    // migración.
+    db.exec(`
+      CREATE TABLE sale_items_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sale_id TEXT NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+        product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
+        name_snapshot TEXT NOT NULL,
+        price_snapshot INTEGER NOT NULL,
+        cost_snapshot INTEGER NOT NULL,
+        surcharge INTEGER NOT NULL DEFAULT 0,
+        qty INTEGER NOT NULL,
+        line_total INTEGER NOT NULL,
+        is_weight INTEGER NOT NULL DEFAULT 0,
+        returned_qty INTEGER NOT NULL DEFAULT 0
+      );
+      INSERT INTO sale_items_new (
+        id, sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot,
+        surcharge, qty, line_total, is_weight, returned_qty
+      )
+      SELECT id, sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot,
+             surcharge, qty, line_total, is_weight, returned_qty
+      FROM sale_items;
+      DROP TABLE sale_items;
+      ALTER TABLE sale_items_new RENAME TO sale_items;
+      CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+      CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
+    `)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

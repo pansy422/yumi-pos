@@ -404,7 +404,7 @@ function TopProducts({
   items,
   loading,
 }: {
-  items: { product_id: string; name: string; qty: number; revenue: number }[]
+  items: { product_id: string | null; name: string; qty: number; revenue: number }[]
   loading?: boolean
 }) {
   const max = items.reduce((a, i) => Math.max(a, i.qty), 0)
@@ -425,7 +425,7 @@ function TopProducts({
         ) : (
           <ul className="divide-y divide-border/40">
             {items.map((it) => (
-              <li key={it.product_id} className="px-4 py-2.5 text-sm">
+              <li key={it.product_id ?? `__deleted__${it.name}`} className="px-4 py-2.5 text-sm">
                 <div className="flex items-center justify-between">
                   <div className="truncate">{it.name}</div>
                   <div className="num text-xs text-muted-foreground">{it.qty} u</div>

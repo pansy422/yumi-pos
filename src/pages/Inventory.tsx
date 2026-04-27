@@ -41,7 +41,7 @@ import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
 import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
 import { api } from '@/lib/api'
-import type { CategoryStat, Product } from '@shared/types'
+import type { Category, Product } from '@shared/types'
 import { formatCLP, formatWeight } from '@shared/money'
 import { cn } from '@/lib/utils'
 
@@ -54,7 +54,7 @@ export function Inventory() {
   const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [firstLoad, setFirstLoad] = useState(true)
-  const [categories, setCategories] = useState<CategoryStat[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [category, setCategory] = useState<'__all__' | '__none__' | string>('__all__')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameFrom, setRenameFrom] = useState('')
@@ -78,7 +78,7 @@ export function Inventory() {
   }
 
   const loadCategories = async () => {
-    setCategories(await api.categoriesList())
+    setCategories(await api.categoriesCrud())
   }
 
   useEffect(() => {
@@ -128,6 +128,11 @@ export function Inventory() {
               <FileUp className="h-4 w-4" /> Importar CSV
             </Button>
             <Button asChild variant="outline">
+              <Link to="/ajustes?tab=categories">
+                <Tag className="h-4 w-4" /> Categorías
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
               <Link to="/inventario/pistolear">
                 <ScanBarcode className="h-4 w-4" /> Pistolear
               </Link>
@@ -143,12 +148,12 @@ export function Inventory() {
           <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-sm animate-fade-in">
             <Archive className="mt-0.5 h-4 w-4 text-muted-foreground" />
             <div>
-              <div className="font-medium">Productos archivados</div>
+              <div className="font-medium">Productos inactivos</div>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
-                Estos productos están ocultos del POS. Click en uno para abrirlo: ahí puedes
-                <strong> restaurar</strong> (desmarcar la casilla "Archivar") o
-                <strong> eliminar definitivamente</strong> (botón rojo). Los productos con ventas
-                no se pueden borrar; quedan archivados para mantener el historial de boletas.
+                Estos productos están ocultos del POS pero aparecen en las boletas históricas.
+                Click en uno para abrirlo: usa el switch <strong>Activo / Inactivo</strong> para
+                volver a venderlo, o el botón rojo <strong>Eliminar</strong> para borrarlo de
+                forma definitiva.
               </p>
             </div>
           </div>
@@ -231,8 +236,8 @@ export function Inventory() {
                 <SelectItem value="__all__">Todas las categorías</SelectItem>
                 <SelectItem value="__none__">Sin categoría</SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.name} ({c.count})
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name} ({c.product_count})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -262,14 +267,14 @@ export function Inventory() {
               onClick={() => setBulkOpen(true)}
             >
               <Percent className="h-3.5 w-3.5" />
-              Precios %
+              Precios
             </Button>
           </div>
           <div className="flex overflow-hidden rounded-md border border-border">
             {(
               [
                 { id: 'active' as const, label: 'Activos', icon: ArrowDownAZ },
-                { id: 'archived' as const, label: 'Archivados', icon: Archive },
+                { id: 'archived' as const, label: 'Inactivos', icon: Archive },
                 { id: 'all' as const, label: 'Todos', icon: null },
               ]
             ).map((opt) => (
@@ -353,7 +358,7 @@ export function Inventory() {
                             {p.archived === 1 && (
                               <Badge variant="secondary" className="gap-1">
                                 <Archive className="h-3 w-3" />
-                                Archivado
+                                Inactivo
                               </Badge>
                             )}
                           </div>

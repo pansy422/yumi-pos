@@ -195,22 +195,17 @@ export function archive(id: string, archived: boolean): void {
 }
 
 /**
- * Eliminación dura. Solo se permite si el producto no tiene ventas
- * asociadas (sale_items) ni promociones. Si las tiene, hay que archivar
- * para preservar la integridad histórica.
+ * Eliminación dura del producto. Las ventas históricas no son un
+ * problema: el FK sale_items.product_id es ON DELETE SET NULL, así que
+ * las boletas viejas siguen mostrándose perfectas (ya guardamos
+ * name/price/cost en snapshots por línea). Lo único que bloqueamos son
+ * promociones activas, porque borrar el producto dejaría la promoción
+ * apuntando a un id fantasma — mejor que la cajera la limpie primero.
  */
 export function deleteHard(id: string): void {
   const db = getDb()
   const product = get(id)
   if (!product) throw new Error('El producto no existe')
-  const inSales = db
-    .prepare(`SELECT 1 FROM sale_items WHERE product_id = ? LIMIT 1`)
-    .get(id)
-  if (inSales) {
-    throw new Error(
-      `"${product.name}" tiene ventas asociadas. Para mantener el historial, archívalo en vez de eliminarlo (se oculta del POS).`,
-    )
-  }
   const inPromos = db
     .prepare(
       `SELECT 1 FROM promotions WHERE kind = 'percent_off_product' AND target = ? LIMIT 1`,
@@ -292,8 +287,6 @@ export function reactivate(id: string, opts?: { newStock?: number }): Product {
   return p
 }
 
-export type CategoryStat = { name: string; count: number; stock: number; value: number }
-
 /**
  * Productos que requieren reposición. Considera críticos los que tienen
  * stock <= 0 o stock < stock_min (cuando stock_min > 0).
@@ -311,28 +304,6 @@ export function critical(): Product[] {
     )
     .all() as Record<string, unknown>[]
   return rows.map(row).filter((p): p is Product => p !== null)
-}
-
-export function categories(): CategoryStat[] {
-  const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT category AS name,
-              COUNT(*) AS count,
-              COALESCE(SUM(stock), 0) AS stock,
-              COALESCE(SUM(stock * cost), 0) AS value
-       FROM products
-       WHERE archived = 0 AND category IS NOT NULL AND TRIM(category) <> ''
-       GROUP BY category
-       ORDER BY count DESC, name COLLATE NOCASE`,
-    )
-    .all() as { name: string; count: number; stock: number; value: number }[]
-  return rows.map((r) => ({
-    name: r.name,
-    count: Number(r.count),
-    stock: Number(r.stock),
-    value: Number(r.value),
-  }))
 }
 
 export function renameCategory(from: string, to: string): number {
