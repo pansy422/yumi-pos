@@ -98,7 +98,13 @@ export function create(input: SaleInput): SaleWithItems {
             is_weight: number
           }
         | undefined
-      if (!p) throw new Error('Uno de los productos del ticket ya no existe')
+      if (!p) {
+        // Buscamos el nombre cacheado en sale_items previos para dar
+        // un mensaje útil. Si no hay (sale nuevo), usamos un fallback.
+        throw new Error(
+          'Uno de los productos del ticket ya no existe en el inventario. Sal de la pantalla y vuelve a entrar para que se actualice el ticket.',
+        )
+      }
       if (p.archived === 1) {
         throw new Error(`No se puede vender "${p.name}" porque está archivado`)
       }

@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
 import { useQuickKeys, QUICK_KEY_COLORS, type QuickKey } from '@/stores/quickKeys'
 import { formatCLP } from '@shared/money'
@@ -28,6 +29,7 @@ export function QuickKeysPanel({
   const unsetKey = useQuickKeys((s) => s.unset)
   const [editing, setEditing] = React.useState(false)
   const [pickerSlot, setPickerSlot] = React.useState<number | null>(null)
+  const { toast } = useToast()
 
   const slots = React.useMemo(() => {
     const map = new Map<number, QuickKey>()
@@ -46,8 +48,24 @@ export function QuickKeysPanel({
     }
     const fresh = await api.productsGet(current.product_id)
     if (!fresh) {
-      // product was deleted; clear slot
+      // Producto eliminado de la base — limpiamos el slot
       unsetKey(slot)
+      toast({
+        variant: 'warning',
+        title: 'Acceso rápido vacío',
+        description: `"${current.name}" ya no existe en el inventario.`,
+      })
+      return
+    }
+    if (fresh.archived === 1) {
+      // Producto archivado — no lo agregamos al ticket; limpiamos el
+      // slot para que la cajera asigne otro producto
+      unsetKey(slot)
+      toast({
+        variant: 'warning',
+        title: 'Producto archivado',
+        description: `"${fresh.name}" está archivado. Asigna otro al acceso rápido o reactívalo desde Inventario.`,
+      })
       return
     }
     onPick(fresh)
