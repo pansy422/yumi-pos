@@ -9,7 +9,7 @@ export type QuickKey = {
   color?: string
 }
 
-const SLOT_COUNT = 12
+const SLOT_COUNT = 6
 
 type State = {
   keys: QuickKey[]
