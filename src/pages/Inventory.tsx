@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
   Archive,
-  ArchiveRestore,
   ArrowDownAZ,
   Edit3,
   FileUp,
@@ -392,7 +391,8 @@ export function Inventory() {
                               e.stopPropagation()
                               setEditing(p)
                             }}
-                            className="opacity-0 group-hover:opacity-100"
+                            title="Editar producto"
+                            className="text-muted-foreground hover:text-foreground"
                           >
                             <Edit3 className="h-4 w-4" />
                           </Button>

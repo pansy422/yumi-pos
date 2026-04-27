@@ -145,7 +145,7 @@ export function bulkPriceChange(filter: {
   productIds?: string[]
   percent: number
   field?: 'price' | 'cost'
-  rounding?: 'none' | 'nearest_10' | 'nearest_100'
+  rounding?: 'none' | 'nearest_10' | 'nearest_100' | 'psycho_90' | 'psycho_990'
 }): { updated: number; oldTotal: number; newTotal: number } {
   const db = getDb()
   const field = filter.field === 'cost' ? 'cost' : 'price'
@@ -174,26 +174,65 @@ export function bulkPriceChange(filter: {
     .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total, COUNT(*) AS n FROM products ${whereSql}`)
     .get(params) as { total: number; n: number }
 
-  let roundExpr = `${field} * ${factor}`
-  if (filter.rounding === 'nearest_10') {
-    roundExpr = `ROUND(${roundExpr} / 10) * 10`
-  } else if (filter.rounding === 'nearest_100') {
-    roundExpr = `ROUND(${roundExpr} / 100) * 100`
-  } else {
-    roundExpr = `ROUND(${roundExpr})`
+  // El cálculo del nuevo precio. Para los modos psicológicos (*990, *90)
+  // calculamos en JS porque la fórmula necesita un MAX(min, ...) que es
+  // más legible fuera de SQL y aplica además la regla "cae a 990 si el
+  // precio es muy bajo".
+  const mode = filter.rounding ?? 'psycho_990'
+  const psycho = mode === 'psycho_990' || mode === 'psycho_90'
+
+  if (!psycho) {
+    let roundExpr = `${field} * ${factor}`
+    if (mode === 'nearest_10') {
+      roundExpr = `ROUND(${roundExpr} / 10) * 10`
+    } else if (mode === 'nearest_100') {
+      roundExpr = `ROUND(${roundExpr} / 100) * 100`
+    } else {
+      roundExpr = `ROUND(${roundExpr})`
+    }
+
+    const result = db
+      .prepare(
+        `UPDATE products SET ${field} = MAX(0, ${roundExpr}), updated_at = datetime('now') ${whereSql}`,
+      )
+      .run(params)
+
+    const after = db
+      .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total FROM products ${whereSql}`)
+      .get(params) as { total: number }
+
+    return { updated: Number(result.changes), oldTotal: Number(before.total), newTotal: Number(after.total) }
   }
 
-  const result = db
-    .prepare(
-      `UPDATE products SET ${field} = MAX(0, ${roundExpr}), updated_at = datetime('now') ${whereSql}`,
-    )
-    .run(params)
+  // Modo psicológico: hacer el cálculo en JS y aplicar uno por uno, en
+  // una transacción para que sea atómico.
+  const rows = db
+    .prepare(`SELECT id, ${field} AS amount FROM products ${whereSql}`)
+    .all(params) as { id: string; amount: number }[]
 
-  const after = db
-    .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total FROM products ${whereSql}`)
-    .get(params) as { total: number }
+  const updateStmt = db.prepare(
+    `UPDATE products SET ${field} = ?, updated_at = datetime('now') WHERE id = ?`,
+  )
+  let updated = 0
+  let newTotal = 0
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      const raw = Number(r.amount) * factor
+      let next: number
+      if (mode === 'psycho_990') {
+        next = Math.max(990, Math.round((raw - 990) / 1000) * 1000 + 990)
+      } else {
+        next = Math.max(90, Math.round((raw - 90) / 100) * 100 + 90)
+      }
+      if (next < 0) next = 0
+      newTotal += next
+      const res = updateStmt.run(next, r.id)
+      updated += Number(res.changes)
+    }
+  })
+  tx()
 
-  return { updated: Number(result.changes), oldTotal: Number(before.total), newTotal: Number(after.total) }
+  return { updated, oldTotal: Number(before.total), newTotal }
 }
 
 export function archive(id: string, archived: boolean): void {

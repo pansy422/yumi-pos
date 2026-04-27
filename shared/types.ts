@@ -330,7 +330,7 @@ export type Api = {
     productIds?: string[]
     percent: number
     field?: 'price' | 'cost'
-    rounding?: 'none' | 'nearest_10' | 'nearest_100'
+    rounding?: 'none' | 'nearest_10' | 'nearest_100' | 'psycho_90' | 'psycho_990'
   }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
 
   promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>

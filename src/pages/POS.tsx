@@ -827,21 +827,14 @@ export function POS() {
         open={heldOpen}
         onOpenChange={setHeldOpen}
         tickets={heldTickets}
+        currentItemsCount={items.length}
         onRecall={(t) => {
-          if (items.length > 0) {
-            const ok = window.confirm(
-              'Tienes productos en el ticket actual. ¿Reemplazarlos por el ticket en espera?',
-            )
-            if (!ok) return
-          }
           loadItems(t.items, t.discount)
           removeHeld(t.id)
           setHeldOpen(false)
           toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
         }}
-        onDiscard={(t) => {
-          if (window.confirm(`¿Descartar el ticket "${t.name}"?`)) removeHeld(t.id)
-        }}
+        onDiscard={(t) => removeHeld(t.id)}
       />
 
       <PaymentDialog
@@ -1104,15 +1097,27 @@ function HeldTicketsDialog({
   open,
   onOpenChange,
   tickets,
+  currentItemsCount,
   onRecall,
   onDiscard,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   tickets: HeldTicket[]
+  currentItemsCount: number
   onRecall: (t: HeldTicket) => void
   onDiscard: (t: HeldTicket) => void
 }) {
+  const [pendingDiscardId, setPendingDiscardId] = useState<string | null>(null)
+  const [pendingRecallId, setPendingRecallId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) {
+      setPendingDiscardId(null)
+      setPendingRecallId(null)
+    }
+  }, [open])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -1130,29 +1135,105 @@ function HeldTicketsDialog({
               const itemsTotal = t.items.reduce((a, i) => a + i.price * i.qty, 0)
               const total = Math.max(0, itemsTotal - t.discount)
               const units = t.items.reduce((a, i) => a + i.qty, 0)
+              const isDiscarding = pendingDiscardId === t.id
+              const isConfirmingRecall = pendingRecallId === t.id
               return (
                 <li
                   key={t.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5"
+                  className="flex flex-col gap-2 px-3 py-2.5"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium truncate">{t.name}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {units} unidad{units === 1 ? '' : 'es'} ·{' '}
-                      <span className="num">{formatCLP(total)}</span>
-                      {' · '}
-                      {new Date(t.created_at).toLocaleTimeString('es-CL', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium truncate">{t.name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {units} unidad{units === 1 ? '' : 'es'} ·{' '}
+                        <span className="num">{formatCLP(total)}</span>
+                        {' · '}
+                        {new Date(t.created_at).toLocaleTimeString('es-CL', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </div>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Descartar ticket"
+                      onClick={() => {
+                        setPendingRecallId(null)
+                        setPendingDiscardId(t.id)
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (currentItemsCount > 0) {
+                          setPendingDiscardId(null)
+                          setPendingRecallId(t.id)
+                        } else {
+                          onRecall(t)
+                        }
+                      }}
+                    >
+                      <Play className="h-4 w-4" /> Recuperar
+                    </Button>
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => onDiscard(t)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                  <Button size="sm" onClick={() => onRecall(t)}>
-                    <Play className="h-4 w-4" /> Recuperar
-                  </Button>
+                  {isDiscarding && (
+                    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-[12px]">
+                      <span className="font-medium text-destructive">¿Descartar "{t.name}"?</span>
+                      <div className="mt-1 flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7"
+                          onClick={() => setPendingDiscardId(null)}
+                        >
+                          No
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7"
+                          onClick={() => {
+                            setPendingDiscardId(null)
+                            onDiscard(t)
+                          }}
+                        >
+                          Sí, descartar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {isConfirmingRecall && (
+                    <div className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px]">
+                      <span className="font-medium">
+                        Tienes productos en el ticket actual. ¿Reemplazarlos por "{t.name}"?
+                      </span>
+                      <div className="mt-1 flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7"
+                          onClick={() => setPendingRecallId(null)}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="warning"
+                          className="h-7"
+                          onClick={() => {
+                            setPendingRecallId(null)
+                            onRecall(t)
+                          }}
+                        >
+                          Sí, reemplazar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </li>
               )
             })}

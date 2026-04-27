@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP } from '@shared/money'
+import { formatCLP, roundPrice, type Rounding } from '@shared/money'
 import { cn } from '@/lib/utils'
 
 type Filter =
@@ -41,25 +41,25 @@ export function BulkPriceDialog({
   const { toast } = useToast()
   const [percent, setPercent] = React.useState<number>(10)
   const [field, setField] = React.useState<'price' | 'cost'>('price')
-  const [rounding, setRounding] = React.useState<'none' | 'nearest_10' | 'nearest_100'>(
-    'nearest_10',
-  )
+  const [rounding, setRounding] = React.useState<Rounding>('psycho_990')
   const [submitting, setSubmitting] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) {
       setPercent(10)
       setField('price')
-      setRounding('nearest_10')
+      setRounding('psycho_990')
     }
+  }, [open])
+
+  const [confirming, setConfirming] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!open) setConfirming(false)
   }, [open])
 
   const apply = async () => {
     if (Math.abs(percent) < 0.01) return
-    const sure = confirm(
-      `¿Aplicar ${percent > 0 ? '+' : ''}${percent}% al ${field === 'price' ? 'precio' : 'costo'} de ${filter.label}? Esta acción afecta a todos los productos seleccionados a la vez.`,
-    )
-    if (!sure) return
     setSubmitting(true)
     try {
       const r = await api.productsBulkPrice({
@@ -125,15 +125,17 @@ export function BulkPriceDialog({
               <Label>Redondeo</Label>
               <Select
                 value={rounding}
-                onValueChange={(v) => setRounding(v as typeof rounding)}
+                onValueChange={(v) => setRounding(v as Rounding)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Exacto (al peso)</SelectItem>
-                  <SelectItem value="nearest_10">A los $10</SelectItem>
+                  <SelectItem value="psycho_990">Termina en 990 (recomendado)</SelectItem>
+                  <SelectItem value="psycho_90">Termina en 90</SelectItem>
                   <SelectItem value="nearest_100">A los $100</SelectItem>
+                  <SelectItem value="nearest_10">A los $10</SelectItem>
+                  <SelectItem value="none">Exacto (al peso)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -180,34 +182,58 @@ export function BulkPriceDialog({
               ))}
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Ejemplo: un producto de $1.000 quedará en{' '}
-              <span className="num font-semibold">
-                {formatCLP(
-                  rounding === 'nearest_100'
-                    ? Math.round((1000 * factor) / 100) * 100
-                    : rounding === 'nearest_10'
-                      ? Math.round((1000 * factor) / 10) * 10
-                      : Math.round(1000 * factor),
-                )}
-              </span>
-              .
+              Ejemplo: $1.000 →{' '}
+              <span className="num font-semibold">{formatCLP(roundPrice(1000 * factor, rounding))}</span>
+              {' · '}
+              $2.500 →{' '}
+              <span className="num font-semibold">{formatCLP(roundPrice(2500 * factor, rounding))}</span>
+              {' · '}
+              $5.000 →{' '}
+              <span className="num font-semibold">{formatCLP(roundPrice(5000 * factor, rounding))}</span>
             </p>
           </div>
         </div>
 
+        {confirming && (
+          <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
+            <div className="font-medium text-warning">¿Confirmas el cambio?</div>
+            <p className="mt-1 text-[12px] text-foreground">
+              Vas a aplicar <span className="num font-semibold">{percent > 0 ? '+' : ''}{percent}%</span>{' '}
+              al {field === 'price' ? 'precio' : 'costo'} de{' '}
+              <span className="font-semibold">{filter.label}</span>. Esta acción afecta a todos los
+              productos a la vez y no se puede deshacer automáticamente.
+            </p>
+          </div>
+        )}
+
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={apply}
-            disabled={submitting || Math.abs(percent) < 0.01}
-            variant={sign ? 'default' : 'warning'}
-          >
-            {submitting
-              ? 'Aplicando…'
-              : `Aplicar ${percent > 0 ? '+' : ''}${percent}% a ${filter.label}`}
-          </Button>
+          {confirming ? (
+            <>
+              <Button variant="outline" onClick={() => setConfirming(false)} disabled={submitting}>
+                Volver
+              </Button>
+              <Button
+                onClick={apply}
+                disabled={submitting}
+                variant={sign ? 'default' : 'warning'}
+              >
+                {submitting ? 'Aplicando…' : 'Sí, aplicar ahora'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => setConfirming(true)}
+                disabled={submitting || Math.abs(percent) < 0.01}
+                variant={sign ? 'default' : 'warning'}
+              >
+                {`Aplicar ${percent > 0 ? '+' : ''}${percent}% a ${filter.label}`}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
