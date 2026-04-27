@@ -11,6 +11,7 @@ const api = {
   productsUpdate: invoke(IPC.productsUpdate),
   productsArchive: invoke(IPC.productsArchive),
   productsDelete: invoke(IPC.productsDelete),
+  productsReactivate: invoke(IPC.productsReactivate),
   productsScanIn: invoke(IPC.productsScanIn),
   productsAdjustStock: invoke(IPC.productsAdjustStock),
   productsImport: invoke(IPC.productsImport),

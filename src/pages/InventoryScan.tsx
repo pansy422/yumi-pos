@@ -26,6 +26,7 @@ export function InventoryScan() {
   const { toast } = useToast()
   const [active, setActive] = useState(true)
   const [pending, setPending] = useState<string | null>(null)
+  const [pendingArchived, setPendingArchived] = useState<Product | null>(null)
   const [log, setLog] = useState<LogEntry[]>([])
   const idRef = useRef(0)
   const nextId = () => ++idRef.current
@@ -51,6 +52,7 @@ export function InventoryScan() {
           )
         } else {
           setPending(r.barcode)
+          setPendingArchived(r.archived_match ?? null)
         }
       } catch (err) {
         toast({
@@ -171,8 +173,14 @@ export function InventoryScan() {
 
       <UnknownBarcodeDialog
         open={!!pending}
-        onOpenChange={(v) => !v && setPending(null)}
+        onOpenChange={(v) => {
+          if (!v) {
+            setPending(null)
+            setPendingArchived(null)
+          }
+        }}
         barcode={pending}
+        archivedMatch={pendingArchived}
         onResolved={(p, kind) => {
           setLog((l) =>
             [
@@ -180,19 +188,30 @@ export function InventoryScan() {
                 id: nextId(),
                 ts: new Date().toISOString(),
                 product: p,
-                kind: kind === 'linked' ? ('incremented' as const) : ('created' as const),
+                kind:
+                  kind === 'reactivated' || kind === 'linked'
+                    ? ('incremented' as const)
+                    : ('created' as const),
               },
               ...l,
             ].slice(0, 100),
           )
           setPending(null)
+          setPendingArchived(null)
           toast({
             variant: 'success',
-            title: kind === 'linked' ? 'Código vinculado' : 'Producto creado',
+            title:
+              kind === 'reactivated'
+                ? 'Producto reactivado'
+                : kind === 'linked'
+                  ? 'Código vinculado'
+                  : 'Producto creado',
             description:
-              kind === 'linked'
-                ? `${p.name} ahora reconoce ${p.barcode}. Stock: ${p.stock}`
-                : p.name,
+              kind === 'reactivated'
+                ? `${p.name} vuelve al inventario. Stock: ${p.stock}`
+                : kind === 'linked'
+                  ? `${p.name} ahora reconoce ${p.barcode}. Stock: ${p.stock}`
+                  : p.name,
           })
         }}
       />

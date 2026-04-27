@@ -6,6 +6,7 @@ export const IPC = {
   productsUpdate: 'products:update',
   productsArchive: 'products:archive',
   productsDelete: 'products:delete',
+  productsReactivate: 'products:reactivate',
   productsScanIn: 'products:scanIn',
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',

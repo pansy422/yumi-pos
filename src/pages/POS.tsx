@@ -115,6 +115,48 @@ export function POS() {
     [appliedPromos],
   )
 
+  // Sincronizar el carrito al entrar al POS: si algún producto del
+  // carrito persistido fue eliminado o archivado mientras la app
+  // estaba en otra pantalla, lo sacamos del ticket para evitar errores
+  // al cobrar. Le avisamos a la cajera con un toast.
+  useEffect(() => {
+    if (items.length === 0) return
+    let cancelled = false
+    Promise.all(items.map((i) => api.productsGet(i.product_id))).then((fetched) => {
+      if (cancelled) return
+      const dropped: { name: string; reason: 'deleted' | 'archived' }[] = []
+      const valid: typeof items = []
+      items.forEach((it, idx) => {
+        const p = fetched[idx]
+        if (!p) {
+          dropped.push({ name: it.name, reason: 'deleted' })
+        } else if (p.archived === 1) {
+          dropped.push({ name: it.name, reason: 'archived' })
+        } else {
+          valid.push(it)
+        }
+      })
+      if (dropped.length > 0) {
+        loadItems(valid, discount)
+        const titles = dropped.map((d) => d.name).join(', ')
+        toast({
+          variant: 'warning',
+          title:
+            dropped.length === 1
+              ? 'Producto removido del ticket'
+              : `${dropped.length} productos removidos del ticket`,
+          description: `${titles} ya no está${dropped.length === 1 ? '' : 'n'} disponible${dropped.length === 1 ? '' : 's'} en inventario.`,
+        })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+    // Solo al montar — no queremos validar en cada cambio del carrito
+    // (eso es costoso y la auto-validación al agregar ya cubre el resto)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
   // largo.

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link2, PackagePlus, Search } from 'lucide-react'
+import { ArchiveRestore, Link2, PackagePlus, Search } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -33,12 +33,14 @@ export function UnknownBarcodeDialog({
   open,
   onOpenChange,
   barcode,
+  archivedMatch,
   onResolved,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   barcode: string | null
-  onResolved: (p: Product, kind: 'created' | 'linked') => void
+  archivedMatch?: Product | null
+  onResolved: (p: Product, kind: 'created' | 'linked' | 'reactivated') => void
 }) {
   const { toast } = useToast()
   const [tab, setTab] = useState<'new' | 'link'>('new')
@@ -59,6 +61,23 @@ export function UnknownBarcodeDialog({
       setPicked(null)
     }
   }, [open])
+
+  const reactivate = async () => {
+    if (!archivedMatch) return
+    setSaving(true)
+    try {
+      const updated = await api.productsReactivate(archivedMatch.id, true)
+      onResolved(updated, 'reactivated')
+    } catch (err) {
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo reactivar',
+        description: err instanceof Error ? err.message : String(err),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (tab !== 'link' || !open) return
@@ -126,9 +145,45 @@ export function UnknownBarcodeDialog({
           <DialogTitle>Código no reconocido</DialogTitle>
           <DialogDescription>
             <span className="mono rounded-md bg-muted px-2 py-0.5 text-foreground">{barcode}</span>{' '}
-            no está en el inventario. Crea un producto nuevo o vincúlalo a uno existente.
+            no está activo en el inventario.
+            {archivedMatch
+              ? ' Pero hay un producto archivado con este mismo código.'
+              : ' Crea un producto nuevo o vincúlalo a uno existente.'}
           </DialogDescription>
         </DialogHeader>
+
+        {archivedMatch && (
+          <div className="space-y-3 rounded-lg border border-warning/40 bg-warning/10 p-4">
+            <div className="flex items-start gap-2">
+              <ArchiveRestore className="mt-0.5 h-5 w-5 text-warning shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs uppercase tracking-wider text-warning">
+                  Producto archivado
+                </div>
+                <div className="font-semibold truncate">{archivedMatch.name}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  Stock al momento de archivarlo:{' '}
+                  <span className="num">{archivedMatch.stock}</span> · precio{' '}
+                  <span className="num">${archivedMatch.price.toLocaleString('es-CL')}</span>
+                </div>
+              </div>
+            </div>
+            <Button
+              onClick={reactivate}
+              disabled={saving}
+              variant="warning"
+              className="w-full"
+            >
+              <ArchiveRestore className="h-4 w-4" />
+              {saving ? 'Reactivando…' : 'Reactivar y sumar 1 al stock'}
+            </Button>
+            <p className="text-[11px] text-muted-foreground">
+              O si prefieres tratar este código como un producto distinto, usa las pestañas
+              de abajo. Tendrás que cambiar primero el código del producto archivado para
+              liberarlo (los códigos de barras son únicos).
+            </p>
+          </div>
+        )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'new' | 'link')}>
           <TabsList className="grid w-full grid-cols-2">
