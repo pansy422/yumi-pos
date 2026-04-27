@@ -62,11 +62,16 @@ export function UnknownBarcodeDialog({
     }
   }, [open])
 
-  const reactivate = async () => {
+  const [reactivateStock, setReactivateStock] = useState<number>(1)
+  useEffect(() => {
+    if (archivedMatch) setReactivateStock(1)
+  }, [archivedMatch])
+
+  const reactivate = async (newStock: number) => {
     if (!archivedMatch) return
     setSaving(true)
     try {
-      const updated = await api.productsReactivate(archivedMatch.id, true)
+      const updated = await api.productsReactivate(archivedMatch.id, { newStock })
       onResolved(updated, 'reactivated')
     } catch (err) {
       toast({
@@ -168,18 +173,54 @@ export function UnknownBarcodeDialog({
                 </div>
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-warning">Stock al reactivar</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={0}
+                  value={reactivateStock}
+                  onChange={(e) =>
+                    setReactivateStock(Math.max(0, Math.round(Number(e.target.value) || 0)))
+                  }
+                  className="h-10 num text-right"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReactivateStock(1)}
+                >
+                  Empezar en 1
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setReactivateStock(archivedMatch.stock + 1)}
+                >
+                  Anterior +1 ({archivedMatch.stock + 1})
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Tú decides el stock real. Por defecto empieza en 1 — si ya tenías mercadería
+                en bodega, escribe la cantidad correcta.
+              </p>
+            </div>
             <Button
-              onClick={reactivate}
+              onClick={() => reactivate(reactivateStock)}
               disabled={saving}
               variant="warning"
               className="w-full"
             >
               <ArchiveRestore className="h-4 w-4" />
-              {saving ? 'Reactivando…' : 'Reactivar y sumar 1 al stock'}
+              {saving
+                ? 'Reactivando…'
+                : `Reactivar con ${reactivateStock} ${reactivateStock === 1 ? 'unidad' : 'unidades'}`}
             </Button>
             <p className="text-[11px] text-muted-foreground">
               O si prefieres tratar este código como un producto distinto, usa las pestañas
-              de abajo. Tendrás que cambiar primero el código del producto archivado para
+              de abajo. Primero tendrás que cambiar el código del producto archivado para
               liberarlo (los códigos de barras son únicos).
             </p>
           </div>

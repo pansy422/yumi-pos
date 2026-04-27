@@ -107,11 +107,37 @@ export type CashSession = {
   notes: string | null
 }
 
+export type Category = {
+  id: string
+  name: string
+  color: string | null
+  default_margin: number | null
+  created_at: string
+  product_count: number
+  total_stock_value: number
+}
+
+export type CategoryInput = {
+  id?: string
+  name: string
+  color?: string | null
+  default_margin?: number | null
+}
+
 export type CategoryStat = {
   name: string
   count: number
   stock: number
   value: number
+}
+
+export type HeldTicket = {
+  id: string
+  name: string
+  items: CartItem[]
+  discount: number
+  /** ISO timestamp en SQLite ('YYYY-MM-DD HH:MM:SS', UTC). */
+  created_at: string
 }
 
 export type PromotionKind =
@@ -286,20 +312,43 @@ export type ScanInResult =
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
 
 export type Api = {
-  productsList: (q?: { search?: string; includeArchived?: boolean; category?: string | null }) => Promise<Product[]>
+  productsList: (q?: {
+    search?: string
+    includeArchived?: boolean
+    onlyArchived?: boolean
+    category?: string | null
+  }) => Promise<Product[]>
   productsGet: (id: string) => Promise<Product | null>
   productsByBarcode: (barcode: string) => Promise<Product | null>
   productsCreate: (input: ProductInput) => Promise<Product>
   productsUpdate: (id: string, patch: ProductPatch) => Promise<Product>
   productsArchive: (id: string, archived: boolean) => Promise<void>
   productsDelete: (id: string) => Promise<void>
-  productsReactivate: (id: string, addOneToStock?: boolean) => Promise<Product>
+  productsReactivate: (id: string, opts?: { newStock?: number }) => Promise<Product>
   productsScanIn: (barcode: string, opts?: { newProduct?: ProductInput }) => Promise<ScanInResult>
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
   productsCritical: () => Promise<Product[]>
   categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
+  categoriesCrud: () => Promise<Category[]>
+  categoriesSaveMeta: (input: CategoryInput) => Promise<Category>
+  categoriesRemove: (id: string, opts?: { reassignTo?: string | null }) => Promise<void>
+  productsBulkPrice: (filter: {
+    category?: string | null
+    productIds?: string[]
+    percent: number
+    field?: 'price' | 'cost'
+  }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
+
+  heldTicketsList: () => Promise<HeldTicket[]>
+  heldTicketsSave: (input: {
+    name: string
+    items: CartItem[]
+    discount: number
+  }) => Promise<HeldTicket>
+  heldTicketsRemove: (id: string) => Promise<void>
+  heldTicketsClear: () => Promise<void>
 
   promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>
   promotionsSave: (input: PromotionInput) => Promise<Promotion>

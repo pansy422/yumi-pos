@@ -158,6 +158,48 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
     // (1.0 = normal). El front aplica html { font-size: 16px * scale }.
     db.exec(`ALTER TABLE users ADD COLUMN font_scale REAL NOT NULL DEFAULT 1.0`)
   },
+  (db) => {
+    // Categorías con metadata: color para etiquetas en UI y un margen
+    // por defecto que se sugiere al crear productos en esa categoría.
+    // Los productos siguen guardando la categoría como TEXT en
+    // products.category — esta tabla solo agrega metadata y permite
+    // tener categorías "vacías" (sin productos todavía).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        color TEXT,
+        default_margin REAL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name COLLATE NOCASE);
+    `)
+    // Migrar las categorías ya en uso a la tabla nueva.
+    db.exec(`
+      INSERT OR IGNORE INTO categories (id, name)
+      SELECT lower(hex(randomblob(8))), TRIM(category) FROM products
+      WHERE category IS NOT NULL AND TRIM(category) <> ''
+      GROUP BY TRIM(category)
+    `)
+  },
+  (db) => {
+    // Tickets en espera persistidos en SQLite (antes vivían solo en
+    // localStorage del renderer y se podían perder a mitad de turno si
+    // se limpiaba el perfil de Electron). El payload se serializa como
+    // JSON porque la forma del CartItem evoluciona y no queremos un
+    // FK a productos (un producto borrado no debería romper la lectura
+    // del ticket — al recuperar reconciliamos contra la realidad).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS held_tickets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        items_json TEXT NOT NULL,
+        discount INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_held_tickets_created ON held_tickets(created_at);
+    `)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

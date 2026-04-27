@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
+  Archive,
   ArrowDownAZ,
   Edit3,
   FileUp,
   Pencil,
+  Percent,
   Plus,
   Printer,
   Search,
@@ -37,6 +39,7 @@ import { EmptyState, BoxEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
+import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
 import { api } from '@/lib/api'
 import type { CategoryStat, Product } from '@shared/types'
 import { formatCLP, formatWeight } from '@shared/money'
@@ -48,7 +51,7 @@ export function Inventory() {
   const [items, setItems] = useState<Product[]>([])
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
-  const [includeArchived, setIncludeArchived] = useState(false)
+  const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [firstLoad, setFirstLoad] = useState(true)
   const [categories, setCategories] = useState<CategoryStat[]>([])
@@ -57,12 +60,18 @@ export function Inventory() {
   const [renameFrom, setRenameFrom] = useState('')
   const [renameTo, setRenameTo] = useState('')
   const [csvOpen, setCsvOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
     const filterCategory =
       category === '__all__' ? undefined : category === '__none__' ? null : category
-    const list = await api.productsList({ search, includeArchived, category: filterCategory })
+    const list = await api.productsList({
+      search,
+      includeArchived: archivedFilter === 'all',
+      onlyArchived: archivedFilter === 'archived',
+      category: filterCategory,
+    })
     setItems(list)
     setLoading(false)
     setFirstLoad(false)
@@ -79,7 +88,7 @@ export function Inventory() {
   useEffect(() => {
     const t = setTimeout(load, 120)
     return () => clearTimeout(t)
-  }, [search, includeArchived, category])
+  }, [search, archivedFilter, category])
 
   const totalStockValue = items.reduce(
     (a, i) => a + (i.is_weight === 1 ? Math.round((i.cost * i.stock) / 1000) : i.cost * i.stock),
@@ -130,6 +139,20 @@ export function Inventory() {
         }
       />
       <div className="flex flex-col gap-4 p-6">
+        {archivedFilter === 'archived' && (
+          <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-sm animate-fade-in">
+            <Archive className="mt-0.5 h-4 w-4 text-muted-foreground" />
+            <div>
+              <div className="font-medium">Productos archivados</div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Estos productos están ocultos del POS. Click en uno para abrirlo: ahí puedes
+                <strong> restaurar</strong> (desmarcar la casilla "Archivar") o
+                <strong> eliminar definitivamente</strong> (botón rojo). Los productos con ventas
+                no se pueden borrar; quedan archivados para mantener el historial de boletas.
+              </p>
+            </div>
+          </div>
+        )}
         {showCriticalBanner && (
           <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning animate-fade-in">
             <div className="flex items-start gap-2">
@@ -228,14 +251,43 @@ export function Inventory() {
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              title={
+                category === '__all__'
+                  ? 'Subir o bajar todos los precios por %'
+                  : `Cambiar precios de ${category === '__none__' ? 'productos sin categoría' : category} en %`
+              }
+              onClick={() => setBulkOpen(true)}
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Precios %
+            </Button>
           </div>
-          <Button
-            variant={includeArchived ? 'secondary' : 'outline'}
-            onClick={() => setIncludeArchived((v) => !v)}
-          >
-            <ArrowDownAZ className="h-4 w-4" />
-            {includeArchived ? 'Mostrando archivados' : 'Solo activos'}
-          </Button>
+          <div className="flex overflow-hidden rounded-md border border-border">
+            {(
+              [
+                { id: 'active' as const, label: 'Activos', icon: ArrowDownAZ },
+                { id: 'archived' as const, label: 'Archivados', icon: Archive },
+                { id: 'all' as const, label: 'Todos', icon: null },
+              ]
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setArchivedFilter(opt.id)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors',
+                  archivedFilter === opt.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-card text-muted-foreground hover:bg-accent',
+                )}
+              >
+                {opt.icon ? <opt.icon className="h-3.5 w-3.5" /> : null}
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <Card className="card-elev overflow-hidden">
@@ -289,12 +341,22 @@ export function Inventory() {
                         key={p.id}
                         className={cn(
                           'group border-t border-border/40 transition-colors hover:bg-accent/30 cursor-pointer',
-                          p.archived && 'opacity-50',
+                          p.archived && 'bg-muted/40',
                         )}
                         onClick={() => setEditing(p)}
                       >
                         <td className="px-4 py-2.5">
-                          <div className="font-medium">{p.name}</div>
+                          <div className="flex items-center gap-2">
+                            <span className={cn('font-medium', p.archived && 'text-muted-foreground line-through')}>
+                              {p.name}
+                            </span>
+                            {p.archived === 1 && (
+                              <Badge variant="secondary" className="gap-1">
+                                <Archive className="h-3 w-3" />
+                                Archivado
+                              </Badge>
+                            )}
+                          </div>
                           {p.category && (
                             <div className="text-xs text-muted-foreground">{p.category}</div>
                           )}
@@ -329,7 +391,8 @@ export function Inventory() {
                               e.stopPropagation()
                               setEditing(p)
                             }}
-                            className="opacity-0 group-hover:opacity-100"
+                            title="Editar producto"
+                            className="text-muted-foreground hover:text-foreground"
                           >
                             <Edit3 className="h-4 w-4" />
                           </Button>
@@ -368,6 +431,22 @@ export function Inventory() {
         open={csvOpen}
         onOpenChange={setCsvOpen}
         onImported={async () => {
+          await load()
+          await loadCategories()
+        }}
+      />
+
+      <BulkPriceDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        filter={
+          category === '__all__'
+            ? { kind: 'all', label: 'todos los productos' }
+            : category === '__none__'
+              ? { kind: 'category', category: null, label: 'productos sin categoría' }
+              : { kind: 'category', category, label: category }
+        }
+        onApplied={async () => {
           await load()
           await loadCategories()
         }}

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { ensureExists as ensureCategoryExists } from './categories'
 import type {
   Product,
   ProductInput,
@@ -28,12 +29,21 @@ function row(r: Record<string, unknown> | undefined): Product | null {
 }
 
 export function list(
-  q: { search?: string; includeArchived?: boolean; category?: string | null } = {},
+  q: {
+    search?: string
+    includeArchived?: boolean
+    onlyArchived?: boolean
+    category?: string | null
+  } = {},
 ): Product[] {
   const db = getDb()
   const where: string[] = []
   const params: Record<string, unknown> = {}
-  if (!q.includeArchived) where.push('archived = 0')
+  if (q.onlyArchived) {
+    where.push('archived = 1')
+  } else if (!q.includeArchived) {
+    where.push('archived = 0')
+  }
   if (q.search && q.search.trim()) {
     where.push('(name LIKE @s OR barcode LIKE @s OR sku LIKE @s)')
     params.s = `%${q.search.trim()}%`
@@ -88,6 +98,7 @@ export function create(input: ProductInput): Product {
     category: input.category ?? null,
     is_weight: input.is_weight === 1 ? 1 : 0,
   })
+  if (input.category) ensureCategoryExists(input.category)
   return get(id)!
 }
 
@@ -119,7 +130,61 @@ export function update(id: string, patch: ProductPatch): Product {
      stock=@stock, stock_min=@stock_min, stock_max=@stock_max, category=@category,
      is_weight=@is_weight, archived=@archived, updated_at=datetime('now') WHERE id=@id`,
   ).run({ id, ...next })
+  if (next.category) ensureCategoryExists(next.category)
   return get(id)!
+}
+
+/**
+ * Cambio masivo de precios. Aplica un porcentaje (positivo = sube,
+ * negativo = baja) a `field` ('price' o 'cost') de los productos que
+ * matcheen el filtro. Devuelve cuántos productos se actualizaron y
+ * el delta total.
+ */
+export function bulkPriceChange(filter: {
+  category?: string | null
+  productIds?: string[]
+  percent: number
+  field?: 'price' | 'cost'
+}): { updated: number; oldTotal: number; newTotal: number } {
+  const db = getDb()
+  const field = filter.field === 'cost' ? 'cost' : 'price'
+  const factor = 1 + Math.max(-99, Math.min(1000, filter.percent)) / 100
+
+  const where: string[] = ['archived = 0']
+  const params: Record<string, unknown> = {}
+  if (filter.category !== undefined) {
+    if (filter.category === null) {
+      where.push("(category IS NULL OR TRIM(category) = '')")
+    } else {
+      where.push('category = @cat')
+      params.cat = filter.category
+    }
+  }
+  if (filter.productIds && filter.productIds.length > 0) {
+    const placeholders = filter.productIds.map((_, i) => `@id${i}`).join(',')
+    where.push(`id IN (${placeholders})`)
+    filter.productIds.forEach((id, i) => {
+      params[`id${i}`] = id
+    })
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  const before = db
+    .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total, COUNT(*) AS n FROM products ${whereSql}`)
+    .get(params) as { total: number; n: number }
+
+  const result = db
+    .prepare(
+      `UPDATE products SET ${field} = MAX(0, ROUND(${field} * ${factor})),
+       updated_at = datetime('now') ${whereSql}`,
+    )
+    .run(params)
+
+  const after = db
+    .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total FROM products ${whereSql}`)
+    .get(params) as { total: number }
+
+  return { updated: Number(result.changes), oldTotal: Number(before.total), newTotal: Number(after.total) }
 }
 
 export function archive(id: string, archived: boolean): void {
@@ -206,15 +271,22 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
 }
 
 /**
- * Reactiva un producto archivado, opcionalmente sumando 1 al stock
- * (uso típico desde el flujo de pistoleo).
+ * Reactiva un producto archivado. Si se pasa newStock, fija el stock a
+ * ese valor (el caso típico cuando la cajera vuelve a recibir
+ * mercadería y quiere indicar la cantidad real). Si se omite, mantiene
+ * el stock que tenía al archivar.
  */
-export function reactivate(id: string, addOneToStock = true): Product {
+export function reactivate(id: string, opts?: { newStock?: number }): Product {
   const db = getDb()
-  const stmt = addOneToStock
-    ? `UPDATE products SET archived = 0, stock = stock + 1, updated_at = datetime('now') WHERE id = ?`
-    : `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`
-  db.prepare(stmt).run(id)
+  if (opts?.newStock != null) {
+    db.prepare(
+      `UPDATE products SET archived = 0, stock = ?, updated_at = datetime('now') WHERE id = ?`,
+    ).run(Math.max(0, Math.round(opts.newStock)), id)
+  } else {
+    db.prepare(
+      `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`,
+    ).run(id)
+  }
   const p = get(id)
   if (!p) throw new Error('Producto no encontrado')
   return p

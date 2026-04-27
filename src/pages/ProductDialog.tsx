@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Scale } from 'lucide-react'
+import { Box, Scale, TrendingUp } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -51,6 +51,88 @@ const empty: Form = {
   stock_max_kg: '0',
 }
 
+function MarginPanel({
+  cost,
+  price,
+  onPriceChange,
+  onApplyDefaultMargin,
+  categoryName,
+}: {
+  cost: number
+  price: number
+  onPriceChange: (newPrice: number) => void
+  onApplyDefaultMargin: () => void
+  categoryName: string
+}) {
+  const [marginText, setMarginText] = useState('')
+  const computedMargin = cost > 0 ? Math.round(((price - cost) / cost) * 100) : 0
+  useEffect(() => {
+    setMarginText(String(computedMargin))
+  }, [computedMargin])
+  const profit = Math.max(0, price - cost)
+  const applyMargin = (margin: number) => {
+    const next = Math.round(cost * (1 + margin / 100))
+    onPriceChange(Math.max(0, next))
+  }
+  return (
+    <div className="sm:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3">
+      <div className="flex items-center gap-2 text-xs text-primary">
+        <TrendingUp className="h-3.5 w-3.5" />
+        <span className="font-medium uppercase tracking-wider">Margen de ganancia</span>
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <Label className="text-[11px]">Ganancia $</Label>
+          <div className="num text-lg font-bold text-success">
+            +${profit.toLocaleString('es-CL')}
+          </div>
+        </div>
+        <div>
+          <Label className="text-[11px]">Margen actual %</Label>
+          <div className="num text-lg font-bold">
+            {cost > 0 ? `${computedMargin}%` : '—'}
+          </div>
+        </div>
+        <div>
+          <Label className="text-[11px]">Aplicar margen %</Label>
+          <div className="flex gap-1">
+            <Input
+              type="number"
+              value={marginText}
+              onChange={(e) => setMarginText(e.target.value)}
+              className="h-9 num"
+              placeholder="ej. 35"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              className="h-9"
+              onClick={() => {
+                const m = Number(marginText)
+                if (isFinite(m)) applyMargin(Math.max(0, Math.min(1000, m)))
+              }}
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </div>
+      {categoryName && (
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          className="mt-2 text-[11px] text-primary hover:bg-primary/10"
+          onClick={onApplyDefaultMargin}
+        >
+          Aplicar margen por defecto de "{categoryName}"
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export function ProductDialog({
   open,
   onOpenChange,
@@ -68,6 +150,7 @@ export function ProductDialog({
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [archived, setArchived] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   /**
    * Para productos nuevos mostramos primero un picker preguntando si es por
    * unidad o por peso. Para edición saltamos directo al formulario.
@@ -75,7 +158,10 @@ export function ProductDialog({
   const [step, setStep] = useState<'pick_type' | 'form'>('form')
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setConfirmDelete(false)
+      return
+    }
     if (product) {
       setForm({
         barcode: product.barcode ?? '',
@@ -105,6 +191,55 @@ export function ProductDialog({
       setStep(defaultBarcode ? 'form' : 'pick_type')
     }
   }, [open, product, defaultBarcode])
+
+  const handleDelete = async () => {
+    if (!product) return
+    setSaving(true)
+    const archiveFallback = async (reasonForUser: string) => {
+      try {
+        await api.productsArchive(product.id, true)
+        toast({
+          variant: 'success',
+          title: 'Producto archivado',
+          description: `${product.name} se ocultó del POS. ${reasonForUser}`,
+          duration: 7000,
+        })
+        onSaved(product)
+      } catch (e2) {
+        toast({
+          variant: 'destructive',
+          title: 'No se pudo archivar',
+          description: e2 instanceof Error ? e2.message : String(e2),
+        })
+      }
+    }
+    try {
+      await api.productsDelete(product.id)
+      toast({
+        variant: 'success',
+        title: 'Producto eliminado',
+        description: product.name,
+      })
+      onSaved(product)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Si el delete falla por ventas o promo, archivamos igual para no
+      // dejar a la cajera atascada. Preserva la integridad histórica.
+      if (msg.includes('ventas asociadas')) {
+        await archiveFallback(
+          'Como tenía ventas, no se puede borrar definitivamente para preservar el historial de boletas.',
+        )
+      } else if (msg.includes('promoción')) {
+        await archiveFallback(
+          'Tenía una promoción configurada. Si quieres borrar definitivamente, primero elimina la promoción.',
+        )
+      } else {
+        toast({ variant: 'destructive', title: 'No se pudo eliminar', description: msg })
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const save = async () => {
     if (!form.name.trim()) {
@@ -270,6 +405,21 @@ export function ProductDialog({
             <Label>Precio venta {form.is_weight ? 'por kg' : ''} *</Label>
             <MoneyInput value={form.price} onValueChange={(n) => setForm({ ...form, price: n })} />
           </div>
+          <MarginPanel
+            cost={form.cost}
+            price={form.price}
+            onPriceChange={(newPrice) => setForm({ ...form, price: newPrice })}
+            onApplyDefaultMargin={async () => {
+              if (!form.category) return
+              const cats = await api.categoriesCrud()
+              const cat = cats.find((c) => c.name === form.category)
+              if (cat?.default_margin != null) {
+                const newPrice = Math.round(form.cost * (1 + cat.default_margin / 100))
+                setForm({ ...form, price: newPrice })
+              }
+            }}
+            categoryName={form.category}
+          />
 
           <div className="sm:col-span-2 -mb-1 mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
             Alertas de stock (opcional)
@@ -340,46 +490,47 @@ export function ProductDialog({
         </div>
         )}
 
+        {step === 'form' && product && confirmDelete && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3">
+            <div className="text-sm font-semibold text-destructive">
+              ¿Eliminar "{product.name}"?
+            </div>
+            <p className="mt-1 text-[12px] text-foreground">
+              Esta acción no se puede deshacer. Si el producto tiene ventas o promociones, se
+              archivará automáticamente para preservar el historial.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setConfirmDelete(false)}
+                disabled={saving}
+              >
+                Volver
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={saving}
+                onClick={async () => {
+                  await handleDelete()
+                  setConfirmDelete(false)
+                }}
+              >
+                {saving ? 'Eliminando…' : 'Sí, eliminar'}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {step === 'form' && (
           <DialogFooter className="sm:justify-between">
             {product ? (
               <Button
                 variant="ghost"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                disabled={saving}
-                onClick={async () => {
-                  if (!confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`)) return
-                  setSaving(true)
-                  try {
-                    await api.productsDelete(product.id)
-                    toast({ variant: 'success', title: 'Producto eliminado' })
-                    onSaved(product)
-                  } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err)
-                    if (
-                      msg.includes('ventas asociadas') &&
-                      confirm(
-                        `${msg}\n\n¿Quieres archivarlo en su lugar? El producto se ocultará del POS pero queda disponible en reportes.`,
-                      )
-                    ) {
-                      try {
-                        await api.productsArchive(product.id, true)
-                        toast({ variant: 'success', title: 'Producto archivado' })
-                        onSaved(product)
-                      } catch (e2) {
-                        toast({
-                          variant: 'destructive',
-                          title: 'No se pudo archivar',
-                          description: e2 instanceof Error ? e2.message : String(e2),
-                        })
-                      }
-                    } else {
-                      toast({ variant: 'destructive', title: 'No se pudo eliminar', description: msg })
-                    }
-                  } finally {
-                    setSaving(false)
-                  }
-                }}
+                disabled={saving || confirmDelete}
+                onClick={() => setConfirmDelete(true)}
               >
                 Eliminar
               </Button>
@@ -390,7 +541,7 @@ export function ProductDialog({
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
                 Cancelar
               </Button>
-              <Button onClick={save} disabled={saving}>
+              <Button onClick={save} disabled={saving || confirmDelete}>
                 {saving ? 'Guardando…' : 'Guardar'}
               </Button>
             </div>
