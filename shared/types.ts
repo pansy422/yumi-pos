@@ -131,6 +131,15 @@ export type CategoryStat = {
   value: number
 }
 
+export type HeldTicket = {
+  id: string
+  name: string
+  items: CartItem[]
+  discount: number
+  /** ISO timestamp en SQLite ('YYYY-MM-DD HH:MM:SS', UTC). */
+  created_at: string
+}
+
 export type PromotionKind =
   | 'percent_off_category'
   | 'percent_off_product'
@@ -331,6 +340,15 @@ export type Api = {
     percent: number
     field?: 'price' | 'cost'
   }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
+
+  heldTicketsList: () => Promise<HeldTicket[]>
+  heldTicketsSave: (input: {
+    name: string
+    items: CartItem[]
+    discount: number
+  }) => Promise<HeldTicket>
+  heldTicketsRemove: (id: string) => Promise<void>
+  heldTicketsClear: () => Promise<void>
 
   promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>
   promotionsSave: (input: PromotionInput) => Promise<Promotion>

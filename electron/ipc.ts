@@ -9,6 +9,7 @@ import * as settingsRepo from './db/settings'
 import * as promotions from './db/promotions'
 import * as users from './db/users'
 import * as categoriesRepo from './db/categories'
+import * as heldTicketsRepo from './db/heldTickets'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
 import {
@@ -125,6 +126,17 @@ export function registerIpc(): void {
   handle(IPC.productsBulkPrice, (filter: Parameters<typeof products.bulkPriceChange>[0]) =>
     products.bulkPriceChange(filter),
   )
+
+  handle(IPC.heldTicketsList, () => heldTicketsRepo.list())
+  handle(IPC.heldTicketsSave, (input: Parameters<typeof heldTicketsRepo.save>[0]) =>
+    heldTicketsRepo.save(input),
+  )
+  handle(IPC.heldTicketsRemove, (id: string) => {
+    heldTicketsRepo.remove(id)
+  })
+  handle(IPC.heldTicketsClear, () => {
+    heldTicketsRepo.clear()
+  })
 
   handle(IPC.promotionsList, (includeInactive?: boolean) => promotions.list(!!includeInactive))
   handle(IPC.promotionsSave, (input: Parameters<typeof promotions.save>[0]) =>

@@ -44,7 +44,12 @@ export function WeightDialog({
 
   if (!product) return null
 
-  const parsed = parseFloat(text.replace(',', '.'))
+  // En modo "g" solo aceptamos enteros (no tiene sentido cobrar 250.5g
+  // porque después se redondea y la cajera ve un valor distinto al que
+  // marcó la balanza). En modo "kg" sí aceptamos hasta 3 decimales para
+  // ingresar gramos con precisión (0.345 kg = 345 g).
+  const sanitized = unit === 'g' ? text.replace(/[^\d]/g, '') : text.replace(',', '.')
+  const parsed = parseFloat(sanitized)
   const grams =
     isFinite(parsed) && parsed > 0 ? Math.round(unit === 'kg' ? parsed * 1000 : parsed) : 0
   const total = Math.round((product.price * grams) / 1000)
@@ -92,9 +97,15 @@ export function WeightDialog({
             </div>
             <Input
               autoFocus
-              inputMode="decimal"
+              inputMode={unit === 'g' ? 'numeric' : 'decimal'}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => {
+                // En modo g forzamos enteros: cualquier carácter no numérico
+                // se descarta para que no se vea el "." que después igual se
+                // ignora.
+                const v = unit === 'g' ? e.target.value.replace(/[^\d]/g, '') : e.target.value
+                setText(v)
+              }}
               placeholder={unit === 'kg' ? 'ej. 0.345' : 'ej. 345'}
               className="h-12 text-2xl text-center num"
               onKeyDown={(e) => {

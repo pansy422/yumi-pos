@@ -18,6 +18,11 @@ export const IPC = {
   categoriesRemove: 'categories:remove',
   productsBulkPrice: 'products:bulkPrice',
 
+  heldTicketsList: 'heldTickets:list',
+  heldTicketsSave: 'heldTickets:save',
+  heldTicketsRemove: 'heldTickets:remove',
+  heldTicketsClear: 'heldTickets:clear',
+
   promotionsList: 'promotions:list',
   promotionsSave: 'promotions:save',
   promotionsDelete: 'promotions:delete',

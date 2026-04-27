@@ -45,6 +45,11 @@ const api = {
   categoriesRemove: invoke(IPC.categoriesRemove),
   productsBulkPrice: invoke(IPC.productsBulkPrice),
 
+  heldTicketsList: invoke(IPC.heldTicketsList),
+  heldTicketsSave: invoke(IPC.heldTicketsSave),
+  heldTicketsRemove: invoke(IPC.heldTicketsRemove),
+  heldTicketsClear: invoke(IPC.heldTicketsClear),
+
   promotionsList: invoke(IPC.promotionsList),
   promotionsSave: invoke(IPC.promotionsSave),
   promotionsDelete: invoke(IPC.promotionsDelete),

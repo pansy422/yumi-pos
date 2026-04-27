@@ -182,6 +182,24 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
       GROUP BY TRIM(category)
     `)
   },
+  (db) => {
+    // Tickets en espera persistidos en SQLite (antes vivían solo en
+    // localStorage del renderer y se podían perder a mitad de turno si
+    // se limpiaba el perfil de Electron). El payload se serializa como
+    // JSON porque la forma del CartItem evoluciona y no queremos un
+    // FK a productos (un producto borrado no debería romper la lectura
+    // del ticket — al recuperar reconciliamos contra la realidad).
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS held_tickets (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        items_json TEXT NOT NULL,
+        discount INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_held_tickets_created ON held_tickets(created_at);
+    `)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  AlertTriangle,
   BarChart3,
   Box,
   DollarSign,
@@ -88,6 +89,8 @@ export function POS() {
   const heldTickets = useHeldTickets((s) => s.tickets)
   const holdTicket = useHeldTickets((s) => s.hold)
   const removeHeld = useHeldTickets((s) => s.remove)
+  const refreshHeld = useHeldTickets((s) => s.refresh)
+  const heldLoaded = useHeldTickets((s) => s.loaded)
   const cash = useSession((s) => s.cash)
   const currentUser = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
@@ -156,6 +159,12 @@ export function POS() {
     // (eso es costoso y la auto-validación al agregar ya cubre el resto)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Cargar tickets en espera al montar el POS. Si el proceso renderer
+  // se reinicia o crashea, los tickets siguen vivos en SQLite.
+  useEffect(() => {
+    if (!heldLoaded) refreshHeld()
+  }, [heldLoaded, refreshHeld])
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -718,7 +727,30 @@ export function POS() {
               )}
               <div className="space-y-1.5">
                 <Label className="text-xs">Descuento manual</Label>
-                <MoneyInput value={discount} onValueChange={setDiscount} />
+                <MoneyInput
+                  value={discount}
+                  onValueChange={(n) => {
+                    // El descuento manual nunca puede ser mayor al subtotal
+                    // restando lo que ya rebajaron las promos. Si la cajera
+                    // tipea de más, capeamos en el máximo y avisamos.
+                    const max = Math.max(0, sub - autoDiscount)
+                    if (n > max) {
+                      setDiscount(max)
+                      toast({
+                        variant: 'warning',
+                        title: 'Descuento limitado',
+                        description: `El descuento manual no puede superar ${formatCLP(max)}.`,
+                      })
+                    } else {
+                      setDiscount(Math.max(0, n))
+                    }
+                  }}
+                />
+                {discount > 0 && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Máx: <span className="num">{formatCLP(Math.max(0, sub - autoDiscount))}</span>
+                  </p>
+                )}
               </div>
               <div className="border-t border-border/60 pt-3">
                 <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -815,11 +847,19 @@ export function POS() {
         open={holdNameOpen}
         onOpenChange={setHoldNameOpen}
         defaultName={holdName}
-        onConfirm={(name) => {
-          holdTicket(name, items, discount)
-          clear()
-          setHoldNameOpen(false)
-          toast({ variant: 'success', title: 'Ticket en espera', description: name })
+        onConfirm={async (name) => {
+          try {
+            await holdTicket(name, items, discount)
+            clear()
+            setHoldNameOpen(false)
+            toast({ variant: 'success', title: 'Ticket en espera', description: name })
+          } catch (err) {
+            toast({
+              variant: 'destructive',
+              title: 'No se pudo guardar el ticket',
+              description: err instanceof Error ? err.message : String(err),
+            })
+          }
         }}
       />
 
@@ -828,13 +868,15 @@ export function POS() {
         onOpenChange={setHeldOpen}
         tickets={heldTickets}
         currentItemsCount={items.length}
-        onRecall={(t) => {
+        onRecall={async (t) => {
           loadItems(t.items, t.discount)
-          removeHeld(t.id)
+          await removeHeld(t.id)
           setHeldOpen(false)
           toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
         }}
-        onDiscard={(t) => removeHeld(t.id)}
+        onDiscard={async (t) => {
+          await removeHeld(t.id)
+        }}
       />
 
       <PaymentDialog
@@ -1149,7 +1191,14 @@ function HeldTicketsDialog({
                         {units} unidad{units === 1 ? '' : 'es'} ·{' '}
                         <span className="num">{formatCLP(total)}</span>
                         {' · '}
-                        {new Date(t.created_at).toLocaleTimeString('es-CL', {
+                        {/* SQLite datetime('now') guarda en UTC sin sufijo;
+                            agregamos la 'Z' para que JS lo interprete como UTC
+                            y muestre la hora local correctamente. */}
+                        {new Date(
+                          t.created_at.includes('T') || t.created_at.endsWith('Z')
+                            ? t.created_at
+                            : t.created_at.replace(' ', 'T') + 'Z',
+                        ).toLocaleTimeString('es-CL', {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
@@ -1338,6 +1387,13 @@ function PaymentDialog({
   const [submitting, setSubmitting] = useState(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
+  /**
+   * Si la impresión automática falló (impresora apagada, cable suelto,
+   * etc.) lo guardamos aquí para mostrar un banner persistente con el
+   * botón "Reimprimir". Antes solo aparecía un toast que se iba en 5
+   * segundos y la cajera podía no darse cuenta.
+   */
+  const [printError, setPrintError] = useState<string | null>(null)
   const tot = Math.max(0, total() - autoDiscount)
 
   useEffect(() => {
@@ -1345,6 +1401,7 @@ function PaymentDialog({
       setLines([])
       setLastSale(null)
       setShowPreview(false)
+      setPrintError(null)
     } else {
       // Por defecto una línea efectivo cubriendo todo el total
       setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
@@ -1432,8 +1489,10 @@ function PaymentDialog({
       clear()
       if (settings?.printer.enabled && settings.printer.auto_print) {
         const r = await api.printReceipt(sale.id)
-        if (!r.ok)
+        if (!r.ok) {
+          setPrintError(r.error)
           toast({ variant: 'destructive', title: 'Impresión falló', description: r.error })
+        }
       }
     } catch (err) {
       toast({
@@ -1668,6 +1727,26 @@ function PaymentDialog({
                   </div>
                 )}
               </div>
+              {printError && (
+                <div className="w-full rounded-md border border-destructive/40 bg-destructive/10 p-3 text-left">
+                  <div className="flex items-start gap-2 text-sm">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-destructive">
+                        La boleta no se imprimió
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-foreground">
+                        La venta quedó guardada (boleta #{lastSale.number}). Revisa la
+                        impresora y vuelve a intentar — la pantalla no se cierra hasta que
+                        confirmes.
+                      </p>
+                      <p className="mt-1 text-[11px] text-muted-foreground break-words">
+                        {printError}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex w-full flex-wrap justify-center gap-2 pt-2">
                 <Button
                   variant="outline"
@@ -1676,21 +1755,30 @@ function PaymentDialog({
                   {showPreview ? 'Ocultar boleta' : 'Ver boleta'}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant={printError ? 'default' : 'outline'}
                   onClick={async () => {
                     const r = await api.printReceipt(lastSale.id)
-                    if (!r.ok)
+                    if (!r.ok) {
+                      setPrintError(r.error)
                       toast({
                         variant: 'destructive',
                         title: 'Impresión falló',
                         description: r.error,
                       })
-                    else toast({ variant: 'success', title: 'Reimprimiendo' })
+                    } else {
+                      setPrintError(null)
+                      toast({ variant: 'success', title: 'Reimprimiendo' })
+                    }
                   }}
                 >
-                  Reimprimir
+                  {printError ? 'Reintentar impresión' : 'Reimprimir'}
                 </Button>
-                <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+                <Button
+                  variant={printError ? 'outline' : 'default'}
+                  onClick={() => onOpenChange(false)}
+                >
+                  {printError ? 'Cerrar de todos modos' : 'Cerrar'}
+                </Button>
               </div>
             </div>
             {showPreview && settings && (
