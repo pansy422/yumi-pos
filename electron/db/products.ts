@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { ensureExists as ensureCategoryExists } from './categories'
 import type {
   Product,
   ProductInput,
@@ -97,6 +98,7 @@ export function create(input: ProductInput): Product {
     category: input.category ?? null,
     is_weight: input.is_weight === 1 ? 1 : 0,
   })
+  if (input.category) ensureCategoryExists(input.category)
   return get(id)!
 }
 
@@ -128,7 +130,70 @@ export function update(id: string, patch: ProductPatch): Product {
      stock=@stock, stock_min=@stock_min, stock_max=@stock_max, category=@category,
      is_weight=@is_weight, archived=@archived, updated_at=datetime('now') WHERE id=@id`,
   ).run({ id, ...next })
+  if (next.category) ensureCategoryExists(next.category)
   return get(id)!
+}
+
+/**
+ * Cambio masivo de precios. Aplica un porcentaje (positivo = sube,
+ * negativo = baja) a `field` ('price' o 'cost') de los productos que
+ * matcheen el filtro. Devuelve cuántos productos se actualizaron y
+ * el delta total.
+ */
+export function bulkPriceChange(filter: {
+  category?: string | null
+  productIds?: string[]
+  percent: number
+  field?: 'price' | 'cost'
+  rounding?: 'none' | 'nearest_10' | 'nearest_100'
+}): { updated: number; oldTotal: number; newTotal: number } {
+  const db = getDb()
+  const field = filter.field === 'cost' ? 'cost' : 'price'
+  const factor = 1 + Math.max(-99, Math.min(1000, filter.percent)) / 100
+
+  const where: string[] = ['archived = 0']
+  const params: Record<string, unknown> = {}
+  if (filter.category !== undefined) {
+    if (filter.category === null) {
+      where.push("(category IS NULL OR TRIM(category) = '')")
+    } else {
+      where.push('category = @cat')
+      params.cat = filter.category
+    }
+  }
+  if (filter.productIds && filter.productIds.length > 0) {
+    const placeholders = filter.productIds.map((_, i) => `@id${i}`).join(',')
+    where.push(`id IN (${placeholders})`)
+    filter.productIds.forEach((id, i) => {
+      params[`id${i}`] = id
+    })
+  }
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+
+  const before = db
+    .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total, COUNT(*) AS n FROM products ${whereSql}`)
+    .get(params) as { total: number; n: number }
+
+  let roundExpr = `${field} * ${factor}`
+  if (filter.rounding === 'nearest_10') {
+    roundExpr = `ROUND(${roundExpr} / 10) * 10`
+  } else if (filter.rounding === 'nearest_100') {
+    roundExpr = `ROUND(${roundExpr} / 100) * 100`
+  } else {
+    roundExpr = `ROUND(${roundExpr})`
+  }
+
+  const result = db
+    .prepare(
+      `UPDATE products SET ${field} = MAX(0, ${roundExpr}), updated_at = datetime('now') ${whereSql}`,
+    )
+    .run(params)
+
+  const after = db
+    .prepare(`SELECT COALESCE(SUM(${field}), 0) AS total FROM products ${whereSql}`)
+    .get(params) as { total: number }
+
+  return { updated: Number(result.changes), oldTotal: Number(before.total), newTotal: Number(after.total) }
 }
 
 export function archive(id: string, archived: boolean): void {

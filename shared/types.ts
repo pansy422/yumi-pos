@@ -107,6 +107,23 @@ export type CashSession = {
   notes: string | null
 }
 
+export type Category = {
+  id: string
+  name: string
+  color: string | null
+  default_margin: number | null
+  created_at: string
+  product_count: number
+  total_stock_value: number
+}
+
+export type CategoryInput = {
+  id?: string
+  name: string
+  color?: string | null
+  default_margin?: number | null
+}
+
 export type CategoryStat = {
   name: string
   count: number
@@ -305,6 +322,16 @@ export type Api = {
   productsCritical: () => Promise<Product[]>
   categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
+  categoriesCrud: () => Promise<Category[]>
+  categoriesSaveMeta: (input: CategoryInput) => Promise<Category>
+  categoriesRemove: (id: string, opts?: { reassignTo?: string | null }) => Promise<void>
+  productsBulkPrice: (filter: {
+    category?: string | null
+    productIds?: string[]
+    percent: number
+    field?: 'price' | 'cost'
+    rounding?: 'none' | 'nearest_10' | 'nearest_100'
+  }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
 
   promotionsList: (includeInactive?: boolean) => Promise<Promotion[]>
   promotionsSave: (input: PromotionInput) => Promise<Promotion>

@@ -40,6 +40,10 @@ const api = {
   productsCritical: invoke(IPC.productsCritical),
   categoriesList: invoke(IPC.categoriesList),
   categoriesRename: invoke(IPC.categoriesRename),
+  categoriesCrud: invoke(IPC.categoriesCrud),
+  categoriesSaveMeta: invoke(IPC.categoriesSaveMeta),
+  categoriesRemove: invoke(IPC.categoriesRemove),
+  productsBulkPrice: invoke(IPC.productsBulkPrice),
 
   promotionsList: invoke(IPC.promotionsList),
   promotionsSave: invoke(IPC.promotionsSave),

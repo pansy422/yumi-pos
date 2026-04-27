@@ -36,6 +36,7 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { ReceiptEditor } from '@/components/common/ReceiptEditor'
 import { PromotionsTab } from './SettingsPromotions'
 import { UsersTab } from './SettingsUsers'
+import { CategoriesTab } from './SettingsCategories'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
@@ -74,8 +75,11 @@ export function Settings() {
             <TabsTrigger value="receipt">
               <Receipt className="h-4 w-4" /> Boleta
             </TabsTrigger>
+            <TabsTrigger value="categories">
+              <Tag className="h-4 w-4" /> Categorías
+            </TabsTrigger>
             <TabsTrigger value="promotions">
-              <Tag className="h-4 w-4" /> Promociones
+              <Sparkles className="h-4 w-4" /> Promociones
             </TabsTrigger>
             <TabsTrigger value="users">
               <Sparkles className="h-4 w-4" /> Usuarios
@@ -101,6 +105,9 @@ export function Settings() {
                 toast({ variant: 'success', title: 'Impresora guardada' })
               }}
             />
+          </TabsContent>
+          <TabsContent value="categories">
+            <CategoriesTab />
           </TabsContent>
           <TabsContent value="promotions">
             <PromotionsTab />

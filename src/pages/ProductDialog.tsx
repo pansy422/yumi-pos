@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Scale } from 'lucide-react'
+import { Box, Scale, TrendingUp } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -49,6 +49,84 @@ const empty: Form = {
   stock_kg: '0',
   stock_min_kg: '0',
   stock_max_kg: '0',
+}
+
+function MarginPanel({
+  cost,
+  price,
+  onMarginChange,
+  onApplyDefault,
+  categoryName,
+}: {
+  cost: number
+  price: number
+  onMarginChange: (margin: number) => void
+  onApplyDefault: () => void
+  categoryName: string
+}) {
+  const [marginText, setMarginText] = useState('')
+  const computedMargin = cost > 0 ? Math.round(((price - cost) / cost) * 100) : 0
+  useEffect(() => {
+    setMarginText(String(computedMargin))
+  }, [computedMargin])
+  const profit = Math.max(0, price - cost)
+  return (
+    <div className="sm:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3">
+      <div className="flex items-center gap-2 text-xs text-primary">
+        <TrendingUp className="h-3.5 w-3.5" />
+        <span className="font-medium uppercase tracking-wider">Margen de ganancia</span>
+      </div>
+      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div>
+          <Label className="text-[11px]">Ganancia $</Label>
+          <div className="num text-lg font-bold text-success">
+            +${profit.toLocaleString('es-CL')}
+          </div>
+        </div>
+        <div>
+          <Label className="text-[11px]">Margen actual %</Label>
+          <div className="num text-lg font-bold">
+            {cost > 0 ? `${computedMargin}%` : '—'}
+          </div>
+        </div>
+        <div>
+          <Label className="text-[11px]">Aplicar margen %</Label>
+          <div className="flex gap-1">
+            <Input
+              type="number"
+              value={marginText}
+              onChange={(e) => setMarginText(e.target.value)}
+              className="h-9 num"
+              placeholder="ej. 35"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              type="button"
+              className="h-9"
+              onClick={() => {
+                const m = Number(marginText)
+                if (isFinite(m)) onMarginChange(Math.max(0, Math.min(1000, m)))
+              }}
+            >
+              OK
+            </Button>
+          </div>
+        </div>
+      </div>
+      {categoryName && (
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          className="mt-2 text-[11px] text-primary hover:bg-primary/10"
+          onClick={onApplyDefault}
+        >
+          Aplicar margen por defecto de "{categoryName}"
+        </Button>
+      )}
+    </div>
+  )
 }
 
 export function ProductDialog({
@@ -270,6 +348,24 @@ export function ProductDialog({
             <Label>Precio venta {form.is_weight ? 'por kg' : ''} *</Label>
             <MoneyInput value={form.price} onValueChange={(n) => setForm({ ...form, price: n })} />
           </div>
+          <MarginPanel
+            cost={form.cost}
+            price={form.price}
+            onMarginChange={(margin) => {
+              const newPrice = Math.round(form.cost * (1 + margin / 100))
+              setForm({ ...form, price: newPrice })
+            }}
+            onApplyDefault={async () => {
+              if (!form.category) return
+              const cats = await api.categoriesCrud()
+              const cat = cats.find((c) => c.name === form.category)
+              if (cat?.default_margin != null) {
+                const newPrice = Math.round(form.cost * (1 + cat.default_margin / 100))
+                setForm({ ...form, price: newPrice })
+              }
+            }}
+            categoryName={form.category}
+          />
 
           <div className="sm:col-span-2 -mb-1 mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
             Alertas de stock (opcional)

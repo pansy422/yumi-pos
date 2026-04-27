@@ -13,6 +13,10 @@ export const IPC = {
   productsCritical: 'products:critical',
   categoriesList: 'categories:list',
   categoriesRename: 'categories:rename',
+  categoriesCrud: 'categories:crud',
+  categoriesSaveMeta: 'categories:saveMeta',
+  categoriesRemove: 'categories:remove',
+  productsBulkPrice: 'products:bulkPrice',
 
   promotionsList: 'promotions:list',
   promotionsSave: 'promotions:save',

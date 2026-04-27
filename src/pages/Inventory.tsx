@@ -8,6 +8,7 @@ import {
   Edit3,
   FileUp,
   Pencil,
+  Percent,
   Plus,
   Printer,
   Search,
@@ -39,6 +40,7 @@ import { EmptyState, BoxEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
+import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
 import { api } from '@/lib/api'
 import type { CategoryStat, Product } from '@shared/types'
 import { formatCLP, formatWeight } from '@shared/money'
@@ -59,6 +61,7 @@ export function Inventory() {
   const [renameFrom, setRenameFrom] = useState('')
   const [renameTo, setRenameTo] = useState('')
   const [csvOpen, setCsvOpen] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -249,6 +252,19 @@ export function Inventory() {
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              title={
+                category === '__all__'
+                  ? 'Subir o bajar todos los precios por %'
+                  : `Cambiar precios de ${category === '__none__' ? 'productos sin categoría' : category} en %`
+              }
+              onClick={() => setBulkOpen(true)}
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Precios %
+            </Button>
           </div>
           <div className="flex overflow-hidden rounded-md border border-border">
             {(
@@ -415,6 +431,22 @@ export function Inventory() {
         open={csvOpen}
         onOpenChange={setCsvOpen}
         onImported={async () => {
+          await load()
+          await loadCategories()
+        }}
+      />
+
+      <BulkPriceDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        filter={
+          category === '__all__'
+            ? { kind: 'all', label: 'todos los productos' }
+            : category === '__none__'
+              ? { kind: 'category', category: null, label: 'productos sin categoría' }
+              : { kind: 'category', category, label: category }
+        }
+        onApplied={async () => {
           await load()
           await loadCategories()
         }}
