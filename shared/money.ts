@@ -27,3 +27,46 @@ export function formatWeight(grams: number): string {
   if (g < 1000) return `${g} g`
   return `${(g / 1000).toFixed(3)} kg`
 }
+
+/**
+ * Total de una línea de venta (en pesos enteros).
+ *
+ * Para productos al peso (`is_weight=1`):
+ *   - `qty` viene en gramos (entero)
+ *   - `price` y `surcharge` son por kg
+ *   - line_total = (price + surcharge) × qty / 1000  redondeado a CLP
+ *
+ * Para productos por unidad:
+ *   - line_total = (price + surcharge) × qty
+ *
+ * IMPORTANTE: esta función es la única fuente de verdad. Si la cambias,
+ * el cart frontend, el motor de promos y el INSERT de sale_items se
+ * actualizan automáticamente. Antes había 3 copias literales y se
+ * podían desincronizar.
+ */
+export function lineTotal(item: {
+  price: number
+  surcharge?: number
+  qty: number
+  is_weight?: 0 | 1 | number
+}): number {
+  const unit = item.price + (item.surcharge ?? 0)
+  return item.is_weight === 1
+    ? Math.round((unit * item.qty) / 1000)
+    : unit * item.qty
+}
+
+/**
+ * Costo total de una línea (mismo manejo de peso que `lineTotal`, pero
+ * con `cost` en vez de `price`). Útil para reportes de ganancia y
+ * valor de inventario.
+ */
+export function lineCost(item: {
+  cost: number
+  qty: number
+  is_weight?: 0 | 1 | number
+}): number {
+  return item.is_weight === 1
+    ? Math.round((item.cost * item.qty) / 1000)
+    : item.cost * item.qty
+}

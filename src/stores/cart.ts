@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { lineTotal } from '@shared/money'
 import type { CartItem, Product } from '@shared/types'
 
 type State = {
@@ -20,22 +21,6 @@ type Actions = {
   surchargeTotal: () => number
   total: () => number
   loadItems: (items: CartItem[], discount: number) => void
-}
-
-/**
- * Para productos al peso (is_weight=1):
- *   - qty representa GRAMOS (entero)
- *   - price es por kg
- *   - line_total = (price + surcharge) × qty / 1000  (redondeado a CLP)
- * Para productos por unidad:
- *   - qty representa unidades enteras
- *   - line_total = (price + surcharge) × qty
- */
-function lineTotal(item: CartItem): number {
-  const unit = item.price + item.surcharge
-  return item.is_weight === 1
-    ? Math.round((unit * item.qty) / 1000)
-    : unit * item.qty
 }
 
 export const useCart = create<State & Actions>()(

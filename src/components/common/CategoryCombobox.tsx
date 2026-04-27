@@ -3,7 +3,7 @@ import { ChevronDown, Tag } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import type { CategoryStat } from '@shared/types'
+import type { Category } from '@shared/types'
 
 export function CategoryCombobox({
   value,
@@ -17,11 +17,11 @@ export function CategoryCombobox({
   className?: string
 }) {
   const [open, setOpen] = React.useState(false)
-  const [items, setItems] = React.useState<CategoryStat[]>([])
+  const [items, setItems] = React.useState<Category[]>([])
   const wrapRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
-    api.categoriesList().then(setItems)
+    api.categoriesCrud().then(setItems)
   }, [])
 
   React.useEffect(() => {
@@ -83,9 +83,17 @@ export function CategoryCombobox({
                     value === c.name && 'bg-primary/10 text-primary',
                   )}
                 >
-                  <span>{c.name}</span>
+                  <span className="flex items-center gap-2">
+                    {c.color && (
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: c.color }}
+                      />
+                    )}
+                    {c.name}
+                  </span>
                   <span className="text-[10px] text-muted-foreground">
-                    {c.count} producto{c.count === 1 ? '' : 's'}
+                    {c.product_count} producto{c.product_count === 1 ? '' : 's'}
                   </span>
                 </li>
               ))}

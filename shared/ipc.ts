@@ -11,7 +11,6 @@ export const IPC = {
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',
   productsCritical: 'products:critical',
-  categoriesList: 'categories:list',
   categoriesRename: 'categories:rename',
   categoriesCrud: 'categories:crud',
   categoriesSaveMeta: 'categories:saveMeta',

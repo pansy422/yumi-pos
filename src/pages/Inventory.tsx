@@ -41,7 +41,7 @@ import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
 import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
 import { api } from '@/lib/api'
-import type { CategoryStat, Product } from '@shared/types'
+import type { Category, Product } from '@shared/types'
 import { formatCLP, formatWeight } from '@shared/money'
 import { cn } from '@/lib/utils'
 
@@ -54,7 +54,7 @@ export function Inventory() {
   const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived' | 'all'>('active')
   const [loading, setLoading] = useState(true)
   const [firstLoad, setFirstLoad] = useState(true)
-  const [categories, setCategories] = useState<CategoryStat[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [category, setCategory] = useState<'__all__' | '__none__' | string>('__all__')
   const [renameOpen, setRenameOpen] = useState(false)
   const [renameFrom, setRenameFrom] = useState('')
@@ -78,7 +78,7 @@ export function Inventory() {
   }
 
   const loadCategories = async () => {
-    setCategories(await api.categoriesList())
+    setCategories(await api.categoriesCrud())
   }
 
   useEffect(() => {
@@ -236,8 +236,8 @@ export function Inventory() {
                 <SelectItem value="__all__">Todas las categorías</SelectItem>
                 <SelectItem value="__none__">Sin categoría</SelectItem>
                 {categories.map((c) => (
-                  <SelectItem key={c.name} value={c.name}>
-                    {c.name} ({c.count})
+                  <SelectItem key={c.id} value={c.name}>
+                    {c.name} ({c.product_count})
                   </SelectItem>
                 ))}
               </SelectContent>

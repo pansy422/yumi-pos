@@ -1661,6 +1661,7 @@ function PaymentDialog({
                                   updateLine(line.id, { cash_received: n })
                                 }
                                 className="mt-1 text-lg"
+                                autoFocus={idx === 0}
                               />
                             </div>
                           )}

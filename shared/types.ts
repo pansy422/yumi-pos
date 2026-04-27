@@ -126,13 +126,6 @@ export type CategoryInput = {
   default_margin?: number | null
 }
 
-export type CategoryStat = {
-  name: string
-  count: number
-  stock: number
-  value: number
-}
-
 export type HeldTicket = {
   id: string
   name: string
@@ -331,7 +324,6 @@ export type Api = {
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
   productsCritical: () => Promise<Product[]>
-  categoriesList: () => Promise<CategoryStat[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
   categoriesCrud: () => Promise<Category[]>
   categoriesSaveMeta: (input: CategoryInput) => Promise<Category>

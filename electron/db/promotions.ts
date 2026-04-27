@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { lineTotal } from '../../shared/money'
 import type { CartItem, Promotion, PromotionInput, AppliedPromotion } from '../../shared/types'
 
 function rowToPromo(r: Record<string, unknown> | undefined): Promotion | null {
@@ -99,10 +100,6 @@ export function computeForCart(items: (CartItem & { category?: string | null })[
   const promos = list(false)
   if (promos.length === 0) return { total_discount: 0, applied: [] }
 
-  const lineTotal = (i: CartItem) => {
-    const unit = i.price + i.surcharge
-    return i.is_weight === 1 ? Math.round((unit * i.qty) / 1000) : unit * i.qty
-  }
   const subtotal = items.reduce((a, i) => a + lineTotal(i), 0)
 
   const applied: AppliedPromotion[] = []

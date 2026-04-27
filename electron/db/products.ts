@@ -287,8 +287,6 @@ export function reactivate(id: string, opts?: { newStock?: number }): Product {
   return p
 }
 
-export type CategoryStat = { name: string; count: number; stock: number; value: number }
-
 /**
  * Productos que requieren reposición. Considera críticos los que tienen
  * stock <= 0 o stock < stock_min (cuando stock_min > 0).
@@ -306,28 +304,6 @@ export function critical(): Product[] {
     )
     .all() as Record<string, unknown>[]
   return rows.map(row).filter((p): p is Product => p !== null)
-}
-
-export function categories(): CategoryStat[] {
-  const db = getDb()
-  const rows = db
-    .prepare(
-      `SELECT category AS name,
-              COUNT(*) AS count,
-              COALESCE(SUM(stock), 0) AS stock,
-              COALESCE(SUM(stock * cost), 0) AS value
-       FROM products
-       WHERE archived = 0 AND category IS NOT NULL AND TRIM(category) <> ''
-       GROUP BY category
-       ORDER BY count DESC, name COLLATE NOCASE`,
-    )
-    .all() as { name: string; count: number; stock: number; value: number }[]
-  return rows.map((r) => ({
-    name: r.name,
-    count: Number(r.count),
-    stock: Number(r.stock),
-    value: Number(r.value),
-  }))
 }
 
 export function renameCategory(from: string, to: string): number {
