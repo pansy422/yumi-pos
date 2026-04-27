@@ -286,7 +286,12 @@ export type ScanInResult =
 export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
 
 export type Api = {
-  productsList: (q?: { search?: string; includeArchived?: boolean; category?: string | null }) => Promise<Product[]>
+  productsList: (q?: {
+    search?: string
+    includeArchived?: boolean
+    onlyArchived?: boolean
+    category?: string | null
+  }) => Promise<Product[]>
   productsGet: (id: string) => Promise<Product | null>
   productsByBarcode: (barcode: string) => Promise<Product | null>
   productsCreate: (input: ProductInput) => Promise<Product>

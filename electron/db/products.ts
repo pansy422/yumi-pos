@@ -28,12 +28,21 @@ function row(r: Record<string, unknown> | undefined): Product | null {
 }
 
 export function list(
-  q: { search?: string; includeArchived?: boolean; category?: string | null } = {},
+  q: {
+    search?: string
+    includeArchived?: boolean
+    onlyArchived?: boolean
+    category?: string | null
+  } = {},
 ): Product[] {
   const db = getDb()
   const where: string[] = []
   const params: Record<string, unknown> = {}
-  if (!q.includeArchived) where.push('archived = 0')
+  if (q.onlyArchived) {
+    where.push('archived = 1')
+  } else if (!q.includeArchived) {
+    where.push('archived = 0')
+  }
   if (q.search && q.search.trim()) {
     where.push('(name LIKE @s OR barcode LIKE @s OR sku LIKE @s)')
     params.s = `%${q.search.trim()}%`
