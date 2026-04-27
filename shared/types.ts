@@ -63,7 +63,9 @@ export type SaleInput = {
 }
 
 export type SaleItem = {
-  product_id: string
+  /** null si el producto fue borrado después de la venta. El nombre,
+   * precio y costo siguen disponibles en los snapshots. */
+  product_id: string | null
   name_snapshot: string
   price_snapshot: number
   cost_snapshot: number
@@ -280,7 +282,7 @@ export type DailyReport = {
   revenue: number
   profit: number
   by_payment: { method: PaymentMethod; total: number; count: number }[]
-  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+  top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
 }
 
@@ -291,7 +293,7 @@ export type RangeReport = {
   revenue: number
   profit: number
   by_payment: { method: PaymentMethod; total: number; count: number }[]
-  top_products: { product_id: string; name: string; qty: number; revenue: number }[]
+  top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
   daily: { date: string; revenue: number; profit: number; count: number }[]
 }

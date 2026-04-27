@@ -12,20 +12,28 @@ import type {
 
 function topProducts(fromDate: string, toDate: string) {
   const db = getDb()
+  // Agrupamos por (product_id, name_snapshot) para que productos
+  // borrados (product_id NULL) no se colapsen todos en una sola fila
+  // confusa: cada producto borrado aparece con su nombre histórico.
   return db
     .prepare(
       `SELECT si.product_id AS product_id,
-              MAX(si.name_snapshot) AS name,
+              si.name_snapshot AS name,
               SUM(si.qty) AS qty,
               SUM(si.line_total) AS revenue
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
        WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
-       GROUP BY si.product_id
+       GROUP BY si.product_id, si.name_snapshot
        ORDER BY qty DESC
        LIMIT 10`,
     )
-    .all(fromDate, toDate) as { product_id: string; name: string; qty: number; revenue: number }[]
+    .all(fromDate, toDate) as {
+    product_id: string | null
+    name: string
+    qty: number
+    revenue: number
+  }[]
 }
 
 function byPayment(fromDate: string, toDate: string) {
@@ -48,6 +56,9 @@ function byPayment(fromDate: string, toDate: string) {
 
 function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
   const db = getDb()
+  // LEFT JOIN para que las ventas de productos borrados también cuenten.
+  // Caen en la categoría "Sin categoría" (__none__) — están en el
+  // histórico pero ya no podemos saber a qué categoría pertenecían.
   const rows = db
     .prepare(
       `SELECT
@@ -58,7 +69,7 @@ function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
          SUM((si.price_snapshot - si.cost_snapshot) * si.qty) AS profit
        FROM sale_items si
        JOIN sales s ON s.id = si.sale_id
-       JOIN products p ON p.id = si.product_id
+       LEFT JOIN products p ON p.id = si.product_id
        WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
        GROUP BY cat
        ORDER BY revenue DESC`,

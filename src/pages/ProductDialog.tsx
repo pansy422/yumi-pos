@@ -223,13 +223,11 @@ export function ProductDialog({
       onSaved(product)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // Si el delete falla por ventas o promo, archivamos igual para no
-      // dejar a la cajera atascada. Preserva la integridad histórica.
-      if (msg.includes('ventas asociadas')) {
-        await archiveFallback(
-          'Como tenía ventas, no se puede borrar definitivamente para preservar el historial de boletas.',
-        )
-      } else if (msg.includes('promoción')) {
+      // El único caso bloqueante hoy es una promoción configurada
+      // contra el producto. Caemos a archivar para no dejar a la
+      // cajera atascada (las ventas históricas ya no son problema:
+      // el FK es ON DELETE SET NULL).
+      if (msg.includes('promoción')) {
         await archiveFallback(
           'Tenía una promoción configurada. Si quieres borrar definitivamente, primero elimina la promoción.',
         )
@@ -496,8 +494,8 @@ export function ProductDialog({
               ¿Eliminar "{product.name}"?
             </div>
             <p className="mt-1 text-[12px] text-foreground">
-              Esta acción no se puede deshacer. Si el producto tiene ventas o promociones, se
-              archivará automáticamente para preservar el historial.
+              Esta acción no se puede deshacer. Las boletas históricas siguen viéndose
+              perfectas (guardamos el nombre y precio en cada línea de venta).
             </p>
             <div className="mt-2 flex gap-2">
               <Button

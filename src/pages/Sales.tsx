@@ -455,12 +455,19 @@ export function Sales() {
                   <Printer className="h-4 w-4" /> Reimprimir
                 </Button>
                 {!picked.voided &&
-                  picked.items.some((i) => i.qty - i.returned_qty > 0) && (
+                  picked.items.some(
+                    (i) => i.product_id != null && i.qty - i.returned_qty > 0,
+                  ) && (
                     <Button
                       variant="warning"
                       onClick={() => {
                         const initial: Record<string, number> = {}
-                        for (const it of picked.items) initial[it.product_id] = 0
+                        // Solo se pueden devolver líneas cuyo producto sigue
+                        // existiendo: necesitamos restituir stock y eso no
+                        // tiene sentido si el producto fue borrado.
+                        for (const it of picked.items) {
+                          if (it.product_id) initial[it.product_id] = 0
+                        }
                         setReturnQty(initial)
                         setReturnReason('')
                         setReturnDlg(true)
@@ -526,18 +533,21 @@ export function Sales() {
 
           {picked && (
             <ul className="max-h-72 divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
-              {picked.items.map((it) => {
+              {picked.items.map((it, idx) => {
                 const remaining = it.qty - it.returned_qty
-                const value = returnQty[it.product_id] ?? 0
                 const isWeight = it.is_weight === 1
+                const isDeleted = it.product_id == null
+                const key = it.product_id ?? `__deleted__${idx}`
+                const value = it.product_id ? (returnQty[it.product_id] ?? 0) : 0
                 return (
-                  <li key={it.product_id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <li key={key} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-medium">{it.name_snapshot}</div>
                       <div className="text-[11px] text-muted-foreground num">
                         Pendiente:{' '}
                         {isWeight ? formatWeight(remaining) : remaining}
                         {remaining === 0 && ' (todo devuelto)'}
+                        {isDeleted && ' · producto eliminado'}
                       </div>
                     </div>
                     <Input
@@ -545,16 +555,19 @@ export function Sales() {
                       min={0}
                       max={remaining}
                       value={value}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        if (!it.product_id) return
+                        const pid = it.product_id
                         setReturnQty({
                           ...returnQty,
-                          [it.product_id]: Math.max(
+                          [pid]: Math.max(
                             0,
                             Math.min(remaining, Number(e.target.value) || 0),
                           ),
                         })
-                      }
-                      disabled={remaining === 0}
+                      }}
+                      disabled={remaining === 0 || isDeleted}
+                      title={isDeleted ? 'No se puede devolver: producto eliminado' : undefined}
                       className="h-8 w-20 text-center num"
                       placeholder={isWeight ? 'gramos' : 'qty'}
                     />
