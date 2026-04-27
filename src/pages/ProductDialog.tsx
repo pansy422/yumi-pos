@@ -348,24 +348,35 @@ export function ProductDialog({
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 disabled={saving}
                 onClick={async () => {
-                  if (!confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`)) return
+                  if (!confirm(`¿Eliminar "${product.name}"? Esta acción no se puede deshacer.`))
+                    return
                   setSaving(true)
                   try {
                     await api.productsDelete(product.id)
-                    toast({ variant: 'success', title: 'Producto eliminado' })
+                    toast({
+                      variant: 'success',
+                      title: 'Producto eliminado',
+                      description: product.name,
+                    })
                     onSaved(product)
+                    return
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err)
-                    if (
-                      msg.includes('ventas asociadas') &&
-                      confirm(
-                        `${msg}\n\n¿Quieres archivarlo en su lugar? El producto se ocultará del POS pero queda disponible en reportes.`,
-                      )
-                    ) {
+                    // Si el delete falla porque el producto tiene ventas,
+                    // archivamos automáticamente (es lo único que se puede
+                    // hacer para preservar el historial; pedirle a la
+                    // cajera que confirme dos veces es molesto).
+                    if (msg.includes('ventas asociadas')) {
                       try {
                         await api.productsArchive(product.id, true)
-                        toast({ variant: 'success', title: 'Producto archivado' })
+                        toast({
+                          variant: 'success',
+                          title: 'Producto archivado',
+                          description: `${product.name} se ocultó del POS. Como tenía ventas, no se puede borrar definitivamente para preservar el historial de boletas.`,
+                          duration: 7000,
+                        })
                         onSaved(product)
+                        return
                       } catch (e2) {
                         toast({
                           variant: 'destructive',

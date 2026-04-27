@@ -1,7 +1,29 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/ipc'
 
-const invoke = (ch: string) => (...args: unknown[]) => ipcRenderer.invoke(ch, ...args)
+/**
+ * Electron envuelve los errores de ipcMain.handle con un prefijo feo:
+ *   "Error invoking remote method 'foo:bar': Error: <mensaje real>"
+ * Aquí en el preload limpiamos ese prefijo para que la UI reciba SOLO
+ * el mensaje en español que devuelve nuestro humanize() en el main.
+ */
+function cleanInvokeError(err: unknown): Error {
+  const raw = err instanceof Error ? err.message : String(err)
+  const clean = raw
+    .replace(/^Error invoking remote method '[^']+':\s*/, '')
+    .replace(/^Error:\s*/, '')
+  return new Error(clean)
+}
+
+const invoke =
+  (ch: string) =>
+  async (...args: unknown[]) => {
+    try {
+      return await ipcRenderer.invoke(ch, ...args)
+    } catch (err) {
+      throw cleanInvokeError(err)
+    }
+  }
 
 const api = {
   productsList: invoke(IPC.productsList),
