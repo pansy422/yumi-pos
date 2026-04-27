@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Box, Scale, Sparkles, TrendingUp } from 'lucide-react'
-import { roundPrice } from '@shared/money'
+import { Box, Scale, TrendingUp } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -71,9 +70,8 @@ function MarginPanel({
     setMarginText(String(computedMargin))
   }, [computedMargin])
   const profit = Math.max(0, price - cost)
-  const applyMargin = (margin: number, withRounding: boolean) => {
-    const raw = cost * (1 + margin / 100)
-    const next = withRounding ? roundPrice(raw, 'psycho_990') : Math.round(raw)
+  const applyMargin = (margin: number) => {
+    const next = Math.round(cost * (1 + margin / 100))
     onPriceChange(Math.max(0, next))
   }
   return (
@@ -110,56 +108,27 @@ function MarginPanel({
               variant="secondary"
               type="button"
               className="h-9"
-              title="Aplicar margen y redondear a *990"
               onClick={() => {
                 const m = Number(marginText)
-                if (isFinite(m)) applyMargin(Math.max(0, Math.min(1000, m)), true)
+                if (isFinite(m)) applyMargin(Math.max(0, Math.min(1000, m)))
               }}
             >
-              <Sparkles className="h-3.5 w-3.5" />
-              990
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              type="button"
-              className="h-9 px-2"
-              title="Aplicar margen sin redondear"
-              onClick={() => {
-                const m = Number(marginText)
-                if (isFinite(m)) applyMargin(Math.max(0, Math.min(1000, m)), false)
-              }}
-            >
-              =
+              OK
             </Button>
           </div>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        {categoryName && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            className="text-[11px] text-primary hover:bg-primary/10"
-            onClick={onApplyDefaultMargin}
-          >
-            Margen por defecto de "{categoryName}"
-          </Button>
-        )}
-        {price > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            type="button"
-            className="ml-auto text-[11px]"
-            title="Redondear el precio actual a *990"
-            onClick={() => onPriceChange(roundPrice(price, 'psycho_990'))}
-          >
-            <Sparkles className="h-3.5 w-3.5" /> Redondear a *990
-          </Button>
-        )}
-      </div>
+      {categoryName && (
+        <Button
+          variant="ghost"
+          size="sm"
+          type="button"
+          className="mt-2 text-[11px] text-primary hover:bg-primary/10"
+          onClick={onApplyDefaultMargin}
+        >
+          Aplicar margen por defecto de "{categoryName}"
+        </Button>
+      )}
     </div>
   )
 }
@@ -445,8 +414,8 @@ export function ProductDialog({
               const cats = await api.categoriesCrud()
               const cat = cats.find((c) => c.name === form.category)
               if (cat?.default_margin != null) {
-                const raw = form.cost * (1 + cat.default_margin / 100)
-                setForm({ ...form, price: roundPrice(raw, 'psycho_990') })
+                const newPrice = Math.round(form.cost * (1 + cat.default_margin / 100))
+                setForm({ ...form, price: newPrice })
               }
             }}
             categoryName={form.category}

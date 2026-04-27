@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, roundPrice, type Rounding } from '@shared/money'
+import { formatCLP } from '@shared/money'
 import { cn } from '@/lib/utils'
 
 type Filter =
@@ -41,21 +41,15 @@ export function BulkPriceDialog({
   const { toast } = useToast()
   const [percent, setPercent] = React.useState<number>(10)
   const [field, setField] = React.useState<'price' | 'cost'>('price')
-  const [rounding, setRounding] = React.useState<Rounding>('psycho_990')
   const [submitting, setSubmitting] = React.useState(false)
+  const [confirming, setConfirming] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) {
       setPercent(10)
       setField('price')
-      setRounding('psycho_990')
+      setConfirming(false)
     }
-  }, [open])
-
-  const [confirming, setConfirming] = React.useState(false)
-
-  React.useEffect(() => {
-    if (!open) setConfirming(false)
   }, [open])
 
   const apply = async () => {
@@ -67,7 +61,6 @@ export function BulkPriceDialog({
           filter.kind === 'category' ? filter.category : undefined,
         percent,
         field,
-        rounding,
       })
       const delta = r.newTotal - r.oldTotal
       toast({
@@ -108,37 +101,17 @@ export function BulkPriceDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label>Aplicar a</Label>
-              <Select value={field} onValueChange={(v) => setField(v as 'price' | 'cost')}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="price">Precio venta</SelectItem>
-                  <SelectItem value="cost">Costo</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Redondeo</Label>
-              <Select
-                value={rounding}
-                onValueChange={(v) => setRounding(v as Rounding)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="psycho_990">Termina en 990 (recomendado)</SelectItem>
-                  <SelectItem value="psycho_90">Termina en 90</SelectItem>
-                  <SelectItem value="nearest_100">A los $100</SelectItem>
-                  <SelectItem value="nearest_10">A los $10</SelectItem>
-                  <SelectItem value="none">Exacto (al peso)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <Label>Aplicar a</Label>
+            <Select value={field} onValueChange={(v) => setField(v as 'price' | 'cost')}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="price">Precio venta</SelectItem>
+                <SelectItem value="cost">Costo</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div
@@ -183,13 +156,13 @@ export function BulkPriceDialog({
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
               Ejemplo: $1.000 →{' '}
-              <span className="num font-semibold">{formatCLP(roundPrice(1000 * factor, rounding))}</span>
+              <span className="num font-semibold">{formatCLP(1000 * factor)}</span>
               {' · '}
               $2.500 →{' '}
-              <span className="num font-semibold">{formatCLP(roundPrice(2500 * factor, rounding))}</span>
+              <span className="num font-semibold">{formatCLP(2500 * factor)}</span>
               {' · '}
               $5.000 →{' '}
-              <span className="num font-semibold">{formatCLP(roundPrice(5000 * factor, rounding))}</span>
+              <span className="num font-semibold">{formatCLP(5000 * factor)}</span>
             </p>
           </div>
         </div>
