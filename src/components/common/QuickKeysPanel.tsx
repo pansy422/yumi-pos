@@ -58,13 +58,13 @@ export function QuickKeysPanel({
       return
     }
     if (fresh.archived === 1) {
-      // Producto archivado — no lo agregamos al ticket; limpiamos el
+      // Producto inactivo — no lo agregamos al ticket; limpiamos el
       // slot para que la cajera asigne otro producto
       unsetKey(slot)
       toast({
         variant: 'warning',
-        title: 'Producto archivado',
-        description: `"${fresh.name}" está archivado. Asigna otro al acceso rápido o reactívalo desde Inventario.`,
+        title: 'Producto inactivo',
+        description: `"${fresh.name}" está desactivado. Asigna otro al acceso rápido o vuelve a activarlo desde Inventario.`,
       })
       return
     }

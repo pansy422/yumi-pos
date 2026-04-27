@@ -195,24 +195,6 @@ export function ProductDialog({
   const handleDelete = async () => {
     if (!product) return
     setSaving(true)
-    const archiveFallback = async (reasonForUser: string) => {
-      try {
-        await api.productsArchive(product.id, true)
-        toast({
-          variant: 'success',
-          title: 'Producto archivado',
-          description: `${product.name} se ocultó del POS. ${reasonForUser}`,
-          duration: 7000,
-        })
-        onSaved(product)
-      } catch (e2) {
-        toast({
-          variant: 'destructive',
-          title: 'No se pudo archivar',
-          description: e2 instanceof Error ? e2.message : String(e2),
-        })
-      }
-    }
     try {
       await api.productsDelete(product.id)
       toast({
@@ -223,17 +205,11 @@ export function ProductDialog({
       onSaved(product)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      // El único caso bloqueante hoy es una promoción configurada
-      // contra el producto. Caemos a archivar para no dejar a la
-      // cajera atascada (las ventas históricas ya no son problema:
-      // el FK es ON DELETE SET NULL).
-      if (msg.includes('promoción')) {
-        await archiveFallback(
-          'Tenía una promoción configurada. Si quieres borrar definitivamente, primero elimina la promoción.',
-        )
-      } else {
-        toast({ variant: 'destructive', title: 'No se pudo eliminar', description: msg })
-      }
+      // Eliminar es definitivo. Las boletas históricas siguen viéndose
+      // perfectas (FK ON DELETE SET NULL + snapshots). El único caso
+      // bloqueante es una promoción activa apuntando al producto: la
+      // cajera tiene que limpiar la promo antes.
+      toast({ variant: 'destructive', title: 'No se pudo eliminar', description: msg })
     } finally {
       setSaving(false)
     }
@@ -475,14 +451,34 @@ export function ProductDialog({
           </p>
 
           {product && (
-            <div className="flex items-center gap-2 sm:col-span-2">
-              <input
-                id="archived"
-                type="checkbox"
-                checked={archived}
-                onChange={(e) => setArchived(e.target.checked)}
-              />
-              <Label htmlFor="archived">Archivar (oculto del POS)</Label>
+            <div className="sm:col-span-2 flex items-center justify-between rounded-md border border-border/60 bg-muted/30 p-3">
+              <div>
+                <div className="text-sm font-medium">
+                  {archived ? 'Producto inactivo' : 'Producto activo'}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {archived
+                    ? 'Está oculto del POS. Activalo para que vuelva a aparecer al cobrar.'
+                    : 'Disponible en el POS para cobrar normalmente.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={!archived}
+                onClick={() => setArchived(!archived)}
+                className={cn(
+                  'relative h-6 w-11 shrink-0 rounded-full transition-colors',
+                  archived ? 'bg-muted-foreground/30' : 'bg-success',
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+                    archived ? 'translate-x-0' : 'translate-x-5',
+                  )}
+                />
+              </button>
             </div>
           )}
         </div>

@@ -96,7 +96,7 @@ export function BulkPriceDialog({
           <DialogDescription>
             Aplica un porcentaje a todos los productos de{' '}
             <span className="font-semibold text-foreground">{filter.label}</span>. Los productos
-            archivados no se afectan.
+            inactivos no se afectan.
           </DialogDescription>
         </DialogHeader>
 

@@ -37,6 +37,7 @@ import { ReceiptEditor } from '@/components/common/ReceiptEditor'
 import { PromotionsTab } from './SettingsPromotions'
 import { UsersTab } from './SettingsUsers'
 import { CategoriesTab } from './SettingsCategories'
+import { useSearchParams } from 'react-router-dom'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
@@ -53,6 +54,10 @@ export function Settings() {
   const settings = useSession((s) => s.settings)
   const refresh = useSession((s) => s.refresh)
   const [appInfo, setAppInfo] = useState<{ version: string; dbPath: string; userDataPath: string } | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  // Permite linkear directo a una pestaña con ?tab=categories.
+  const initialTab = searchParams.get('tab') ?? 'store'
+  const [tab, setTab] = useState(initialTab)
 
   useEffect(() => {
     api.appInfo().then(setAppInfo)
@@ -64,7 +69,17 @@ export function Settings() {
     <div className="flex h-full flex-col">
       <PageHeader title="Ajustes" />
       <div className="p-6">
-        <Tabs defaultValue="store">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => {
+            setTab(v)
+            // Reflejar la pestaña en la URL para deep-link y volver con el back.
+            const next = new URLSearchParams(searchParams)
+            if (v === 'store') next.delete('tab')
+            else next.set('tab', v)
+            setSearchParams(next, { replace: true })
+          }}
+        >
           <TabsList>
             <TabsTrigger value="store">
               <Store className="h-4 w-4" /> Tienda

@@ -76,7 +76,7 @@ export function UnknownBarcodeDialog({
     } catch (err) {
       toast({
         variant: 'destructive',
-        title: 'No se pudo reactivar',
+        title: 'No se pudo activar',
         description: err instanceof Error ? err.message : String(err),
       })
     } finally {
@@ -152,7 +152,7 @@ export function UnknownBarcodeDialog({
             <span className="mono rounded-md bg-muted px-2 py-0.5 text-foreground">{barcode}</span>{' '}
             no está activo en el inventario.
             {archivedMatch
-              ? ' Pero hay un producto archivado con este mismo código.'
+              ? ' Pero hay un producto desactivado con este mismo código.'
               : ' Crea un producto nuevo o vincúlalo a uno existente.'}
           </DialogDescription>
         </DialogHeader>
@@ -163,18 +163,18 @@ export function UnknownBarcodeDialog({
               <ArchiveRestore className="mt-0.5 h-5 w-5 text-warning shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-xs uppercase tracking-wider text-warning">
-                  Producto archivado
+                  Producto inactivo
                 </div>
                 <div className="font-semibold truncate">{archivedMatch.name}</div>
                 <div className="text-[11px] text-muted-foreground">
-                  Stock al momento de archivarlo:{' '}
+                  Stock al momento de desactivarlo:{' '}
                   <span className="num">{archivedMatch.stock}</span> · precio{' '}
                   <span className="num">${archivedMatch.price.toLocaleString('es-CL')}</span>
                 </div>
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs text-warning">Stock al reactivar</Label>
+              <Label className="text-xs text-warning">Stock al activar</Label>
               <div className="flex items-center gap-2">
                 <Input
                   type="number"
@@ -215,12 +215,12 @@ export function UnknownBarcodeDialog({
             >
               <ArchiveRestore className="h-4 w-4" />
               {saving
-                ? 'Reactivando…'
-                : `Reactivar con ${reactivateStock} ${reactivateStock === 1 ? 'unidad' : 'unidades'}`}
+                ? 'Activando…'
+                : `Activar con ${reactivateStock} ${reactivateStock === 1 ? 'unidad' : 'unidades'}`}
             </Button>
             <p className="text-[11px] text-muted-foreground">
               O si prefieres tratar este código como un producto distinto, usa las pestañas
-              de abajo. Primero tendrás que cambiar el código del producto archivado para
+              de abajo. Primero tendrás que cambiar el código del producto inactivo para
               liberarlo (los códigos de barras son únicos).
             </p>
           </div>
