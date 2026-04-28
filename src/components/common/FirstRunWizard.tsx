@@ -72,23 +72,29 @@ export function FirstRunWizard() {
         hideClose
         className="max-w-2xl overflow-hidden p-0"
       >
-        <div className="border-b bg-gradient-to-br from-brand-1/10 via-transparent to-brand-2/10 px-8 py-6">
+        <div className="border-b border-border/60 bg-gradient-to-br from-brand-1/8 via-card to-brand-2/8 px-8 py-6">
           <div className="flex items-center gap-3">
             <div>
-              <DialogTitle className="text-xl">Configuremos Yumi POS</DialogTitle>
-              <DialogDescription>3 pasos rápidos y empiezas a vender</DialogDescription>
+              <DialogTitle className="text-xl tracking-display-tight">
+                Configuremos Yumi POS
+              </DialogTitle>
+              <DialogDescription className="mt-1">
+                3 pasos rápidos y arrancás a vender.
+              </DialogDescription>
             </div>
             <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
               {STEPS.map((s, i) => (
                 <span
                   key={s}
                   className={cn(
-                    'h-1.5 rounded-full transition-all',
-                    i <= idx ? 'w-8 bg-primary' : 'w-4 bg-muted',
+                    'h-1.5 rounded-full transition-all duration-300 ease-out-quart',
+                    i <= idx
+                      ? 'w-8 brand-gradient'
+                      : 'w-4 bg-muted',
                   )}
                 />
               ))}
-              <span className="ml-2 num">
+              <span className="num ml-2 font-medium tracking-tight">
                 {idx + 1}/{total}
               </span>
             </div>
@@ -97,11 +103,13 @@ export function FirstRunWizard() {
 
         <div className="px-8 py-6 min-h-[360px]">
           {step === 'welcome' && (
-            <div className="flex flex-col items-center justify-center gap-4 py-8 text-center animate-fade-in">
+            <div className="flex flex-col items-center justify-center gap-5 py-12 text-center animate-fade-in">
               <Wordmark className="text-3xl" />
-              <h2 className="text-xl font-semibold">Bienvenido</h2>
-              <p className="max-w-md text-sm text-muted-foreground">
-                Vamos a configurar tu tienda, conectar la impresora y abrir tu primera caja.
+              <h2 className="font-display text-2xl font-semibold tracking-display-tight">
+                Hola
+              </h2>
+              <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+                Configurá tu tienda, conectá la impresora y abrí tu primera caja.
                 Toma menos de 2 minutos.
               </p>
             </div>
@@ -224,17 +232,21 @@ export function FirstRunWizard() {
           {step === 'cash' && (
             <div className="grid gap-4 sm:grid-cols-2 animate-fade-in">
               <div className="space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  Apertura de caja: ¿con cuánto efectivo arrancas?
+                <div className="text-sm text-muted-foreground leading-relaxed">
+                  Apertura de caja: ¿con cuánto efectivo arrancás?
                 </div>
-                <div className="rounded-lg border bg-muted/30 p-4 text-center">
-                  <div className="text-xs uppercase text-muted-foreground">Monto inicial</div>
-                  <div className="num text-3xl font-bold">{formatCLP(openingAmount)}</div>
+                <div className="rounded-xl border border-border/60 bg-gradient-to-br from-brand-1/6 via-muted/30 to-brand-2/4 p-5 text-center">
+                  <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+                    Monto inicial
+                  </div>
+                  <div className="num mt-2 text-[32px] font-semibold leading-none tracking-display brand-text">
+                    {formatCLP(openingAmount)}
+                  </div>
                 </div>
                 <MoneyInput value={openingAmount} onValueChange={setOpeningAmount} />
                 {cash && (
-                  <p className="text-xs text-warning">
-                    Ya tienes una caja abierta — se mantiene la actual.
+                  <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
+                    Ya hay una caja abierta — se mantiene la actual.
                   </p>
                 )}
               </div>

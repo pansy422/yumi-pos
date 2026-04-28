@@ -778,9 +778,9 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="mono break-all text-right text-xs">{v}</span>
+    <div className="flex items-center justify-between gap-4 text-[12px]">
+      <span className="font-medium tracking-tight text-muted-foreground">{k}</span>
+      <span className="mono break-all text-right text-[11px] text-foreground/70">{v}</span>
     </div>
   )
 }

@@ -40,76 +40,113 @@ export function EmptyState({
 
 export function CartEmptyArt() {
   return (
-    <svg width="120" height="120" viewBox="0 0 120 120" fill="none" className="animate-float">
+    <svg width="128" height="128" viewBox="0 0 128 128" fill="none" className="animate-float">
       <defs>
-        <linearGradient id="cea-g" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="hsl(168, 75%, 52%)" stopOpacity="0.9" />
-          <stop offset="1" stopColor="hsl(260, 85%, 65%)" stopOpacity="0.9" />
+        <linearGradient id="cea-g" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="hsl(168, 75%, 52%)" stopOpacity="0.95" />
+          <stop offset="1" stopColor="hsl(260, 85%, 65%)" stopOpacity="0.95" />
+        </linearGradient>
+        <linearGradient id="cea-fill" x1="0" y1="0" x2="0" y2="100%" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="hsl(168, 75%, 52%)" stopOpacity="0.12" />
+          <stop offset="1" stopColor="hsl(260, 85%, 65%)" stopOpacity="0.06" />
         </linearGradient>
       </defs>
-      <rect x="20" y="34" width="80" height="58" rx="10" fill="url(#cea-g)" opacity="0.18" />
-      <rect
-        x="20"
-        y="34"
-        width="80"
-        height="58"
-        rx="10"
+      {/* Recibo "papel" con corte irregular abajo */}
+      <path
+        d="M28 26 H100 V96 L92 90 L84 96 L76 90 L68 96 L60 90 L52 96 L44 90 L36 96 L28 90 Z"
+        fill="url(#cea-fill)"
         stroke="url(#cea-g)"
         strokeWidth="2"
-        strokeDasharray="4 6"
+        strokeLinejoin="round"
+      />
+      {/* Líneas de "items" con distintas longitudes */}
+      <path
+        d="M40 42 H88"
+        stroke="hsl(168, 75%, 52%)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        opacity="0.85"
       />
       <path
-        d="M34 50 H86 M34 62 H72 M34 74 H80"
+        d="M40 54 H78 M40 66 H82"
         stroke="hsl(168, 75%, 52%)"
-        strokeWidth="3"
+        strokeWidth="2"
         strokeLinecap="round"
-        opacity="0.6"
+        opacity="0.45"
       />
-      <circle cx="92" cy="32" r="14" fill="hsl(168, 75%, 52%)" opacity="0.18" />
-      <circle cx="92" cy="32" r="10" fill="hsl(168, 75%, 52%)" opacity="0.4" />
-      <circle cx="92" cy="32" r="5" fill="hsl(168, 75%, 52%)" />
+      {/* Línea total */}
+      <path
+        d="M40 78 H88"
+        stroke="hsl(260, 85%, 65%)"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        opacity="0.8"
+      />
+      {/* Sello / badge */}
+      <circle cx="98" cy="30" r="14" fill="hsl(168, 75%, 52%)" opacity="0.12" />
+      <circle cx="98" cy="30" r="9" fill="hsl(168, 75%, 52%)" opacity="0.3" />
+      <circle cx="98" cy="30" r="4" fill="hsl(168, 75%, 52%)" />
     </svg>
   )
 }
 
 export function BoxEmptyArt() {
   return (
-    <svg width="120" height="120" viewBox="0 0 120 120" fill="none" className="animate-float">
+    <svg width="128" height="128" viewBox="0 0 128 128" fill="none" className="animate-float">
       <defs>
-        <linearGradient id="bea-g" x1="0" y1="0" x2="0" y2="120" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="hsl(168, 75%, 52%)" stopOpacity="0.5" />
-          <stop offset="1" stopColor="hsl(260, 85%, 65%)" stopOpacity="0.2" />
+        <linearGradient id="bea-top" x1="0" y1="0" x2="0" y2="100%" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="hsl(168, 75%, 60%)" stopOpacity="0.8" />
+          <stop offset="1" stopColor="hsl(260, 85%, 70%)" stopOpacity="0.5" />
+        </linearGradient>
+        <linearGradient id="bea-left" x1="0" y1="0" x2="100%" y2="0" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="hsl(168, 75%, 36%)" stopOpacity="0.18" />
+          <stop offset="1" stopColor="hsl(168, 75%, 36%)" stopOpacity="0.08" />
+        </linearGradient>
+        <linearGradient id="bea-right" x1="0" y1="0" x2="100%" y2="0" gradientUnits="objectBoundingBox">
+          <stop offset="0" stopColor="hsl(168, 75%, 36%)" stopOpacity="0.05" />
+          <stop offset="1" stopColor="hsl(168, 75%, 36%)" stopOpacity="0.15" />
         </linearGradient>
       </defs>
-      <path d="M20 42 L60 24 L100 42 L60 60 Z" fill="url(#bea-g)" stroke="hsl(168, 75%, 52%)" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M20 42 V92 L60 110 V60 Z" fill="hsl(224, 35%, 14%)" stroke="hsl(168, 75%, 52%)" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M100 42 V92 L60 110 V60 Z" fill="hsl(224, 35%, 11%)" stroke="hsl(168, 75%, 52%)" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M20 42 L60 60 L100 42" stroke="hsl(168, 75%, 52%)" strokeWidth="2" strokeLinejoin="round" fill="none" />
+      {/* Caja isométrica con tres caras visibles */}
+      <path d="M22 44 L64 24 L106 44 L64 64 Z" fill="url(#bea-top)" stroke="hsl(168, 75%, 42%)" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M22 44 V94 L64 114 V64 Z" fill="url(#bea-left)" stroke="hsl(168, 75%, 42%)" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M106 44 V94 L64 114 V64 Z" fill="url(#bea-right)" stroke="hsl(168, 75%, 42%)" strokeWidth="1.5" strokeLinejoin="round" />
+      {/* Detalles de cinta de embalaje en el tope */}
+      <path d="M64 24 V64" stroke="hsl(260, 85%, 60%)" strokeWidth="1.5" opacity="0.5" />
+      {/* Sombra debajo */}
+      <ellipse cx="64" cy="118" rx="32" ry="3" fill="hsl(168, 75%, 42%)" opacity="0.1" />
     </svg>
   )
 }
 
 export function ChartEmptyArt() {
   return (
-    <svg width="120" height="120" viewBox="0 0 120 120" fill="none" className="animate-float">
+    <svg width="128" height="128" viewBox="0 0 128 128" fill="none" className="animate-float">
       <defs>
-        <linearGradient id="che-g" x1="0" y1="0" x2="120" y2="0" gradientUnits="userSpaceOnUse">
+        <linearGradient id="che-g" x1="0" y1="0" x2="128" y2="0" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="hsl(168, 75%, 52%)" />
           <stop offset="1" stopColor="hsl(260, 85%, 65%)" />
         </linearGradient>
       </defs>
-      <rect x="14" y="80" width="14" height="20" rx="3" fill="url(#che-g)" opacity="0.4" />
-      <rect x="38" y="60" width="14" height="40" rx="3" fill="url(#che-g)" opacity="0.6" />
-      <rect x="62" y="40" width="14" height="60" rx="3" fill="url(#che-g)" opacity="0.8" />
-      <rect x="86" y="20" width="14" height="80" rx="3" fill="url(#che-g)" />
+      {/* Eje base con marca */}
+      <path d="M16 108 L112 108" stroke="hsl(168, 75%, 42%)" strokeWidth="1.5" strokeLinecap="round" opacity="0.3" />
+      <rect x="16" y="84" width="14" height="22" rx="4" fill="url(#che-g)" opacity="0.35" />
+      <rect x="40" y="64" width="14" height="42" rx="4" fill="url(#che-g)" opacity="0.55" />
+      <rect x="64" y="44" width="14" height="62" rx="4" fill="url(#che-g)" opacity="0.78" />
+      <rect x="88" y="22" width="14" height="84" rx="4" fill="url(#che-g)" />
+      {/* Línea de tendencia con puntos */}
       <path
-        d="M14 78 Q40 60 62 50 T100 22"
-        stroke="hsl(168, 75%, 52%)"
+        d="M23 82 Q47 62 71 52 T95 24"
+        stroke="hsl(260, 85%, 65%)"
         strokeWidth="2"
         strokeLinecap="round"
         fill="none"
-        opacity="0.4"
+        opacity="0.55"
       />
+      <circle cx="23" cy="82" r="3" fill="hsl(260, 85%, 65%)" />
+      <circle cx="47" cy="62" r="3" fill="hsl(260, 85%, 65%)" />
+      <circle cx="71" cy="52" r="3" fill="hsl(260, 85%, 65%)" />
+      <circle cx="95" cy="24" r="3" fill="hsl(260, 85%, 65%)" />
     </svg>
   )
 }

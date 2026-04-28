@@ -86,23 +86,34 @@ export function CategoriesTab() {
               {items.map((c) => (
                 <li
                   key={c.id}
-                  className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-accent/30"
+                  className="group flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-colors duration-150 hover:bg-accent/40"
                   onClick={() => setEdit(c)}
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span
-                      className="h-3 w-3 shrink-0 rounded-full"
+                      className="h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-background"
                       style={{ background: c.color || '#94a3b8' }}
                     />
                     <div className="min-w-0">
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-[11px] text-muted-foreground">
-                        {c.product_count} producto{c.product_count === 1 ? '' : 's'}
+                      <div className="font-medium tracking-tight">{c.name}</div>
+                      <div className="mt-0.5 text-[11px] text-muted-foreground">
+                        <span className="num">{c.product_count}</span>{' '}
+                        producto{c.product_count === 1 ? '' : 's'}
                         {c.total_stock_value > 0 && (
-                          <> · valor inventario {formatCLP(c.total_stock_value)}</>
+                          <>
+                            {' · '}valor{' '}
+                            <span className="num font-medium text-foreground/70">
+                              {formatCLP(c.total_stock_value)}
+                            </span>
+                          </>
                         )}
                         {c.default_margin != null && (
-                          <> · margen sugerido {c.default_margin}%</>
+                          <>
+                            {' · '}margen{' '}
+                            <span className="num font-medium text-foreground/70">
+                              {c.default_margin}%
+                            </span>
+                          </>
                         )}
                       </div>
                     </div>
@@ -110,6 +121,8 @@ export function CategoriesTab() {
                   <Button
                     size="icon"
                     variant="ghost"
+                    className="opacity-60 transition-opacity group-hover:opacity-100"
+                    title="Eliminar categoría"
                     onClick={(e) => {
                       e.stopPropagation()
                       setDeleteTarget(c)
