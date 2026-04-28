@@ -61,12 +61,14 @@ function KPI({
 }) {
   return (
     <Card className="card-elev card-glow lift relative overflow-hidden">
-      <CardContent className="relative p-4">
-        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="mt-1 flex items-baseline gap-2">
+      <CardContent className="relative p-5">
+        <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+          {label}
+        </div>
+        <div className="mt-2 flex items-baseline gap-2">
           <div
             className={cn(
-              'num text-2xl font-bold tracking-tight',
+              'num text-[26px] font-semibold leading-none tracking-display-tight',
               accent === 'primary' && 'brand-text',
               accent === 'success' && 'text-success',
             )}
@@ -76,8 +78,10 @@ function KPI({
           {typeof delta === 'number' && (
             <span
               className={cn(
-                'flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium',
-                delta >= 0 ? 'bg-success/15 text-success' : 'bg-destructive/15 text-destructive',
+                'flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 text-[10px] font-medium',
+                delta >= 0
+                  ? 'border-success/20 bg-success/10 text-success'
+                  : 'border-destructive/20 bg-destructive/10 text-destructive',
               )}
             >
               {delta >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -85,9 +89,9 @@ function KPI({
             </span>
           )}
         </div>
-        {hint && <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>}
+        {hint && <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div>}
         {spark && spark.length > 0 && (
-          <div className="mt-2 -mx-1">
+          <div className="mt-3 -mx-1">
             <Sparkline data={spark} height={36} />
           </div>
         )}
@@ -266,7 +270,7 @@ function RangeView() {
           <CategoryBreakdown items={report?.by_category ?? []} loading={loading} />
           <Card className="card-elev">
             <CardContent className="p-0">
-              <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Día a día
               </div>
               {(report?.daily ?? []).length === 0 ? (
@@ -276,7 +280,7 @@ function RangeView() {
               ) : (
                 <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <thead className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2 text-left font-medium">Fecha</th>
                       <th className="px-4 py-2 text-right font-medium">Ventas</th>
@@ -318,7 +322,7 @@ function PaymentBreakdown({
   return (
     <Card className="card-elev">
       <CardContent className="p-0">
-        <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           Por método de pago
         </div>
         <div className="p-4">
@@ -350,7 +354,7 @@ function CategoryBreakdown({
   return (
     <Card className="card-elev">
       <CardContent className="p-0">
-        <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           Por categoría
         </div>
         {loading ? (
@@ -411,7 +415,7 @@ function TopProducts({
   return (
     <Card className="card-elev">
       <CardContent className="p-0">
-        <div className="border-b border-border/60 px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           Top productos
         </div>
         {loading ? (

@@ -60,7 +60,7 @@ export function Donut({
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           {centerLabel && (
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
               {centerLabel}
             </div>
           )}

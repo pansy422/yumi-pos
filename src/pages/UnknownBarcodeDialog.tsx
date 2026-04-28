@@ -162,7 +162,7 @@ export function UnknownBarcodeDialog({
             <div className="flex items-start gap-2">
               <ArchiveRestore className="mt-0.5 h-5 w-5 text-warning shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="text-xs uppercase tracking-wider text-warning">
+                <div className="text-xs font-semibold uppercase tracking-caps text-warning">
                   Producto inactivo
                 </div>
                 <div className="font-semibold truncate">{archivedMatch.name}</div>

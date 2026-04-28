@@ -288,7 +288,7 @@ export function CsvImport({
               </div>
               <div className="max-h-72 overflow-auto rounded-md border border-border/40">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-card text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <thead className="sticky top-0 bg-card text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                     <tr>
                       <th className="px-2 py-1 text-left">#</th>
                       <th className="px-2 py-1 text-left">Nombre</th>

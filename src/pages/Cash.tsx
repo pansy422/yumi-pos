@@ -238,14 +238,18 @@ function Stat({ label, value, highlight }: { label: string; value: number; highl
     <div
       className={`rounded-lg border p-4 transition-colors ${
         highlight
-          ? 'border-primary/30 bg-gradient-to-br from-brand-1/10 via-card to-brand-2/5'
+          ? 'border-primary/25 bg-gradient-to-br from-brand-1/8 via-card to-brand-2/4'
           : 'border-border/60 bg-muted/30'
       }`}
     >
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+        {label}
+      </div>
       <div
-        className={`num font-bold tracking-tight ${
-          highlight ? 'text-2xl brand-text' : 'text-xl'
+        className={`num mt-1.5 font-semibold leading-none ${
+          highlight
+            ? 'text-[26px] tracking-display-tight brand-text'
+            : 'text-[22px] tracking-display-tight'
         } ${value < 0 ? 'text-destructive' : ''}`}
       >
         {formatCLP(value)}

@@ -100,7 +100,7 @@ export function Sidebar() {
             <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
             <div className="min-w-0">
               <div className="truncate font-medium">{user.name}</div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 {user.role === 'admin' ? 'Admin' : 'Cajero'}
               </div>
             </div>
