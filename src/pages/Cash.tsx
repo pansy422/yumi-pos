@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, DoorOpen, Lock } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -155,25 +156,34 @@ export function Cash() {
         </Card>
 
         {cash && (
-          <Card className="col-span-3">
+          <Card className="card-elev col-span-3">
             <CardContent className="p-0">
-              <div className="border-b px-4 py-2 text-xs uppercase text-muted-foreground">
+              <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Movimientos de caja
               </div>
               {movements.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">Sin movimientos</p>
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  Sin movimientos en esta sesión.
+                </p>
               ) : (
-                <ul className="divide-y">
+                <ul className="divide-y divide-border/40">
                   {movements.map((m) => (
-                    <li key={m.id} className="flex items-center justify-between px-4 py-2 text-sm">
-                      <div>
-                        <div className="font-medium">{KIND_LABEL[m.kind]}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {m.note} · {new Date(m.created_at).toLocaleString('es-CL')}
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-accent/30"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium tracking-tight">{KIND_LABEL[m.kind]}</div>
+                        <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                          {m.note ? `${m.note} · ` : ''}
+                          {new Date(m.created_at).toLocaleString('es-CL')}
                         </div>
                       </div>
                       <div
-                        className={`num font-semibold ${m.amount >= 0 ? 'text-success' : 'text-destructive'}`}
+                        className={cn(
+                          'num font-semibold tabular-nums',
+                          m.amount >= 0 ? 'text-success' : 'text-destructive',
+                        )}
                       >
                         {formatCLP(m.amount)}
                       </div>

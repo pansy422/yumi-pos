@@ -172,7 +172,7 @@ function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => v
               </p>
             </div>
           </div>
-          <div className="flex overflow-hidden rounded-md border border-border">
+          <div className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/60 p-0.5">
             {(['light', 'dark'] as const).map((t) => (
               <button
                 key={t}
@@ -184,10 +184,11 @@ function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => v
                   toast({ variant: 'success', title: t === 'dark' ? 'Tema oscuro' : 'Tema claro' })
                 }}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors',
+                  'flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium tracking-tight',
+                  'transition-[background-color,color,box-shadow] duration-150 ease-out-quart',
                   settings.flags.theme === t
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-card text-muted-foreground hover:bg-accent',
+                    ? 'bg-card text-foreground shadow-[0_1px_2px_0_hsl(var(--shadow-color)/0.08)]'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {t === 'light' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}

@@ -77,17 +77,18 @@ export function WeightDialog({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label>Peso</Label>
-              <div className="flex overflow-hidden rounded-md border border-border">
+              <div className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/60 p-0.5">
                 {(['kg', 'g'] as Unit[]).map((u) => (
                   <button
                     key={u}
                     type="button"
                     onClick={() => setUnit(u)}
                     className={cn(
-                      'px-3 py-1 text-xs font-medium transition-colors',
+                      'rounded px-3 py-1 text-xs font-semibold tracking-tight uppercase',
+                      'transition-[background-color,color,box-shadow] duration-150 ease-out-quart',
                       unit === u
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-card text-muted-foreground hover:bg-accent',
+                        ? 'bg-card text-foreground shadow-[0_1px_2px_0_hsl(var(--shadow-color)/0.08)]'
+                        : 'text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {u}
@@ -133,25 +134,32 @@ export function WeightDialog({
 
           <div
             className={cn(
-              'flex items-center justify-between rounded-md border p-3',
+              'flex items-center justify-between rounded-xl border p-4',
+              'transition-colors duration-200',
               overstock
                 ? 'border-warning/40 bg-warning/10'
                 : grams > 0
-                  ? 'border-success/30 bg-success/5'
-                  : 'border-border/40 bg-muted/30',
+                  ? 'border-success/25 bg-success/5'
+                  : 'border-border/60 bg-muted/30',
             )}
           >
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Total línea
               </div>
-              {grams > 0 && (
-                <div className="text-[11px] text-muted-foreground">
+              {grams > 0 ? (
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
                   {formatWeight(grams)} × {formatCLP(product.price)}/kg
+                </div>
+              ) : (
+                <div className="mt-0.5 text-[11px] text-muted-foreground/70">
+                  Ingresa el peso para calcular
                 </div>
               )}
             </div>
-            <div className="num text-2xl font-bold">{formatCLP(total)}</div>
+            <div className="num text-[26px] font-semibold leading-none tracking-display-tight">
+              {formatCLP(total)}
+            </div>
           </div>
           {overstock && (
             <p className="text-[11px] text-warning">
