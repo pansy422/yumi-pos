@@ -157,9 +157,16 @@ export function ReceiptEditor({
 
   const reset = () => setTemplate(DEFAULT_TEMPLATE)
 
+  const [presetKey, setPresetKey] = React.useState(0)
+
   const applyPreset = (id: string) => {
     const p = PRESETS.find((x) => x.id === id)
     if (p) setTemplate(p.template)
+    // El dropdown es para "aplicar un preset" (acción), no para mostrar
+    // el preset actual. Forzamos remount para que vuelva al placeholder
+    // "Aplicar preset" en vez de quedarse mostrando el último elegido
+    // (que se desbordaba sobre el borde del trigger).
+    setPresetKey((k) => k + 1)
   }
 
   const exportJson = () => {
@@ -203,17 +210,19 @@ export function ReceiptEditor({
       <div className="space-y-3 min-w-0">
         <Card className="card-elev">
           <CardContent className="flex flex-wrap items-center gap-2 p-4">
-            <Select onValueChange={applyPreset}>
-              <SelectTrigger className="w-44">
+            <Select key={presetKey} onValueChange={applyPreset}>
+              <SelectTrigger className="w-48">
                 <Wand2 className="h-3.5 w-3.5" />
                 <SelectValue placeholder="Aplicar preset" />
               </SelectTrigger>
               <SelectContent>
                 {PRESETS.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    <div>
-                      <div>{p.label}</div>
-                      <div className="text-[10px] text-muted-foreground">{p.description}</div>
+                  <SelectItem key={p.id} value={p.id} textValue={p.label}>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm">{p.label}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {p.description}
+                      </span>
                     </div>
                   </SelectItem>
                 ))}

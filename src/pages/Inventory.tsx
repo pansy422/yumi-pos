@@ -330,13 +330,13 @@ export function Inventory() {
             ) : (
               <div className="overflow-auto scrollfade-y max-h-[60vh]">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <thead className="sticky top-0 z-10 bg-card/90 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground backdrop-blur-md backdrop-saturate-150">
                     <tr>
-                      <th className="px-4 py-2 text-left font-medium">Producto</th>
-                      <th className="px-4 py-2 text-left font-medium">Código</th>
-                      <th className="px-4 py-2 text-right font-medium">Costo</th>
-                      <th className="px-4 py-2 text-right font-medium">Precio</th>
-                      <th className="px-4 py-2 text-right font-medium">Stock</th>
+                      <th className="px-4 py-3 text-left">Producto</th>
+                      <th className="px-4 py-3 text-left">Código</th>
+                      <th className="px-4 py-3 text-right">Costo</th>
+                      <th className="px-4 py-3 text-right">Precio</th>
+                      <th className="px-4 py-3 text-right">Stock</th>
                       <th className="w-10" />
                     </tr>
                   </thead>
@@ -345,7 +345,8 @@ export function Inventory() {
                       <tr
                         key={p.id}
                         className={cn(
-                          'group border-t border-border/40 transition-colors hover:bg-accent/30 cursor-pointer',
+                          'group border-t border-border/40 cursor-pointer',
+                          'transition-colors duration-150 hover:bg-accent/40',
                           p.archived && 'bg-muted/40',
                         )}
                         onClick={() => setEditing(p)}
@@ -517,11 +518,13 @@ function SmallStat({
 }) {
   return (
     <Card className="card-elev lift">
-      <CardContent className="p-3">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <CardContent className="p-4">
+        <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+          {label}
+        </div>
         <div
           className={cn(
-            'num mt-1 text-xl font-bold',
+            'num mt-1.5 text-2xl font-semibold leading-none tracking-display-tight',
             accent === 'primary' && 'brand-text',
             accent === 'warning' && 'text-warning',
           )}
