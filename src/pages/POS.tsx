@@ -335,19 +335,20 @@ export function POS() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Barra superior tipo "caja registradora": branding + estado de caja
-          + navegación admin. Reemplaza al sidebar oculto en /pos. */}
-      <div className="flex items-center gap-4 border-b border-border/60 bg-card/40 px-6 py-2.5 backdrop-blur-sm">
+      {/* Barra superior premium tipo macOS: glass + branding + estado
+          + navegación admin. Sticky para que la cajera no la pierda al
+          scrollear el ticket. */}
+      <div className="sticky top-0 z-30 flex items-center gap-4 border-b border-border/60 bg-background/75 px-6 py-3 backdrop-blur-xl backdrop-saturate-150">
         <Wordmark />
         {currentUser && (
           <>
-            <span className="h-6 w-px bg-border" />
-            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs">
+            <span className="h-6 w-px bg-border/60" />
+            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 py-1 pl-2.5 pr-1 text-[11px] font-medium">
               <UserIcon className="h-3 w-3 text-primary" />
-              <span className="font-medium">{currentUser.name}</span>
+              <span className="tracking-tight">{currentUser.name}</span>
               <button
                 onClick={logout}
-                className="ml-1 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="ml-0.5 grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                 title="Cerrar sesión"
               >
                 <LogOut className="h-3 w-3" />
@@ -355,16 +356,16 @@ export function POS() {
             </div>
           </>
         )}
-        <span className="h-6 w-px bg-border" />
+        <span className="h-6 w-px bg-border/60" />
         <div
           className={cn(
-            'flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium',
+            'flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-medium tracking-tight',
             cash
-              ? 'border-success/40 bg-success/10 text-success'
-              : 'border-warning/40 bg-warning/10 text-warning',
+              ? 'border-success/30 bg-success/10 text-success'
+              : 'border-warning/30 bg-warning/10 text-warning',
           )}
         >
-          <span className="relative flex h-2 w-2">
+          <span className="relative flex h-1.5 w-1.5">
             <span
               className={cn(
                 'absolute inline-flex h-full w-full animate-ping-soft rounded-full',
@@ -373,14 +374,14 @@ export function POS() {
             />
             <span
               className={cn(
-                'relative inline-flex h-2 w-2 rounded-full',
+                'relative inline-flex h-1.5 w-1.5 rounded-full',
                 cash ? 'bg-success' : 'bg-warning',
               )}
             />
           </span>
           Caja {cash ? 'abierta' : 'cerrada'}
         </div>
-        <nav className="ml-auto flex items-center gap-1 text-xs">
+        <nav className="ml-auto flex items-center gap-0.5 text-xs">
           <NavBtn to="/inventario" icon={Box} label="Inventario" hint="F2" />
           <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
           <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
@@ -389,17 +390,20 @@ export function POS() {
         </nav>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 bg-card/20 px-6 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 bg-background/40 px-6 py-4">
         <div>
           <div className="flex items-baseline gap-3">
-            <div className="text-2xl font-semibold tracking-tight">Vender</div>
+            <div className="font-display text-[28px] font-semibold tracking-display-tight leading-none">
+              Vender
+            </div>
             {nextSaleNumber != null && (
-              <div className="text-xs text-muted-foreground">
-                Próxima boleta <span className="num font-semibold text-foreground">#{nextSaleNumber}</span>
+              <div className="text-[12px] text-muted-foreground">
+                Próxima boleta{' '}
+                <span className="num font-semibold text-foreground">#{nextSaleNumber}</span>
               </div>
             )}
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <p className="mt-1.5 text-[12px] text-muted-foreground">
             Pasa el código por el lector. El escáner está siempre activo.
           </p>
         </div>
@@ -752,17 +756,17 @@ export function POS() {
                   </p>
                 )}
               </div>
-              <div className="border-t border-border/60 pt-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <div className="border-t border-border/60 pt-4">
+                <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                   Total a cobrar
                 </div>
-                <div className="num text-[64px] font-bold leading-none tracking-tight brand-text">
+                <div className="num mt-1 text-[60px] font-semibold leading-none tracking-display brand-text">
                   {formatCLP(Math.max(0, tot - autoDiscount))}
                 </div>
               </div>
               <Button
                 variant="success"
-                className="h-20 w-full text-xl font-bold shadow-glow"
+                className="h-[72px] w-full text-xl font-semibold tracking-tight shadow-glow"
                 disabled={items.length === 0}
                 onClick={() => setPayOpen(true)}
               >
@@ -904,11 +908,16 @@ function NavBtn({
   return (
     <Link
       to={to}
-      className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+      className={cn(
+        'group flex items-center gap-1.5 rounded-md px-2.5 py-1.5',
+        'text-[12px] font-medium tracking-tight text-muted-foreground',
+        'transition-[background-color,color,transform] duration-150 ease-out-quart',
+        'hover:bg-accent/70 hover:text-foreground active:scale-[0.97]',
+      )}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-3.5 w-3.5 transition-transform group-hover:scale-110" />
       <span>{label}</span>
-      <Kbd>{hint}</Kbd>
+      <Kbd className="ml-0.5">{hint}</Kbd>
     </Link>
   )
 }
@@ -931,17 +940,22 @@ function TodayCard() {
   return (
     <Card className="card-elev card-glow">
       <CardContent className="p-4">
-        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Hoy</div>
-        <div className="num mt-1 text-2xl font-bold tracking-tight brand-text">
+        <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+          Hoy
+        </div>
+        <div className="num mt-1.5 text-[26px] font-semibold leading-none tracking-display-tight brand-text">
           {data ? formatCLP(data.revenue) : '—'}
         </div>
-        <div className="mt-0.5 flex items-center justify-between text-[11px] text-muted-foreground">
+        <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
           <span>
-            <span className="num">{data?.count ?? 0}</span>{' '}
+            <span className="num font-medium text-foreground">{data?.count ?? 0}</span>{' '}
             {(data?.count ?? 0) === 1 ? 'venta' : 'ventas'}
           </span>
           <span>
-            Ganancia <span className="num text-success">{data ? formatCLP(data.profit) : '—'}</span>
+            Ganancia{' '}
+            <span className="num font-medium text-success">
+              {data ? formatCLP(data.profit) : '—'}
+            </span>
           </span>
         </div>
       </CardContent>
@@ -1523,14 +1537,14 @@ function PaymentDialog({
       >
         {!lastSale ? (
           <>
-            <div className="relative border-b border-border/60 bg-gradient-to-br from-brand-1/15 via-card to-brand-2/10 px-6 py-5">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="relative border-b border-border/60 bg-gradient-to-br from-brand-1/10 via-card to-brand-2/8 px-6 py-6">
+              <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Total a cobrar
               </div>
-              <div className="num text-5xl font-bold leading-none tracking-tight brand-text">
+              <div className="num mt-1.5 text-[52px] font-semibold leading-none tracking-display brand-text">
                 {formatCLP(tot)}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">
+              <div className="mt-2 text-[12px] text-muted-foreground">
                 {items.length} producto{items.length === 1 ? '' : 's'} ·{' '}
                 {items.reduce((a, i) => a + i.qty, 0)} unidad
                 {items.reduce((a, i) => a + i.qty, 0) === 1 ? '' : 'es'}
