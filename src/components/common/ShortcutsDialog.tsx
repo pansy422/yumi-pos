@@ -54,7 +54,7 @@ export function ShortcutsDialog() {
 function Group({ title, items }: { title: string; items: { keys: string[]; label: string }[] }) {
   return (
     <div className="space-y-2">
-      <div className="text-xs uppercase tracking-wider text-muted-foreground">{title}</div>
+      <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">{title}</div>
       <ul className="space-y-2">
         {items.map((it) => (
           <li key={it.label} className="flex items-center justify-between gap-3">

@@ -249,7 +249,7 @@ export function ReceiptEditor({
         <Card className="card-elev">
           <CardContent className="p-3">
             <div className="mb-2 flex items-center justify-between px-1">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Bloques ({template.blocks.length})
               </div>
               <AddBlockMenu onAdd={add} />
@@ -278,7 +278,7 @@ export function ReceiptEditor({
       <div className="lg:sticky lg:top-4 lg:self-start">
         <Card className="card-elev">
           <CardContent className="p-4">
-            <div className="mb-3 flex items-center gap-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
               <Type className="h-3.5 w-3.5" /> Vista previa en vivo
             </div>
             <ReceiptPreview
@@ -464,7 +464,7 @@ function BlockEditor({
     <div className="space-y-3 border-t border-border/40 p-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider">Alineación</Label>
+          <Label className="text-[10px] font-semibold uppercase tracking-caps">Alineación</Label>
           <div className="flex overflow-hidden rounded-md border border-border">
             {(['left', 'center', 'right'] as Align[]).map((a) => (
               <button
@@ -483,7 +483,7 @@ function BlockEditor({
           </div>
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider">Tamaño</Label>
+          <Label className="text-[10px] font-semibold uppercase tracking-caps">Tamaño</Label>
           <Select
             value={block.size ?? 'normal'}
             onValueChange={(v) => onChange({ size: v as Size })}
@@ -499,7 +499,7 @@ function BlockEditor({
           </Select>
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider">Negrita</Label>
+          <Label className="text-[10px] font-semibold uppercase tracking-caps">Negrita</Label>
           <div className="flex h-9 items-center">
             <Switch
               checked={!!block.bold}
@@ -508,7 +508,7 @@ function BlockEditor({
           </div>
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wider">Mostrar</Label>
+          <Label className="text-[10px] font-semibold uppercase tracking-caps">Mostrar</Label>
           <Select
             value={block.show ?? 'always'}
             onValueChange={(v) => onChange({ show: v as ShowWhen })}

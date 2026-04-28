@@ -71,42 +71,58 @@ export function LoginDialog() {
   return (
     <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent hideClose className="max-w-md">
-        <DialogHeader>
+        <DialogHeader className="space-y-3">
           <div className="flex justify-center">
             <Wordmark className="text-2xl" />
           </div>
-          <DialogTitle className="text-center">¿Quién va a vender?</DialogTitle>
+          <DialogTitle className="text-center text-xl tracking-display-tight">
+            ¿Quién va a vender?
+          </DialogTitle>
           <DialogDescription className="text-center">
-            Ingresa el PIN para iniciar sesión.
+            Elegí tu usuario y entrá con tu PIN.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {users.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => {
-                  setPicked(u)
-                  setPin('')
-                }}
-                className={cn(
-                  'flex flex-col items-center gap-1 rounded-lg border-2 px-3 py-3 transition-all',
-                  picked?.id === u.id
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-card hover:bg-accent',
-                )}
-              >
-                <UserIcon className="h-5 w-5" />
-                <span className="truncate text-sm font-medium">{u.name}</span>
-                <span className="text-[10px] uppercase text-muted-foreground">
-                  {u.role === 'admin' ? 'Admin' : 'Cajero'}
-                </span>
-              </button>
-            ))}
+            {users.map((u) => {
+              const active = picked?.id === u.id
+              return (
+                <button
+                  key={u.id}
+                  onClick={() => {
+                    setPicked(u)
+                    setPin('')
+                  }}
+                  className={cn(
+                    'group flex flex-col items-center gap-1.5 rounded-lg px-3 py-3.5',
+                    'border transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out-quart',
+                    'active:scale-[0.97]',
+                    active
+                      ? 'border-primary/40 bg-primary/8 text-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.2),0_4px_16px_-8px_hsl(var(--primary)/0.3)]'
+                      : 'border-border/70 bg-card hover:border-border hover:bg-accent/50',
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'grid h-9 w-9 place-items-center rounded-full',
+                      active ? 'bg-primary/15' : 'bg-muted',
+                    )}
+                  >
+                    <UserIcon className="h-4 w-4" />
+                  </div>
+                  <span className="truncate text-sm font-medium tracking-tight">
+                    {u.name}
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-caps text-muted-foreground">
+                    {u.role === 'admin' ? 'Admin' : 'Cajero'}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Input
               type="password"
               inputMode="numeric"
@@ -130,7 +146,7 @@ export function LoginDialog() {
           <Button
             onClick={submit}
             disabled={!picked || pin.length === 0 || submitting}
-            className="h-12 w-full text-base"
+            className="h-12 w-full text-base tracking-tight"
           >
             <LogIn className="h-5 w-5" />
             {submitting ? 'Verificando…' : 'Entrar'}

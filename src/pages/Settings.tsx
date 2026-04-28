@@ -290,8 +290,8 @@ function Field({
   type?: string
 }) {
   return (
-    <div className={`space-y-1 ${className ?? ''}`}>
-      <Label>{label}</Label>
+    <div className={`space-y-1.5 ${className ?? ''}`}>
+      <Label className="text-[12px]">{label}</Label>
       <Input type={type} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   )
@@ -569,7 +569,7 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
         <Card className="card-elev">
           <CardContent className="p-5">
             <div className="mb-3 flex items-center justify-between">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
                 Impresoras detectadas en Windows
               </div>
               <Button
@@ -639,7 +639,7 @@ function PrinterTab({ settings, onSaved }: { settings: SettingsT; onSaved: () =>
       {form.connection === 'network' && (
         <Card className="card-elev">
           <CardContent className="p-5 text-sm">
-            <div className="mb-2 flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-caps text-muted-foreground">
               <Network className="h-3.5 w-3.5" /> Modo red
             </div>
             <ul className="space-y-1.5 text-muted-foreground">

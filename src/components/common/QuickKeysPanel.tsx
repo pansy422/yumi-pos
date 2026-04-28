@@ -75,7 +75,7 @@ export function QuickKeysPanel({
     <Card className="card-elev shrink-0">
       <CardContent className="p-2">
         <div className="mb-1.5 flex items-center justify-between px-1">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
             <Zap className="h-3 w-3 text-primary" />
             Acceso rápido
             <span className="opacity-60">— productos sin código</span>

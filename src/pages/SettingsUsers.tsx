@@ -305,7 +305,7 @@ function UserEditor({
                     <span style={{ fontSize: `${10 + (s.id - 1) * 8}px`, fontWeight: 600 }}>
                       {s.hint}
                     </span>
-                    <span className="text-[9px] uppercase tracking-wider">{s.label}</span>
+                    <span className="text-[9px] font-semibold uppercase tracking-caps">{s.label}</span>
                   </button>
                 )
               })}

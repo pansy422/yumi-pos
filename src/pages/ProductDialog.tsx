@@ -78,7 +78,7 @@ function MarginPanel({
     <div className="sm:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3">
       <div className="flex items-center gap-2 text-xs text-primary">
         <TrendingUp className="h-3.5 w-3.5" />
-        <span className="font-medium uppercase tracking-wider">Margen de ganancia</span>
+        <span className="font-semibold uppercase tracking-caps">Margen de ganancia</span>
       </div>
       <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
@@ -395,7 +395,7 @@ export function ProductDialog({
             categoryName={form.category}
           />
 
-          <div className="sm:col-span-2 -mb-1 mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          <div className="sm:col-span-2 -mb-1 mt-2 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
             Alertas de stock (opcional)
           </div>
           {form.is_weight ? (

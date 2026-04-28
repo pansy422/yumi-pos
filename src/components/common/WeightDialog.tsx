@@ -142,7 +142,7 @@ export function WeightDialog({
             )}
           >
             <div>
-              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+              <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
                 Total línea
               </div>
               {grams > 0 && (

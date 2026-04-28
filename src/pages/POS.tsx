@@ -554,7 +554,7 @@ export function POS() {
             ) : (
               <div ref={cartScrollRef} className="flex-1 overflow-auto scrollfade-y">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2 text-left font-medium">Producto</th>
                       <th className="px-4 py-2 text-right font-medium">Precio</th>
@@ -582,13 +582,13 @@ export function POS() {
                           <div className="flex items-center gap-2">
                             <span className="text-base font-medium">{it.name}</span>
                             {isWeight && (
-                              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                              <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold font-semibold uppercase tracking-caps text-primary">
                                 <Scale className="inline h-2.5 w-2.5 mr-0.5" />
                                 kg
                               </span>
                             )}
                             {isLast && (
-                              <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-success">
+                              <span className="rounded-full bg-success/15 px-1.5 py-0.5 text-[9px] font-bold font-semibold uppercase tracking-caps text-success">
                                 + Recién
                               </span>
                             )}
@@ -1588,7 +1588,7 @@ function PaymentDialog({
                       )}
                     >
                       <div className="mb-2 flex items-center justify-between">
-                        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <div className="text-[10px] font-semibold font-semibold uppercase tracking-caps text-muted-foreground">
                           Pago {idx + 1}
                         </div>
                         <div className="flex items-center gap-1">
@@ -1619,7 +1619,7 @@ function PaymentDialog({
 
                       <div className="space-y-2">
                         <div>
-                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                             Método
                           </Label>
                           <div className="mt-1 grid grid-cols-5 gap-1">
@@ -1650,7 +1650,7 @@ function PaymentDialog({
 
                         <div className={cn('grid gap-2', isCash ? 'sm:grid-cols-2' : 'sm:grid-cols-1')}>
                           <div>
-                            <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                               Monto a cobrar
                             </Label>
                             <MoneyInput
@@ -1666,7 +1666,7 @@ function PaymentDialog({
                           </div>
                           {isCash && (
                             <div>
-                              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                              <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                                 Efectivo recibido
                               </Label>
                               <MoneyInput
@@ -1718,7 +1718,7 @@ function PaymentDialog({
                 </Button>
                 {hasCash && cashChange > 0 && (
                   <div className="rounded-md border border-success/30 bg-success/10 px-3 py-1 text-xs">
-                    <span className="uppercase tracking-wider text-success/80">Vuelto total</span>{' '}
+                    <span className="font-semibold uppercase tracking-caps text-success/80">Vuelto total</span>{' '}
                     <span className="num font-bold text-success">{formatCLP(cashChange)}</span>
                   </div>
                 )}
@@ -1761,7 +1761,7 @@ function PaymentDialog({
             <div className="flex flex-col items-center gap-3 px-8 py-8">
               <AnimatedCheck size={88} />
               <div className="text-center">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                <div className="text-xs font-semibold uppercase tracking-caps text-muted-foreground">
                   Boleta #{lastSale.number}
                 </div>
                 <div className="num text-3xl font-bold tracking-tight">{formatCLP(lastSale.total)}</div>

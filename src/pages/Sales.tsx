@@ -189,7 +189,7 @@ export function Sales() {
         <Card className="card-elev">
           <CardContent className="grid gap-3 p-4 md:grid-cols-[160px_repeat(2,_1fr)_180px_1fr]">
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider">Período</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-caps">Período</Label>
               <Select value={range} onValueChange={(v) => setRange(v as Range)}>
                 <SelectTrigger>
                   <Calendar className="h-3.5 w-3.5" />
@@ -204,7 +204,7 @@ export function Sales() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider">Desde</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-caps">Desde</Label>
               <Input
                 type="date"
                 value={from}
@@ -215,7 +215,7 @@ export function Sales() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider">Hasta</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-caps">Hasta</Label>
               <Input
                 type="date"
                 value={to}
@@ -226,7 +226,7 @@ export function Sales() {
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider">Método de pago</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-caps">Método de pago</Label>
               <Select value={method} onValueChange={(v) => setMethod(v as typeof method)}>
                 <SelectTrigger>
                   <Filter className="h-3.5 w-3.5" />
@@ -243,7 +243,7 @@ export function Sales() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-[10px] uppercase tracking-wider">Buscar #</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-caps">Buscar #</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -291,12 +291,12 @@ export function Sales() {
             ) : (
               <div className="overflow-auto scrollfade-y max-h-[60vh]">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <thead className="sticky top-0 z-10 bg-card/90 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground backdrop-blur-md backdrop-saturate-150">
                     <tr>
-                      <th className="px-4 py-2 text-left font-medium">Boleta</th>
-                      <th className="px-4 py-2 text-left font-medium">Fecha</th>
-                      <th className="px-4 py-2 text-left font-medium">Método</th>
-                      <th className="px-4 py-2 text-right font-medium">Total</th>
+                      <th className="px-4 py-3 text-left">Boleta</th>
+                      <th className="px-4 py-3 text-left">Fecha</th>
+                      <th className="px-4 py-3 text-left">Método</th>
+                      <th className="px-4 py-3 text-right">Total</th>
                       <th className="w-16" />
                     </tr>
                   </thead>
