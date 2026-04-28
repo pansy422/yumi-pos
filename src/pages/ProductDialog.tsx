@@ -75,27 +75,35 @@ function MarginPanel({
     onPriceChange(Math.max(0, next))
   }
   return (
-    <div className="sm:col-span-2 rounded-md border border-primary/20 bg-primary/5 p-3">
-      <div className="flex items-center gap-2 text-xs text-primary">
+    <div className="sm:col-span-2 rounded-xl border border-primary/20 bg-gradient-to-br from-primary/8 via-card to-primary/4 p-4">
+      <div className="flex items-center gap-2 text-primary">
         <TrendingUp className="h-3.5 w-3.5" />
-        <span className="font-semibold uppercase tracking-caps">Margen de ganancia</span>
+        <span className="text-[10px] font-semibold uppercase tracking-caps">
+          Margen de ganancia
+        </span>
       </div>
-      <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <Label className="text-[11px]">Ganancia $</Label>
-          <div className="num text-lg font-bold text-success">
+          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+            Ganancia
+          </Label>
+          <div className="num mt-1 text-xl font-semibold leading-none tracking-display-tight text-success">
             +${profit.toLocaleString('es-CL')}
           </div>
         </div>
         <div>
-          <Label className="text-[11px]">Margen actual %</Label>
-          <div className="num text-lg font-bold">
+          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+            Margen actual
+          </Label>
+          <div className="num mt-1 text-xl font-semibold leading-none tracking-display-tight">
             {cost > 0 ? `${computedMargin}%` : '—'}
           </div>
         </div>
         <div>
-          <Label className="text-[11px]">Aplicar margen %</Label>
-          <div className="flex gap-1">
+          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+            Aplicar margen %
+          </Label>
+          <div className="mt-1 flex gap-1">
             <Input
               type="number"
               value={marginText}
@@ -107,7 +115,7 @@ function MarginPanel({
               size="sm"
               variant="secondary"
               type="button"
-              className="h-9"
+              className="h-9 px-3"
               onClick={() => {
                 const m = Number(marginText)
                 if (isFinite(m)) applyMargin(Math.max(0, Math.min(1000, m)))
@@ -123,7 +131,7 @@ function MarginPanel({
           variant="ghost"
           size="sm"
           type="button"
-          className="mt-2 text-[11px] text-primary hover:bg-primary/10"
+          className="mt-3 h-7 text-[11px] text-primary hover:bg-primary/10"
           onClick={onApplyDefaultMargin}
         >
           Aplicar margen por defecto de "{categoryName}"
@@ -280,13 +288,19 @@ export function ProductDialog({
                 setStep('form')
               }}
               className={cn(
-                'flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-border bg-card px-4 py-8 text-center transition-all',
-                'hover:border-primary hover:bg-primary/5',
+                'group flex flex-col items-center justify-center gap-3 rounded-xl px-4 py-8 text-center',
+                'border border-border/70 bg-card',
+                'transition-[border-color,background-color,transform,box-shadow] duration-200 ease-out-quart',
+                'hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5',
+                'hover:shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.3)]',
+                'active:scale-[0.98]',
               )}
             >
-              <Box className="h-10 w-10 text-primary" />
-              <div className="font-semibold">Por unidad</div>
-              <p className="text-[11px] text-muted-foreground">
+              <div className="grid h-14 w-14 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+                <Box className="h-7 w-7" />
+              </div>
+              <div className="font-semibold tracking-tight">Por unidad</div>
+              <p className="max-w-[180px] text-[11px] leading-relaxed text-muted-foreground">
                 Cada uno tiene un precio fijo. Bebidas, abarrotes, snacks…
               </p>
             </button>
@@ -296,13 +310,19 @@ export function ProductDialog({
                 setStep('form')
               }}
               className={cn(
-                'flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-border bg-card px-4 py-8 text-center transition-all',
-                'hover:border-primary hover:bg-primary/5',
+                'group flex flex-col items-center justify-center gap-3 rounded-xl px-4 py-8 text-center',
+                'border border-border/70 bg-card',
+                'transition-[border-color,background-color,transform,box-shadow] duration-200 ease-out-quart',
+                'hover:border-primary/40 hover:bg-primary/5 hover:-translate-y-0.5',
+                'hover:shadow-[0_8px_24px_-12px_hsl(var(--primary)/0.3)]',
+                'active:scale-[0.98]',
               )}
             >
-              <Scale className="h-10 w-10 text-primary" />
-              <div className="font-semibold">Por peso (kg)</div>
-              <p className="text-[11px] text-muted-foreground">
+              <div className="grid h-14 w-14 place-items-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
+                <Scale className="h-7 w-7" />
+              </div>
+              <div className="font-semibold tracking-tight">Por peso (kg)</div>
+              <p className="max-w-[180px] text-[11px] leading-relaxed text-muted-foreground">
                 Verduras, frutas, fiambres, queso. Se cobra por kilo, al vender se
                 ingresa el peso.
               </p>
@@ -310,14 +330,18 @@ export function ProductDialog({
           </div>
         ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2 flex items-center gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary">
+          <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/8 px-3 py-2 text-xs text-primary">
             {form.is_weight ? <Scale className="h-3.5 w-3.5" /> : <Box className="h-3.5 w-3.5" />}
-            Tipo: <span className="font-semibold">{form.is_weight ? 'Por peso (kg)' : 'Por unidad'}</span>
+            <span className="font-medium">
+              Tipo: <span className="font-semibold tracking-tight">
+                {form.is_weight ? 'Por peso (kg)' : 'Por unidad'}
+              </span>
+            </span>
             {!product && (
               <button
                 type="button"
                 onClick={() => setStep('pick_type')}
-                className="ml-auto rounded text-primary/80 hover:text-primary underline"
+                className="ml-auto rounded text-primary/80 underline-offset-2 hover:text-primary hover:underline"
               >
                 Cambiar
               </button>

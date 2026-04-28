@@ -29,20 +29,22 @@ export function Sidebar() {
   const user = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border/70 bg-card/40 backdrop-blur-sm">
-      <div className="flex h-16 items-center px-4">
+    <aside className="flex w-60 shrink-0 flex-col border-r border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
+      <div className="flex h-[60px] items-center border-b border-border/40 px-5">
         <Wordmark />
       </div>
-      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
+      <nav className="flex flex-1 flex-col gap-0.5 px-3 py-3">
         {ITEMS.map((it) => (
           <NavLink
             key={it.to}
             to={it.to}
             className={({ isActive }) =>
               cn(
-                'group relative flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                'group relative flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium tracking-tight',
+                'transition-[background-color,color,transform,box-shadow] duration-150 ease-out-quart',
+                'active:scale-[0.98]',
                 isActive
-                  ? 'bg-gradient-to-r from-primary/15 via-primary/8 to-transparent text-foreground'
+                  ? 'bg-card text-foreground shadow-[0_1px_2px_0_hsl(var(--shadow-color)/0.06),0_2px_8px_-2px_hsl(var(--shadow-color)/0.08)]'
                   : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
               )
             }
@@ -51,10 +53,13 @@ export function Sidebar() {
               <>
                 <span className="flex items-center gap-3">
                   {isActive && (
-                    <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full brand-gradient" />
+                    <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full brand-gradient" />
                   )}
                   <it.icon
-                    className={cn('h-4 w-4', isActive ? 'text-primary' : '')}
+                    className={cn(
+                      'h-4 w-4 transition-transform group-hover:scale-110',
+                      isActive ? 'text-primary' : '',
+                    )}
                   />
                   {it.label}
                 </span>

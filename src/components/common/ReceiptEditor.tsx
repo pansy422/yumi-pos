@@ -368,8 +368,11 @@ function BlockRow({
   return (
     <li
       className={cn(
-        'rounded-lg border border-border/60 bg-card/50 transition-colors',
-        isOpen && 'border-primary/40 bg-primary/5',
+        'rounded-lg border bg-card/50',
+        'transition-[background-color,border-color,box-shadow] duration-150 ease-out-quart',
+        isOpen
+          ? 'border-primary/30 bg-primary/5 shadow-[0_2px_8px_-2px_hsl(var(--primary)/0.15)]'
+          : 'border-border/60 hover:border-border',
       )}
     >
       <div

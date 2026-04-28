@@ -340,4 +340,14 @@
     backdrop-filter: saturate(140%) blur(20px);
     -webkit-backdrop-filter: saturate(140%) blur(20px);
   }
+
+  /* Stagger: delay incremental para animaciones en grupo. Usar como
+     `animate-fade-in stagger-1` … `stagger-6` en hijos de una lista
+     que se monta. Cada hijo aparece con 50ms de offset → cascada. */
+  .stagger-1 { animation-delay: 30ms; }
+  .stagger-2 { animation-delay: 60ms; }
+  .stagger-3 { animation-delay: 90ms; }
+  .stagger-4 { animation-delay: 120ms; }
+  .stagger-5 { animation-delay: 150ms; }
+  .stagger-6 { animation-delay: 180ms; }
 }
