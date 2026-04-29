@@ -97,3 +97,12 @@ const api = {
 }
 
 contextBridge.exposeInMainWorld('api', api)
+
+/**
+ * Controles mínimos de la ventana — usados por LoginDialog para que
+ * la cajera pueda cerrar la app si se equivocó al hacer logout.
+ */
+contextBridge.exposeInMainWorld('winControls', {
+  minimize: () => ipcRenderer.send('win:minimize'),
+  close: () => ipcRenderer.send('win:close'),
+})
