@@ -25,6 +25,7 @@ function rowToSale(r: Record<string, unknown> | undefined): Sale | null {
     change_given: r.change_given == null ? null : Number(r.change_given),
     cash_session_id: (r.cash_session_id as string | null) ?? null,
     cashier_id: (r.cashier_id as string | null) ?? null,
+    cashier_name: (r.cashier_name as string | null) ?? null,
     voided: Number(r.voided) === 1 ? 1 : 0,
   }
 }
@@ -278,7 +279,14 @@ export function create(input: SaleInput): SaleWithItems {
 export function getById(id: string): SaleWithItems | null {
   const db = getDb()
   const sale = rowToSale(
-    db.prepare(`SELECT * FROM sales WHERE id = ?`).get(id) as Record<string, unknown>,
+    db
+      .prepare(
+        `SELECT s.*, u.name AS cashier_name
+           FROM sales s
+           LEFT JOIN users u ON u.id = s.cashier_id
+          WHERE s.id = ?`,
+      )
+      .get(id) as Record<string, unknown>,
   )
   if (!sale) return null
   const items = db
@@ -314,19 +322,24 @@ export function list(
   // completed_at se guarda en UTC ISO, así que usamos date(..., 'localtime')
   // para que los rangos calcen con la fecha que ve la cajera en pantalla.
   if (q.from) {
-    where.push("date(completed_at, 'localtime') >= @from")
+    where.push("date(s.completed_at, 'localtime') >= @from")
     params.from = q.from
   }
   if (q.to) {
-    where.push("date(completed_at, 'localtime') <= @to")
+    where.push("date(s.completed_at, 'localtime') <= @to")
     params.to = q.to
   }
   if (q.cashSessionId) {
-    where.push('cash_session_id = @session')
+    where.push('s.cash_session_id = @session')
     params.session = q.cashSessionId
   }
   const limit = Math.min(2000, Math.max(1, q.limit ?? 100))
-  const sql = `SELECT * FROM sales ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY completed_at DESC LIMIT ${limit}`
+  const sql = `SELECT s.*, u.name AS cashier_name
+                 FROM sales s
+                 LEFT JOIN users u ON u.id = s.cashier_id
+                 ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+                 ORDER BY s.completed_at DESC
+                 LIMIT ${limit}`
   return (db.prepare(sql).all(params) as Record<string, unknown>[])
     .map(rowToSale)
     .filter((s): s is Sale => s !== null)

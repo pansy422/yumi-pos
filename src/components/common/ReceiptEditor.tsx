@@ -84,6 +84,7 @@ const ADDABLE_TYPES: ReceiptBlock['type'][] = [
   'total',
   'payment_method',
   'cash_received',
+  'cashier',
   'change_given',
 ]
 

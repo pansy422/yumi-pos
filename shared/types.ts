@@ -90,6 +90,9 @@ export type Sale = {
   change_given: number | null
   cash_session_id: string | null
   cashier_id: string | null
+  /** Nombre del cajero al momento de la venta (snapshot via JOIN en
+   * lectura). null si el user fue borrado o nunca hubo. */
+  cashier_name: string | null
   voided: 0 | 1
 }
 
@@ -107,6 +110,12 @@ export type CashSession = {
   counted_close: number | null
   difference: number | null
   notes: string | null
+  /** Cajero que abrió la sesión. null si era anónimo / borrado. */
+  opened_by_id: string | null
+  opened_by_name: string | null
+  /** Cajero que cerró la sesión (puede diferir de quien abrió). */
+  closed_by_id: string | null
+  closed_by_name: string | null
 }
 
 export type Category = {
@@ -224,6 +233,17 @@ export type CashMovement = {
   note: string | null
   created_at: string
   sale_id: string | null
+  /** Quién hizo el movimiento. null para movimientos de venta antiguos
+   * (sale_id != null) o cuando el user fue borrado. */
+  cashier_id: string | null
+  cashier_name: string | null
+}
+
+/** Resumen de una sesión cerrada con conteo de ventas/movimientos para
+ * la vista de historial. */
+export type CashSessionSummary = CashSession & {
+  sales_count: number
+  cash_sales: number
 }
 
 export type StoreSettings = {
@@ -269,6 +289,14 @@ export type Settings = {
   receipt_template: ReceiptTemplate
 }
 
+export type CashierStat = {
+  cashier_id: string | null
+  name: string
+  count: number
+  revenue: number
+  profit: number
+}
+
 export type DailyReport = {
   date: string
   sales_count: number
@@ -277,6 +305,7 @@ export type DailyReport = {
   by_payment: { method: PaymentMethod; total: number; count: number }[]
   top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
+  by_cashier: CashierStat[]
 }
 
 export type RangeReport = {
@@ -288,6 +317,7 @@ export type RangeReport = {
   by_payment: { method: PaymentMethod; total: number; count: number }[]
   top_products: { product_id: string | null; name: string; qty: number; revenue: number }[]
   by_category: CategoryRevenue[]
+  by_cashier: CashierStat[]
   daily: { date: string; revenue: number; profit: number; count: number }[]
 }
 
@@ -369,12 +399,29 @@ export type Api = {
   ) => Promise<{ refunded_total: number; sale: SaleWithItems }>
 
   cashCurrent: () => Promise<CashSession | null>
-  cashOpen: (openingAmount: number, notes?: string) => Promise<CashSession>
-  cashClose: (countedAmount: number, notes?: string) => Promise<CashSession>
-  cashMove: (kind: 'withdraw' | 'deposit' | 'adjustment', amount: number, note: string) => Promise<CashMovement>
+  cashOpen: (
+    openingAmount: number,
+    notes?: string,
+    cashierId?: string | null,
+  ) => Promise<CashSession>
+  cashClose: (
+    countedAmount: number,
+    notes?: string,
+    cashierId?: string | null,
+  ) => Promise<CashSession>
+  cashMove: (
+    kind: 'withdraw' | 'deposit' | 'adjustment',
+    amount: number,
+    note: string,
+    cashierId?: string | null,
+  ) => Promise<CashMovement>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>
+  cashHistory: (opts?: {
+    limit?: number
+    cashierId?: string | null
+  }) => Promise<CashSessionSummary[]>
   printZReport: (sessionId: string) => Promise<Result<void>>
   printLowStock: () => Promise<Result<void>>
 

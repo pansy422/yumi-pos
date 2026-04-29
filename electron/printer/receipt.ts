@@ -111,7 +111,13 @@ export function formatZReport(
       })
     : '-'
   tp.println(pad('Apertura', opened, w))
+  if (z.session.opened_by_name) {
+    tp.println(pad('Abierta por', z.session.opened_by_name, w))
+  }
   tp.println(pad('Cierre', closed, w))
+  if (z.session.closed_by_name) {
+    tp.println(pad('Cerrada por', z.session.closed_by_name, w))
+  }
   tp.println(pad('Apertura $', fmt(z.summary.opening), w))
   tp.println('-'.repeat(w))
 

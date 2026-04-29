@@ -240,6 +240,21 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
       CREATE INDEX IF NOT EXISTS idx_sale_items_product ON sale_items(product_id);
     `)
   },
+  (db) => {
+    // Auditoría de caja: trackear quién abrió, cerró y quién hizo cada
+    // movimiento. Antes solo sabíamos el total de la caja, no quién
+    // operaba en el momento. La cajera entra con su PIN y queda todo
+    // a su nombre.
+    //
+    // No usamos ON DELETE SET NULL acá (recreate-table dance es caro
+    // por las tablas hijas). En su lugar `users.remove` ya limpia
+    // las referencias antes del DELETE.
+    db.exec(`
+      ALTER TABLE cash_sessions ADD COLUMN opened_by_id TEXT REFERENCES users(id);
+      ALTER TABLE cash_sessions ADD COLUMN closed_by_id TEXT REFERENCES users(id);
+      ALTER TABLE cash_movements ADD COLUMN cashier_id TEXT REFERENCES users(id);
+    `)
+  },
 ]
 
 export function runMigrations(db: Database.Database): void {

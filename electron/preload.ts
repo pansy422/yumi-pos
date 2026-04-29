@@ -74,6 +74,7 @@ const api = {
   cashMovements: invoke(IPC.cashMovements),
   cashSummary: invoke(IPC.cashSummary),
   cashZReport: invoke(IPC.cashZReport),
+  cashHistory: invoke(IPC.cashHistory),
   printZReport: invoke(IPC.printZReport),
   printLowStock: invoke(IPC.printLowStock),
 

@@ -3,6 +3,7 @@ import { getDb } from './index'
 import type {
   CashMovement,
   CashSession,
+  CashSessionSummary,
   CashSummary,
   PaymentMethod,
   ZReport,
@@ -19,27 +20,56 @@ function rowToSession(r: Record<string, unknown> | undefined): CashSession | nul
     counted_close: r.counted_close == null ? null : Number(r.counted_close),
     difference: r.difference == null ? null : Number(r.difference),
     notes: (r.notes as string | null) ?? null,
+    opened_by_id: (r.opened_by_id as string | null) ?? null,
+    opened_by_name: (r.opened_by_name as string | null) ?? null,
+    closed_by_id: (r.closed_by_id as string | null) ?? null,
+    closed_by_name: (r.closed_by_name as string | null) ?? null,
   }
 }
+
+/**
+ * SELECT con JOINs a users para devolver los nombres del cajero que
+ * abrió y cerró. Útil para que la UI no haga 2 fetches extra.
+ */
+const SESSION_WITH_USERS_SELECT = `
+  SELECT cs.*,
+         uo.name AS opened_by_name,
+         uc.name AS closed_by_name
+    FROM cash_sessions cs
+    LEFT JOIN users uo ON uo.id = cs.opened_by_id
+    LEFT JOIN users uc ON uc.id = cs.closed_by_id
+`
 
 export function current(): CashSession | null {
   const db = getDb()
   const r = db
-    .prepare(`SELECT * FROM cash_sessions WHERE closed_at IS NULL ORDER BY opened_at DESC LIMIT 1`)
+    .prepare(
+      `${SESSION_WITH_USERS_SELECT} WHERE cs.closed_at IS NULL ORDER BY cs.opened_at DESC LIMIT 1`,
+    )
     .get() as Record<string, unknown> | undefined
   return rowToSession(r)
 }
 
-export function open(openingAmount: number, notes?: string): CashSession {
+export function getById(sessionId: string): CashSession | null {
+  const db = getDb()
+  const r = db
+    .prepare(`${SESSION_WITH_USERS_SELECT} WHERE cs.id = ?`)
+    .get(sessionId) as Record<string, unknown> | undefined
+  return rowToSession(r)
+}
+
+export function open(
+  openingAmount: number,
+  notes?: string,
+  cashierId?: string | null,
+): CashSession {
   if (current()) throw new Error('Ya hay una caja abierta. Ciérrala antes de abrir otra.')
   const db = getDb()
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO cash_sessions (id, opening_amount, notes) VALUES (?, ?, ?)`,
-  ).run(id, Math.round(openingAmount), notes ?? null)
-  return rowToSession(
-    db.prepare(`SELECT * FROM cash_sessions WHERE id = ?`).get(id) as Record<string, unknown>,
-  )!
+    `INSERT INTO cash_sessions (id, opening_amount, notes, opened_by_id) VALUES (?, ?, ?, ?)`,
+  ).run(id, Math.round(openingAmount), notes ?? null, cashierId ?? null)
+  return getById(id)!
 }
 
 export function summary(sessionId: string): CashSummary {
@@ -99,14 +129,6 @@ export function expectedClose(sessionId: string): number {
   return summary(sessionId).expected
 }
 
-export function getById(sessionId: string): CashSession | null {
-  const db = getDb()
-  const r = db.prepare(`SELECT * FROM cash_sessions WHERE id = ?`).get(sessionId) as
-    | Record<string, unknown>
-    | undefined
-  return rowToSession(r)
-}
-
 export function buildZReport(sessionId: string): ZReport {
   const db = getDb()
   const session = getById(sessionId)
@@ -138,7 +160,11 @@ export function buildZReport(sessionId: string): ZReport {
   }
 }
 
-export function close(countedAmount: number, notes?: string): CashSession {
+export function close(
+  countedAmount: number,
+  notes?: string,
+  cashierId?: string | null,
+): CashSession {
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
   const db = getDb()
@@ -146,29 +172,36 @@ export function close(countedAmount: number, notes?: string): CashSession {
   const counted = Math.round(countedAmount)
   const difference = counted - expected
   db.prepare(
-    `UPDATE cash_sessions SET closed_at = datetime('now'), expected_close = ?, counted_close = ?, difference = ?, notes = COALESCE(?, notes) WHERE id = ?`,
-  ).run(expected, counted, difference, notes ?? null, open.id)
-  return rowToSession(
-    db.prepare(`SELECT * FROM cash_sessions WHERE id = ?`).get(open.id) as Record<string, unknown>,
-  )!
+    `UPDATE cash_sessions
+       SET closed_at = datetime('now'),
+           expected_close = ?,
+           counted_close = ?,
+           difference = ?,
+           closed_by_id = ?,
+           notes = COALESCE(?, notes)
+     WHERE id = ?`,
+  ).run(expected, counted, difference, cashierId ?? null, notes ?? null, open.id)
+  return getById(open.id)!
 }
 
 export function move(
   kind: 'withdraw' | 'deposit' | 'adjustment',
   amount: number,
   note: string,
+  cashierId?: string | null,
 ): CashMovement {
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
   const db = getDb()
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note) VALUES (?, ?, ?, ?, ?)`,
-  ).run(id, open.id, kind, Math.round(amount), note)
-  const r = db.prepare(`SELECT * FROM cash_movements WHERE id = ?`).get(id) as Record<
-    string,
-    unknown
-  >
+    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run(id, open.id, kind, Math.round(amount), note, cashierId ?? null)
+  return movementsById(id)!
+}
+
+function movementRow(r: Record<string, unknown>): CashMovement {
   return {
     id: r.id as string,
     cash_session_id: r.cash_session_id as string,
@@ -177,21 +210,78 @@ export function move(
     note: (r.note as string | null) ?? null,
     sale_id: (r.sale_id as string | null) ?? null,
     created_at: r.created_at as string,
+    cashier_id: (r.cashier_id as string | null) ?? null,
+    cashier_name: (r.cashier_name as string | null) ?? null,
   }
+}
+
+function movementsById(id: string): CashMovement | null {
+  const db = getDb()
+  const r = db
+    .prepare(
+      `SELECT cm.*, u.name AS cashier_name
+       FROM cash_movements cm
+       LEFT JOIN users u ON u.id = cm.cashier_id
+       WHERE cm.id = ?`,
+    )
+    .get(id) as Record<string, unknown> | undefined
+  return r ? movementRow(r) : null
 }
 
 export function movements(sessionId: string): CashMovement[] {
   const db = getDb()
   const rows = db
-    .prepare(`SELECT * FROM cash_movements WHERE cash_session_id = ? ORDER BY created_at ASC`)
+    .prepare(
+      `SELECT cm.*, u.name AS cashier_name
+         FROM cash_movements cm
+         LEFT JOIN users u ON u.id = cm.cashier_id
+        WHERE cm.cash_session_id = ?
+        ORDER BY cm.created_at ASC`,
+    )
     .all(sessionId) as Record<string, unknown>[]
-  return rows.map((r) => ({
-    id: r.id as string,
-    cash_session_id: r.cash_session_id as string,
-    kind: r.kind as CashMovement['kind'],
-    amount: Number(r.amount),
-    note: (r.note as string | null) ?? null,
-    sale_id: (r.sale_id as string | null) ?? null,
-    created_at: r.created_at as string,
-  }))
+  return rows.map(movementRow)
+}
+
+/**
+ * Historial de cajas cerradas — para la vista de auditoría. Devuelve
+ * cada sesión con conteo de ventas y total en efectivo, ordenado por
+ * fecha de apertura (descendente).
+ */
+export function history(opts?: { limit?: number; cashierId?: string | null }): CashSessionSummary[] {
+  const db = getDb()
+  const limit = Math.max(1, Math.min(500, opts?.limit ?? 50))
+  const where: string[] = ['cs.closed_at IS NOT NULL']
+  const params: (string | number)[] = []
+  if (opts?.cashierId) {
+    where.push('(cs.opened_by_id = ? OR cs.closed_by_id = ?)')
+    params.push(opts.cashierId, opts.cashierId)
+  }
+  const rows = db
+    .prepare(
+      `SELECT cs.*,
+              uo.name AS opened_by_name,
+              uc.name AS closed_by_name,
+              (SELECT COUNT(*) FROM sales s WHERE s.cash_session_id = cs.id AND s.voided = 0) AS sales_count,
+              COALESCE((
+                SELECT SUM(sp.amount)
+                FROM sale_payments sp
+                JOIN sales s ON s.id = sp.sale_id
+                WHERE s.cash_session_id = cs.id AND s.voided = 0 AND sp.method = 'efectivo'
+              ), 0) AS cash_sales
+         FROM cash_sessions cs
+         LEFT JOIN users uo ON uo.id = cs.opened_by_id
+         LEFT JOIN users uc ON uc.id = cs.closed_by_id
+        WHERE ${where.join(' AND ')}
+        ORDER BY cs.opened_at DESC
+        LIMIT ?`,
+    )
+    .all(...params, limit) as Record<string, unknown>[]
+  return rows.map((r) => {
+    const session = rowToSession(r)!
+    return {
+      ...session,
+      sales_count: Number(r.sales_count ?? 0),
+      cash_sales: Number(r.cash_sales ?? 0),
+    }
+  })
 }

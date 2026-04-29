@@ -173,9 +173,66 @@ function DailyView() {
             <TopProducts items={report?.top_products ?? []} loading={loading} />
           </div>
           <CategoryBreakdown items={report?.by_category ?? []} loading={loading} />
+          <CashierBreakdown items={report?.by_cashier ?? []} loading={loading} />
         </>
       )}
     </div>
+  )
+}
+
+function CashierBreakdown({
+  items,
+  loading,
+}: {
+  items: { cashier_id: string | null; name: string; count: number; revenue: number; profit: number }[]
+  loading?: boolean
+}) {
+  const totalRevenue = items.reduce((a, i) => a + i.revenue, 0)
+  return (
+    <Card className="card-elev">
+      <CardContent className="p-0">
+        <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+          Por cajero
+        </div>
+        {loading ? (
+          <div className="space-y-2 p-4">
+            {[0, 1].map((i) => (
+              <Skeleton key={i} className="h-7" />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted-foreground">Sin datos</p>
+        ) : (
+          <ul className="divide-y divide-border/40">
+            {items.map((it, idx) => {
+              const pct = totalRevenue > 0 ? (it.revenue / totalRevenue) * 100 : 0
+              return (
+                <li key={it.cashier_id ?? `__none__${idx}`} className="px-4 py-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium tracking-tight">{it.name}</div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="num">{it.count} venta{it.count === 1 ? '' : 's'}</span>
+                      <span className="num text-success">{formatCLP(it.profit)}</span>
+                      <span className="num font-semibold text-foreground">
+                        {formatCLP(it.revenue)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full brand-gradient" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="num min-w-[36px] text-right text-[10px] text-muted-foreground">
+                      {pct.toFixed(0)}%
+                    </span>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 
@@ -268,6 +325,7 @@ function RangeView() {
             <TopProducts items={report?.top_products ?? []} loading={loading} />
           </div>
           <CategoryBreakdown items={report?.by_category ?? []} loading={loading} />
+          <CashierBreakdown items={report?.by_cashier ?? []} loading={loading} />
           <Card className="card-elev">
             <CardContent className="p-0">
               <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">

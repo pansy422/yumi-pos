@@ -110,9 +110,12 @@ export function remove(id: string): void {
   }
 
   const tx = db.transaction(() => {
-    // Limpiar el FK desde ventas antes del DELETE — el FK constraint
-    // bloquearía el borrado si quedan ventas referenciando al user.
+    // Limpiar todos los FKs hacia este user antes del DELETE — el FK
+    // constraint bloquearía el borrado si quedan referencias.
     db.prepare(`UPDATE sales SET cashier_id = NULL WHERE cashier_id = ?`).run(id)
+    db.prepare(`UPDATE cash_sessions SET opened_by_id = NULL WHERE opened_by_id = ?`).run(id)
+    db.prepare(`UPDATE cash_sessions SET closed_by_id = NULL WHERE closed_by_id = ?`).run(id)
+    db.prepare(`UPDATE cash_movements SET cashier_id = NULL WHERE cashier_id = ?`).run(id)
     db.prepare(`DELETE FROM users WHERE id = ?`).run(id)
   })
   tx()
