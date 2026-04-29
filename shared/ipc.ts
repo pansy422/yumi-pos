@@ -47,6 +47,7 @@ export const IPC = {
   cashMovements: 'cash:movements',
   cashSummary: 'cash:summary',
   cashZReport: 'cash:zreport',
+  cashHistory: 'cash:history',
   printZReport: 'printer:zreport',
   printLowStock: 'printer:lowStock',
 

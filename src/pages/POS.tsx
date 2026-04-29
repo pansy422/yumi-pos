@@ -41,6 +41,7 @@ import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
 import { WeightDialog } from '@/components/common/WeightDialog'
 import { FontScaleDialog } from '@/components/common/FontScaleDialog'
 import { useSession } from '@/stores/session'
+import { useIsAdmin } from '@/hooks/useRole'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
@@ -96,6 +97,7 @@ export function POS() {
   const cash = useSession((s) => s.cash)
   const currentUser = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
+  const isAdmin = useIsAdmin()
   const { toast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -346,22 +348,23 @@ export function POS() {
         {currentUser && (
           <>
             <span className="h-6 w-px bg-border/60" />
-            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 py-1 pl-2.5 pr-1 text-[11px] font-medium">
-              <UserIcon className="h-3 w-3 text-primary" />
+            <div className="flex items-center gap-1 rounded-full border border-border/60 bg-card/80 py-1 pl-2.5 pr-1 text-[12px] font-medium">
+              <UserIcon className="h-3.5 w-3.5 text-primary" />
               <span className="tracking-tight">{currentUser.name}</span>
               <button
                 onClick={() => setFontDlg(true)}
-                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                className="ml-1 flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
                 title="Tamaño de letra (F8)"
               >
-                <Type className="h-3 w-3" />
+                <Type className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={logout}
-                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-                title="Cerrar sesión"
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                title="Cerrar sesión y cambiar de cajero"
               >
-                <LogOut className="h-3 w-3" />
+                <LogOut className="h-3.5 w-3.5" />
+                Salir
               </button>
             </div>
           </>
@@ -396,7 +399,7 @@ export function POS() {
           <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
           <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
           <NavBtn to="/reportes" icon={BarChart3} label="Reportes" hint="F4" />
-          <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />
+          {isAdmin && <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />}
         </nav>
       </div>
 
@@ -770,24 +773,26 @@ export function POS() {
                 <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                   Total a cobrar
                 </div>
-                <div className="num iridescent-text mt-1 text-[60px] font-semibold leading-none tracking-display">
+                <div className="num brand-text mt-1 text-[60px] font-semibold leading-none tracking-display">
                   {formatCLP(Math.max(0, tot - autoDiscount))}
                 </div>
               </div>
-              <div className={cn('glow-rainbow', items.length > 0 && 'is-active')}>
-                <Button
-                  variant="success"
-                  className="shimmer-sweep relative h-[72px] w-full overflow-hidden text-xl font-semibold tracking-tight shadow-glow"
-                  disabled={items.length === 0}
-                  onClick={() => setPayOpen(true)}
-                >
-                  <Zap className="h-6 w-6" />
-                  Cobrar
-                  <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
-                    F5
-                  </Kbd>
-                </Button>
-              </div>
+              <Button
+                variant="success"
+                className={cn(
+                  'h-[72px] w-full text-xl font-semibold tracking-tight',
+                  'glow-success-hover',
+                  items.length > 0 ? 'glow-breathe' : 'glow-success',
+                )}
+                disabled={items.length === 0}
+                onClick={() => setPayOpen(true)}
+              >
+                <Zap className="h-6 w-6" />
+                Cobrar
+                <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                  F5
+                </Kbd>
+              </Button>
             </CardContent>
           </Card>
 
@@ -952,12 +957,12 @@ function TodayCard() {
   }, [cashId])
 
   return (
-    <Card className="card-elev iridescent-border">
+    <Card className="card-elev accent-border">
       <CardContent className="p-4">
         <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           Hoy
         </div>
-        <div className="num iridescent-text mt-1.5 text-[26px] font-semibold leading-none tracking-display-tight">
+        <div className="num brand-text mt-1.5 text-[26px] font-semibold leading-none tracking-display-tight">
           {data ? formatCLP(data.revenue) : '—'}
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -1555,7 +1560,7 @@ function PaymentDialog({
               <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Total a cobrar
               </div>
-              <div className="num iridescent-text mt-1.5 text-[52px] font-semibold leading-none tracking-display">
+              <div className="num brand-text mt-1.5 text-[52px] font-semibold leading-none tracking-display">
                 {formatCLP(tot)}
               </div>
               <div className="mt-2 text-[12px] text-muted-foreground">
@@ -1750,26 +1755,24 @@ function PaymentDialog({
               <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <div className={cn('glow-rainbow', canSubmit && 'is-active')}>
-                <Button
-                  variant="success"
-                  size="lg"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  className="shimmer-sweep relative overflow-hidden shadow-glow"
-                >
-                  {submitting ? (
-                    'Cobrando…'
-                  ) : (
-                    <>
-                      Confirmar{' '}
-                      <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
-                        Enter
-                      </Kbd>
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="success"
+                size="lg"
+                onClick={submit}
+                disabled={!canSubmit}
+                className={cn('glow-success-hover', canSubmit && 'glow-success')}
+              >
+                {submitting ? (
+                  'Cobrando…'
+                ) : (
+                  <>
+                    Confirmar{' '}
+                    <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                      Enter
+                    </Kbd>
+                  </>
+                )}
+              </Button>
             </div>
           </>
         ) : (

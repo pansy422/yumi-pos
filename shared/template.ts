@@ -33,6 +33,7 @@ export type ReceiptBlock = BlockMeta &
     | { type: 'payment_method' }
     | { type: 'cash_received' }
     | { type: 'change_given' }
+    | { type: 'cashier' }
     | { type: 'text'; value: string }
   )
 
@@ -60,6 +61,7 @@ export const BLOCK_LABELS: Record<ReceiptBlock['type'], string> = {
   payment_method: 'Método de pago',
   cash_received: 'Recibido (efectivo)',
   change_given: 'Vuelto (efectivo)',
+  cashier: 'Atendido por (cajero)',
   text: 'Texto libre',
 }
 
@@ -199,6 +201,7 @@ export function buildVars(sale: SaleWithItems, store: StoreSettings): RenderVars
     tax: formatCLP(tax),
     tax_rate: String(rate),
     surcharge: surchargeTotal > 0 ? formatCLP(surchargeTotal) : '',
+    cashier: sale.cashier_name ?? '',
   }
 }
 
@@ -402,6 +405,11 @@ export function renderTemplate(
         break
       case 'change_given':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Vuelto', vars.change))
+        break
+      case 'cashier':
+        if (vars.cashier) {
+          out.push(baseLine({ ...b, align: b.align ?? 'center' }, `Atendido por: ${vars.cashier}`))
+        }
         break
       case 'text': {
         const text = interpolate(b.value, vars)

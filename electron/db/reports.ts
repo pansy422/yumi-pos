@@ -66,6 +66,35 @@ function byPayment(fromDate: string, toDate: string) {
     .all(fromDate, toDate) as { method: PaymentMethod; count: number; total: number }[]
 }
 
+function byCashier(fromDate: string, toDate: string) {
+  const db = getDb()
+  // Agrupamos por (cashier_id, name) para que cajeros borrados (id NULL)
+  // queden en una fila "Sin asignar". Los nombres se resuelven via JOIN.
+  return db
+    .prepare(
+      `SELECT s.cashier_id AS cashier_id,
+              COALESCE(u.name, 'Sin asignar') AS name,
+              COUNT(*) AS count,
+              COALESCE(SUM(s.total),0) AS revenue,
+              COALESCE(SUM((SELECT SUM(line_total - (CASE WHEN is_weight = 1
+                                                         THEN ROUND(cost_snapshot * qty / 1000.0)
+                                                         ELSE cost_snapshot * qty END))
+                           FROM sale_items WHERE sale_id = s.id)),0) AS profit
+         FROM sales s
+         LEFT JOIN users u ON u.id = s.cashier_id
+        WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
+        GROUP BY s.cashier_id, u.name
+        ORDER BY revenue DESC`,
+    )
+    .all(fromDate, toDate) as {
+    cashier_id: string | null
+    name: string
+    count: number
+    revenue: number
+    profit: number
+  }[]
+}
+
 function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
   const db = getDb()
   // LEFT JOIN para que las ventas de productos borrados también cuenten.
@@ -120,6 +149,14 @@ function totals(
   return { sales_count: Number(r.c), revenue: Number(r.rev), profit: Number(r.profit) }
 }
 
+export type CashierStat = {
+  cashier_id: string | null
+  name: string
+  count: number
+  revenue: number
+  profit: number
+}
+
 export function daily(date: string): DailyReport {
   const t = totals(date, date)
   return {
@@ -130,6 +167,7 @@ export function daily(date: string): DailyReport {
     by_payment: byPayment(date, date),
     top_products: topProducts(date, date),
     by_category: byCategory(date, date),
+    by_cashier: byCashier(date, date),
   }
 }
 
@@ -156,6 +194,7 @@ export function range(fromDate: string, toDate: string): RangeReport {
     by_payment: byPayment(fromDate, toDate),
     top_products: topProducts(fromDate, toDate),
     by_category: byCategory(fromDate, toDate),
+    by_cashier: byCashier(fromDate, toDate),
     daily: dailyRows.map((r) => ({
       date: r.d,
       revenue: Number(r.rev),

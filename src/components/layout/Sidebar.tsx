@@ -17,21 +17,24 @@ import { useSession } from '@/stores/session'
 import { Wordmark } from '@/components/brand/Logo'
 import { Kbd } from '@/components/common/Kbd'
 import { FontScaleDialog } from '@/components/common/FontScaleDialog'
+import { useIsAdmin } from '@/hooks/useRole'
 
-const ITEMS = [
-  { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1' },
-  { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2' },
-  { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3' },
-  { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4' },
-  { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6' },
-  { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9' },
+const ALL_ITEMS = [
+  { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1', adminOnly: false },
+  { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2', adminOnly: false },
+  { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3', adminOnly: false },
+  { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4', adminOnly: false },
+  { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6', adminOnly: false },
+  { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9', adminOnly: true },
 ]
 
 export function Sidebar() {
   const cash = useSession((s) => s.cash)
   const user = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
+  const isAdmin = useIsAdmin()
   const [fontDlg, setFontDlg] = useState(false)
+  const ITEMS = ALL_ITEMS.filter((i) => !i.adminOnly || isAdmin)
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
       <div className="flex h-[60px] items-center border-b border-border/40 px-5">
@@ -104,32 +107,36 @@ export function Sidebar() {
       </div>
 
       {user && (
-        <div className="flex items-center justify-between border-t border-border/60 px-4 py-2 text-xs">
-          <div className="flex items-center gap-2 min-w-0">
-            <UserIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-            <div className="min-w-0">
-              <div className="truncate font-medium">{user.name}</div>
+        <div className="space-y-2 border-t border-border/60 px-3 py-3">
+          <div className="flex items-center gap-2 px-1 min-w-0">
+            <UserIcon className="h-4 w-4 text-primary shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium tracking-tight">{user.name}</div>
               <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 {user.role === 'admin' ? 'Admin' : 'Cajero'}
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-1">
             <button
               onClick={() => setFontDlg(true)}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="grid h-7 w-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Tamaño de letra (F8)"
             >
               <Type className="h-3.5 w-3.5" />
             </button>
-            <button
-              onClick={logout}
-              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              title="Cerrar sesión"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
           </div>
+          <button
+            onClick={logout}
+            className={cn(
+              'flex w-full items-center justify-center gap-2 rounded-md px-3 py-2',
+              'border border-destructive/20 bg-destructive/5 text-[12px] font-semibold text-destructive',
+              'transition-[background-color,border-color,transform] duration-150 ease-out-quart',
+              'hover:bg-destructive/10 hover:border-destructive/30',
+              'active:scale-[0.98]',
+            )}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Cerrar sesión
+          </button>
         </div>
       )}
       <FontScaleDialog open={fontDlg} onOpenChange={setFontDlg} />

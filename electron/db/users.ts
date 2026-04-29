@@ -76,11 +76,49 @@ function clampScale(n: number | undefined): number {
   return Math.max(0.85, Math.min(1.6, Number(n)))
 }
 
+/**
+ * Eliminación dura del usuario. Antes hacía soft-delete porque el FK
+ * sales.cashier_id bloqueaba el DELETE.
+ *
+ * Ahora limpiamos primero `sales.cashier_id` a NULL para los ventas
+ * que ese cajero hizo, y después borramos el user. Atómico via
+ * transacción. Las boletas históricas mantienen total/items/pagos —
+ * solo pierden el link al cajero (que ya no existe).
+ *
+ * Bloqueamos solo dos casos:
+ *   1) Si es el último admin activo — evita lock-out (nadie podría
+ *      crear/borrar usuarios después).
+ *   2) Si el usuario no existe — nada que borrar.
+ *
+ * Para "ocultar sin borrar" la cajera puede usar el toggle Activo en
+ * el editor del usuario.
+ */
 export function remove(id: string): void {
   const db = getDb()
-  // Soft-delete: marcar inactivo en vez de borrar (mantiene la integridad
-  // referencial con sales.cashier_id).
-  db.prepare(`UPDATE users SET active = 0 WHERE id = ?`).run(id)
+  const target = get(id)
+  if (!target) return
+
+  if (target.role === 'admin' && target.active === 1) {
+    const row = db
+      .prepare(`SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND active = 1 AND id <> ?`)
+      .get(id) as { c: number }
+    if (Number(row.c) === 0) {
+      throw new Error(
+        'No se puede eliminar el último administrador activo. Crea otro admin primero o desactiva este en lugar de borrarlo.',
+      )
+    }
+  }
+
+  const tx = db.transaction(() => {
+    // Limpiar todos los FKs hacia este user antes del DELETE — el FK
+    // constraint bloquearía el borrado si quedan referencias.
+    db.prepare(`UPDATE sales SET cashier_id = NULL WHERE cashier_id = ?`).run(id)
+    db.prepare(`UPDATE cash_sessions SET opened_by_id = NULL WHERE opened_by_id = ?`).run(id)
+    db.prepare(`UPDATE cash_sessions SET closed_by_id = NULL WHERE closed_by_id = ?`).run(id)
+    db.prepare(`UPDATE cash_movements SET cashier_id = NULL WHERE cashier_id = ?`).run(id)
+    db.prepare(`DELETE FROM users WHERE id = ?`).run(id)
+  })
+  tx()
 }
 
 export function verifyPin(userId: string, pin: string): User | null {

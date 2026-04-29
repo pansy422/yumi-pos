@@ -352,17 +352,18 @@
   .stagger-6 { animation-delay: 180ms; }
 
   /* ─── Efectos iridiscentes / arcoiris tipo Apple WWDC ────────────
-     Apple los usa con moderación: text de marca, halos en CTAs grandes,
-     borders animados en cards destacadas. Las paletas siempre arrancan
-     y terminan en el mismo color para que el loop sea seamless. */
+     RESERVADOS para branding (logo "POS"). Apple los usa solo en
+     marketing y logos, nunca en datos críticos como precios o
+     totales — un número que cambia de color es difícil de leer y
+     se ve casino. Para CTAs y números usamos halos sólidos por
+     color. */
 
   @keyframes iridescent-shift {
     0%, 100% { background-position: 0% 50%; }
     50% { background-position: 100% 50%; }
   }
 
-  /* Texto con gradiente animado que va de teal → azul → violeta →
-     magenta → teal. Loop de 6s con ease-in-out → respiración orgánica. */
+  /* Texto iridiscente — SOLO para branding (logo "POS"). */
   .iridescent-text {
     background-image: linear-gradient(
       90deg,
@@ -376,29 +377,109 @@
     -webkit-background-clip: text;
             background-clip: text;
     color: transparent;
-    animation: iridescent-shift 6s ease-in-out infinite;
+    animation: iridescent-shift 8s ease-in-out infinite;
   }
 
-  /* Border iridiscente animado (mask trick para que no llene el card). */
-  .iridescent-border {
+  /* ─── Halos sólidos por color — para CTAs y elementos elevados ───
+     Drop shadow grande, blur amplio, color del estado. Nada
+     animado, nada gira. Solo sutilidad y peso visual. */
+
+  .glow-primary {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.15),
+      0 4px 16px -4px hsl(var(--primary) / 0.45),
+      0 12px 40px -8px hsl(var(--primary) / 0.25);
+  }
+  .glow-primary-hover {
+    transition: box-shadow 240ms var(--ease-out-quart),
+                transform 200ms var(--ease-out-quart);
+  }
+  .glow-primary-hover:hover {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.25),
+      0 6px 20px -4px hsl(var(--primary) / 0.55),
+      0 16px 48px -8px hsl(var(--primary) / 0.35);
+    transform: translateY(-1px);
+  }
+
+  .glow-success {
+    box-shadow:
+      0 0 0 1px hsl(var(--success) / 0.15),
+      0 4px 16px -4px hsl(var(--success) / 0.5),
+      0 12px 40px -8px hsl(var(--success) / 0.3);
+  }
+  .glow-success-hover {
+    transition: box-shadow 240ms var(--ease-out-quart),
+                transform 200ms var(--ease-out-quart);
+  }
+  .glow-success-hover:hover {
+    box-shadow:
+      0 0 0 1px hsl(var(--success) / 0.3),
+      0 6px 24px -4px hsl(var(--success) / 0.6),
+      0 16px 48px -8px hsl(var(--success) / 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Pulse muy sutil — solo en estados "listo para vender" cuando
+     hay items en el carrito. NO usar siempre, solo en momentos
+     activos. */
+  @keyframes glow-breathe {
+    0%, 100% {
+      box-shadow:
+        0 0 0 1px hsl(var(--success) / 0.18),
+        0 4px 18px -4px hsl(var(--success) / 0.5);
+    }
+    50% {
+      box-shadow:
+        0 0 0 1px hsl(var(--success) / 0.28),
+        0 8px 28px -4px hsl(var(--success) / 0.7);
+    }
+  }
+  .glow-breathe { animation: glow-breathe 2.6s ease-in-out infinite; }
+
+  /* Card con borde de marca apenas visible — un touch sutil sin caer
+     en rainbow girando. Para cards destacadas en hover. */
+  .accent-border {
     position: relative;
   }
-  .iridescent-border::before {
+  .accent-border::before {
     content: '';
     position: absolute;
-    inset: -1px;
+    inset: 0;
     border-radius: inherit;
     padding: 1px;
     background: linear-gradient(
       135deg,
-      hsl(168 75% 55%),
-      hsl(200 90% 60%),
-      hsl(260 80% 65%),
-      hsl(320 75% 62%),
-      hsl(168 75% 55%)
+      hsl(var(--brand-1) / 0.4),
+      hsl(var(--brand-2) / 0.3) 50%,
+      transparent 100%
     );
-    background-size: 200% 200%;
-    animation: iridescent-shift 4s ease-in-out infinite;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 280ms var(--ease-out-quart);
+    pointer-events: none;
+  }
+  .accent-border:hover::before { opacity: 1; }
+
+  /* DEPRECATED — reemplazado por glow-primary/success. Mantenido
+     solo por si alguna pantalla todavía lo usa, pero no usar nuevo. */
+  .iridescent-border { position: relative; }
+  .iridescent-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--brand-1) / 0.4),
+      hsl(var(--brand-2) / 0.3) 50%,
+      transparent 100%
+    );
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
@@ -409,12 +490,12 @@
     pointer-events: none;
   }
   .iridescent-border:hover::before,
-  .iridescent-border.is-active::before {
-    opacity: 1;
-  }
+  .iridescent-border.is-active::before { opacity: 1; }
 
-  /* Halo de gloria — usar con moderación (botón Cobrar, AnimatedCheck).
-     Conic gradient + blur grande + spin lento. */
+  /* glow-rainbow conic gigante — DEPRECATED. Usar glow-success o
+     glow-primary que son sólidos del color del estado. Mantenido
+     solo para AnimatedCheck del momento de éxito (un destello rainbow
+     UNICO al confirmar venta es OK; en CTAs es agresivo). */
   @keyframes glow-spin {
     from { transform: translate(-50%, -50%) rotate(0deg); }
     to   { transform: translate(-50%, -50%) rotate(360deg); }
@@ -447,12 +528,10 @@
     animation: glow-spin 10s linear infinite;
   }
   .glow-rainbow:hover::before,
-  .glow-rainbow.is-active::before {
-    opacity: 0.85;
-  }
+  .glow-rainbow.is-active::before { opacity: 0.85; }
 
-  /* Shimmer sweep — barrido brillante diagonal cada N segundos.
-     Bueno para botones primarios y banners de éxito. */
+  /* Shimmer sweep — DEPRECATED en CTAs (distrae). Mantenido por si
+     algún empty state lo necesita en el futuro. */
   @keyframes shimmer-sweep {
     0% { transform: translateX(-120%) skewX(-20deg); }
     100% { transform: translateX(220%) skewX(-20deg); }
@@ -470,15 +549,16 @@
     background: linear-gradient(
       90deg,
       transparent,
-      hsl(0 0% 100% / 0.35),
+      hsl(0 0% 100% / 0.25),
       transparent
     );
-    animation: shimmer-sweep 3.5s ease-in-out infinite;
-    animation-delay: 1s;
+    animation: shimmer-sweep 6s ease-in-out infinite;
+    animation-delay: 1.5s;
     pointer-events: none;
   }
 
-  /* Pulse glow — halo respirando (sutil). Usar en estados de éxito. */
+  /* Pulse glow — halo respirando (sutil). DEPRECATED — usar
+     glow-breathe que es del color success y más definido. */
   @keyframes pulse-glow {
     0%, 100% {
       box-shadow:

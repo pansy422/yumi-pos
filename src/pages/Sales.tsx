@@ -295,6 +295,7 @@ export function Sales() {
                     <tr>
                       <th className="px-4 py-3 text-left">Boleta</th>
                       <th className="px-4 py-3 text-left">Fecha</th>
+                      <th className="px-4 py-3 text-left">Cajero</th>
                       <th className="px-4 py-3 text-left">Método</th>
                       <th className="px-4 py-3 text-right">Total</th>
                       <th className="w-16" />
@@ -326,6 +327,13 @@ export function Sales() {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs">
+                          {s.cashier_name ? (
+                            <span className="font-medium tracking-tight">{s.cashier_name}</span>
+                          ) : (
+                            <span className="text-muted-foreground/60">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5">
                           <Badge variant="secondary">{PAY_LABEL[s.payment_method]}</Badge>

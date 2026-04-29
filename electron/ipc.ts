@@ -210,14 +210,31 @@ export function registerIpc(): void {
   )
 
   handle(IPC.cashCurrent, () => cash.current())
-  handle(IPC.cashOpen, (amt: number, notes?: string) => cash.open(amt, notes))
-  handle(IPC.cashClose, (amt: number, notes?: string) => cash.close(amt, notes))
-  handle(IPC.cashMove, (kind: 'withdraw' | 'deposit' | 'adjustment', amt: number, note: string) =>
-    cash.move(kind, amt, note),
+  handle(
+    IPC.cashOpen,
+    (amt: number, notes?: string, cashierId?: string | null) =>
+      cash.open(amt, notes, cashierId ?? null),
+  )
+  handle(
+    IPC.cashClose,
+    (amt: number, notes?: string, cashierId?: string | null) =>
+      cash.close(amt, notes, cashierId ?? null),
+  )
+  handle(
+    IPC.cashMove,
+    (
+      kind: 'withdraw' | 'deposit' | 'adjustment',
+      amt: number,
+      note: string,
+      cashierId?: string | null,
+    ) => cash.move(kind, amt, note, cashierId ?? null),
   )
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
   handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))
+  handle(IPC.cashHistory, (opts?: Parameters<typeof cash.history>[0]) =>
+    cash.history(opts),
+  )
   handleSafe(IPC.printZReport, async (sessionId: string) => {
     const z = cash.buildZReport(sessionId)
     const s = settingsRepo.getAll()

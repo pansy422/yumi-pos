@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron'
 import path from 'node:path'
 import { setupCSP } from './utils/csp'
 import { initDb, closeDb, getDbPath } from './db'
@@ -100,6 +100,13 @@ if (!app.requestSingleInstanceLock()) {
       return
     }
     registerIpc()
+
+    // Controles de ventana expuestos al renderer (LoginDialog usa
+    // estos para que la cajera pueda salir si se equivocó al hacer
+    // logout y no sabe ningún PIN).
+    ipcMain.on('win:minimize', () => mainWindow?.minimize())
+    ipcMain.on('win:close', () => app.quit())
+
     scheduleAutoBackup()
     if (!isDev) Menu.setApplicationMenu(null)
     createWindow()

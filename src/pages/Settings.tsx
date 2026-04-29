@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import {
   AlertCircle,
   CheckCircle2,
@@ -17,6 +18,7 @@ import {
   Upload,
   Usb,
 } from 'lucide-react'
+import { useIsAdmin } from '@/hooks/useRole'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,6 +55,7 @@ export function Settings() {
   const { toast } = useToast()
   const settings = useSession((s) => s.settings)
   const refresh = useSession((s) => s.refresh)
+  const isAdmin = useIsAdmin()
   const [appInfo, setAppInfo] = useState<{ version: string; dbPath: string; userDataPath: string } | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
   // Permite linkear directo a una pestaña con ?tab=categories.
@@ -64,6 +67,10 @@ export function Settings() {
   }, [])
 
   if (!settings) return null
+  // Cajero no debería poder entrar — lo redirigimos al POS. (También
+  // ocultamos el link en sidebar/topbar, pero esto blinda contra
+  // tipear /ajustes en la URL.)
+  if (!isAdmin) return <Navigate to="/pos" replace />
 
   return (
     <div className="flex h-full flex-col">
