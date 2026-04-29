@@ -412,7 +412,7 @@ function Stat({ label, value, highlight }: { label: string; value: number; highl
       <div
         className={`num mt-1.5 font-semibold leading-none ${
           highlight
-            ? 'text-[26px] tracking-display-tight iridescent-text'
+            ? 'text-[26px] tracking-display-tight brand-text'
             : 'text-[22px] tracking-display-tight'
         } ${value < 0 ? 'text-destructive' : ''}`}
       >

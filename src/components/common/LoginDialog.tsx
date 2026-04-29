@@ -197,16 +197,18 @@ export function LoginDialog() {
               />
             </div>
 
-            <div className={cn('glow-rainbow', pin.length > 0 && 'is-active')}>
-              <Button
-                onClick={submit}
-                disabled={!picked || pin.length === 0 || submitting}
-                className="shimmer-sweep relative h-12 w-full overflow-hidden text-base tracking-tight"
-              >
-                <LogIn className="h-5 w-5" />
-                {submitting ? 'Verificando…' : 'Entrar'}
-              </Button>
-            </div>
+            <Button
+              onClick={submit}
+              disabled={!picked || pin.length === 0 || submitting}
+              className={cn(
+                'h-12 w-full text-base tracking-tight',
+                'glow-primary-hover',
+                pin.length > 0 && 'glow-primary',
+              )}
+            >
+              <LogIn className="h-5 w-5" />
+              {submitting ? 'Verificando…' : 'Entrar'}
+            </Button>
           </div>
         </div>
       </div>

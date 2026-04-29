@@ -773,24 +773,26 @@ export function POS() {
                 <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                   Total a cobrar
                 </div>
-                <div className="num iridescent-text mt-1 text-[60px] font-semibold leading-none tracking-display">
+                <div className="num brand-text mt-1 text-[60px] font-semibold leading-none tracking-display">
                   {formatCLP(Math.max(0, tot - autoDiscount))}
                 </div>
               </div>
-              <div className={cn('glow-rainbow', items.length > 0 && 'is-active')}>
-                <Button
-                  variant="success"
-                  className="shimmer-sweep relative h-[72px] w-full overflow-hidden text-xl font-semibold tracking-tight shadow-glow"
-                  disabled={items.length === 0}
-                  onClick={() => setPayOpen(true)}
-                >
-                  <Zap className="h-6 w-6" />
-                  Cobrar
-                  <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
-                    F5
-                  </Kbd>
-                </Button>
-              </div>
+              <Button
+                variant="success"
+                className={cn(
+                  'h-[72px] w-full text-xl font-semibold tracking-tight',
+                  'glow-success-hover',
+                  items.length > 0 ? 'glow-breathe' : 'glow-success',
+                )}
+                disabled={items.length === 0}
+                onClick={() => setPayOpen(true)}
+              >
+                <Zap className="h-6 w-6" />
+                Cobrar
+                <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                  F5
+                </Kbd>
+              </Button>
             </CardContent>
           </Card>
 
@@ -955,12 +957,12 @@ function TodayCard() {
   }, [cashId])
 
   return (
-    <Card className="card-elev iridescent-border">
+    <Card className="card-elev accent-border">
       <CardContent className="p-4">
         <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           Hoy
         </div>
-        <div className="num iridescent-text mt-1.5 text-[26px] font-semibold leading-none tracking-display-tight">
+        <div className="num brand-text mt-1.5 text-[26px] font-semibold leading-none tracking-display-tight">
           {data ? formatCLP(data.revenue) : '—'}
         </div>
         <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -1558,7 +1560,7 @@ function PaymentDialog({
               <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
                 Total a cobrar
               </div>
-              <div className="num iridescent-text mt-1.5 text-[52px] font-semibold leading-none tracking-display">
+              <div className="num brand-text mt-1.5 text-[52px] font-semibold leading-none tracking-display">
                 {formatCLP(tot)}
               </div>
               <div className="mt-2 text-[12px] text-muted-foreground">
@@ -1753,26 +1755,24 @@ function PaymentDialog({
               <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
                 Cancelar
               </Button>
-              <div className={cn('glow-rainbow', canSubmit && 'is-active')}>
-                <Button
-                  variant="success"
-                  size="lg"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  className="shimmer-sweep relative overflow-hidden shadow-glow"
-                >
-                  {submitting ? (
-                    'Cobrando…'
-                  ) : (
-                    <>
-                      Confirmar{' '}
-                      <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
-                        Enter
-                      </Kbd>
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Button
+                variant="success"
+                size="lg"
+                onClick={submit}
+                disabled={!canSubmit}
+                className={cn('glow-success-hover', canSubmit && 'glow-success')}
+              >
+                {submitting ? (
+                  'Cobrando…'
+                ) : (
+                  <>
+                    Confirmar{' '}
+                    <Kbd className="ml-1 border-success-foreground/20 bg-success-foreground/10 text-success-foreground">
+                      Enter
+                    </Kbd>
+                  </>
+                )}
+              </Button>
             </div>
           </>
         ) : (

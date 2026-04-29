@@ -527,7 +527,7 @@ function SmallStat({
   accent?: 'primary' | 'warning'
 }) {
   return (
-    <Card className={cn('card-elev lift', accent === 'primary' && 'iridescent-border')}>
+    <Card className={cn('card-elev lift', accent === 'primary' && 'accent-border')}>
       <CardContent className="p-4">
         <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           {label}
@@ -535,7 +535,7 @@ function SmallStat({
         <div
           className={cn(
             'num mt-1.5 text-2xl font-semibold leading-none tracking-display-tight',
-            accent === 'primary' && 'iridescent-text',
+            accent === 'primary' && 'brand-text',
             accent === 'warning' && 'text-warning',
           )}
         >

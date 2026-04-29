@@ -60,7 +60,7 @@ function KPI({
   accent?: 'primary' | 'success'
 }) {
   return (
-    <Card className="card-elev iridescent-border lift relative overflow-hidden">
+    <Card className="card-elev accent-border lift relative overflow-hidden">
       <CardContent className="relative p-5">
         <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
           {label}
@@ -69,7 +69,7 @@ function KPI({
           <div
             className={cn(
               'num text-[26px] font-semibold leading-none tracking-display-tight',
-              accent === 'primary' && 'iridescent-text',
+              accent === 'primary' && 'brand-text',
               accent === 'success' && 'text-success',
             )}
           >
