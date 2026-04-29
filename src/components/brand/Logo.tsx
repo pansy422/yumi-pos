@@ -8,7 +8,7 @@ export function Wordmark({ className }: { className?: string }) {
         className,
       )}
     >
-      YUMI <span className="brand-text">POS</span>
+      YUMI <span className="iridescent-text">POS</span>
     </div>
   )
 }

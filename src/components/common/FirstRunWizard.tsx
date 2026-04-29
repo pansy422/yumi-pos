@@ -72,7 +72,7 @@ export function FirstRunWizard() {
         hideClose
         className="max-w-2xl overflow-hidden p-0"
       >
-        <div className="border-b border-border/60 bg-gradient-to-br from-brand-1/8 via-card to-brand-2/8 px-8 py-6">
+        <div className="mesh-bg border-b border-border/60 bg-card px-8 py-6">
           <div className="flex items-center gap-3">
             <div>
               <DialogTitle className="text-xl tracking-display-tight">
