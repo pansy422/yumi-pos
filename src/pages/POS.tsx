@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   Sparkles,
   Trash2,
+  Type,
   User as UserIcon,
   X,
   Zap,
@@ -38,6 +39,7 @@ import { cartLineTotal, useCart } from '@/stores/cart'
 import { useHeldTickets, type HeldTicket } from '@/stores/heldTickets'
 import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
 import { WeightDialog } from '@/components/common/WeightDialog'
+import { FontScaleDialog } from '@/components/common/FontScaleDialog'
 import { useSession } from '@/stores/session'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
@@ -106,6 +108,7 @@ export function POS() {
   const [multiplier, setMultiplier] = useState(1)
   const [heldOpen, setHeldOpen] = useState(false)
   const [holdNameOpen, setHoldNameOpen] = useState(false)
+  const [fontDlg, setFontDlg] = useState(false)
   const [holdName, setHoldName] = useState('')
   const [nextSaleNumber, setNextSaleNumber] = useState<number | null>(null)
   const [weightProduct, setWeightProduct] = useState<Product | null>(null)
@@ -347,8 +350,15 @@ export function POS() {
               <UserIcon className="h-3 w-3 text-primary" />
               <span className="tracking-tight">{currentUser.name}</span>
               <button
+                onClick={() => setFontDlg(true)}
+                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                title="Tamaño de letra (F8)"
+              >
+                <Type className="h-3 w-3" />
+              </button>
+              <button
                 onClick={logout}
-                className="ml-0.5 grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
                 title="Cerrar sesión"
               >
                 <LogOut className="h-3 w-3" />
@@ -890,6 +900,8 @@ export function POS() {
         appliedPromos={appliedPromos}
         cashierId={currentUser?.id ?? null}
       />
+
+      <FontScaleDialog open={fontDlg} onOpenChange={setFontDlg} />
     </div>
   )
 }
