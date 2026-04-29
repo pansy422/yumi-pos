@@ -346,22 +346,23 @@ export function POS() {
         {currentUser && (
           <>
             <span className="h-6 w-px bg-border/60" />
-            <div className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 py-1 pl-2.5 pr-1 text-[11px] font-medium">
-              <UserIcon className="h-3 w-3 text-primary" />
+            <div className="flex items-center gap-1 rounded-full border border-border/60 bg-card/80 py-1 pl-2.5 pr-1 text-[12px] font-medium">
+              <UserIcon className="h-3.5 w-3.5 text-primary" />
               <span className="tracking-tight">{currentUser.name}</span>
               <button
                 onClick={() => setFontDlg(true)}
-                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
+                className="ml-1 flex items-center gap-1 rounded-full px-2 py-1 text-[11px] text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
                 title="Tamaño de letra (F8)"
               >
-                <Type className="h-3 w-3" />
+                <Type className="h-3.5 w-3.5" />
               </button>
               <button
                 onClick={logout}
-                className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground"
-                title="Cerrar sesión"
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                title="Cerrar sesión y cambiar de cajero"
               >
-                <LogOut className="h-3 w-3" />
+                <LogOut className="h-3.5 w-3.5" />
+                Salir
               </button>
             </div>
           </>
