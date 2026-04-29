@@ -350,4 +350,173 @@
   .stagger-4 { animation-delay: 120ms; }
   .stagger-5 { animation-delay: 150ms; }
   .stagger-6 { animation-delay: 180ms; }
+
+  /* ─── Efectos iridiscentes / arcoiris tipo Apple WWDC ────────────
+     Apple los usa con moderación: text de marca, halos en CTAs grandes,
+     borders animados en cards destacadas. Las paletas siempre arrancan
+     y terminan en el mismo color para que el loop sea seamless. */
+
+  @keyframes iridescent-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Texto con gradiente animado que va de teal → azul → violeta →
+     magenta → teal. Loop de 6s con ease-in-out → respiración orgánica. */
+  .iridescent-text {
+    background-image: linear-gradient(
+      90deg,
+      hsl(168 75% 50%) 0%,
+      hsl(200 90% 55%) 25%,
+      hsl(260 80% 65%) 50%,
+      hsl(320 75% 60%) 75%,
+      hsl(168 75% 50%) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+            background-clip: text;
+    color: transparent;
+    animation: iridescent-shift 6s ease-in-out infinite;
+  }
+
+  /* Border iridiscente animado (mask trick para que no llene el card). */
+  .iridescent-border {
+    position: relative;
+  }
+  .iridescent-border::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      hsl(168 75% 55%),
+      hsl(200 90% 60%),
+      hsl(260 80% 65%),
+      hsl(320 75% 62%),
+      hsl(168 75% 55%)
+    );
+    background-size: 200% 200%;
+    animation: iridescent-shift 4s ease-in-out infinite;
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 280ms var(--ease-out-quart);
+    pointer-events: none;
+  }
+  .iridescent-border:hover::before,
+  .iridescent-border.is-active::before {
+    opacity: 1;
+  }
+
+  /* Halo de gloria — usar con moderación (botón Cobrar, AnimatedCheck).
+     Conic gradient + blur grande + spin lento. */
+  @keyframes glow-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+  .glow-rainbow {
+    position: relative;
+    isolation: isolate;
+  }
+  .glow-rainbow::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 130%;
+    height: 200%;
+    border-radius: 50%;
+    background: conic-gradient(
+      from 0deg,
+      hsl(168 75% 55% / 0.55),
+      hsl(200 90% 60% / 0.55),
+      hsl(260 80% 65% / 0.55),
+      hsl(320 75% 60% / 0.55),
+      hsl(168 75% 55% / 0.55)
+    );
+    filter: blur(28px);
+    opacity: 0;
+    transition: opacity 320ms var(--ease-out-quart);
+    z-index: -1;
+    transform: translate(-50%, -50%);
+    animation: glow-spin 10s linear infinite;
+  }
+  .glow-rainbow:hover::before,
+  .glow-rainbow.is-active::before {
+    opacity: 0.85;
+  }
+
+  /* Shimmer sweep — barrido brillante diagonal cada N segundos.
+     Bueno para botones primarios y banners de éxito. */
+  @keyframes shimmer-sweep {
+    0% { transform: translateX(-120%) skewX(-20deg); }
+    100% { transform: translateX(220%) skewX(-20deg); }
+  }
+  .shimmer-sweep {
+    position: relative;
+    overflow: hidden;
+  }
+  .shimmer-sweep::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 30%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(0 0% 100% / 0.35),
+      transparent
+    );
+    animation: shimmer-sweep 3.5s ease-in-out infinite;
+    animation-delay: 1s;
+    pointer-events: none;
+  }
+
+  /* Pulse glow — halo respirando (sutil). Usar en estados de éxito. */
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow:
+        0 0 0 0 hsl(var(--brand-1) / 0.5),
+        0 0 32px -8px hsl(var(--brand-1) / 0.3);
+    }
+    50% {
+      box-shadow:
+        0 0 0 8px hsl(var(--brand-1) / 0),
+        0 0 48px -8px hsl(var(--brand-2) / 0.55);
+    }
+  }
+  .pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
+
+  /* Mesh gradient — fondo con manchas de color en blur (para hero
+     sections de éxito o login). Usa pseudo-elementos absolute. */
+  .mesh-bg {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+  .mesh-bg::before,
+  .mesh-bg::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(56px);
+    z-index: -1;
+    opacity: 0.55;
+  }
+  .mesh-bg::before {
+    width: 60%; height: 80%;
+    top: -20%; left: -10%;
+    background: radial-gradient(circle, hsl(168 80% 60% / 0.6), transparent 70%);
+  }
+  .mesh-bg::after {
+    width: 60%; height: 80%;
+    bottom: -20%; right: -10%;
+    background: radial-gradient(circle, hsl(280 80% 70% / 0.55), transparent 70%);
+  }
 }

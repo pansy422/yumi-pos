@@ -70,7 +70,7 @@ export function LoginDialog() {
 
   return (
     <Dialog open={open} onOpenChange={() => {}}>
-      <DialogContent hideClose className="max-w-md">
+      <DialogContent hideClose className="mesh-bg max-w-md">
         <DialogHeader className="space-y-3">
           <div className="flex justify-center">
             <Wordmark className="text-2xl" />
