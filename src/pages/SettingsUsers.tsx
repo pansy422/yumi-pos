@@ -123,10 +123,34 @@ export function UsersTab() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={(e) => {
+                    title="Eliminar usuario definitivamente"
+                    onClick={async (e) => {
                       e.stopPropagation()
-                      if (confirm(`¿Desactivar usuario "${u.name}"?`)) {
-                        api.usersDelete(u.id).then(load)
+                      if (currentUser?.id === u.id) {
+                        toast({
+                          variant: 'warning',
+                          title: 'No podés borrar tu propio usuario',
+                          description: 'Cerrá sesión primero o pedile a otro admin que te elimine.',
+                        })
+                        return
+                      }
+                      if (
+                        !confirm(
+                          `¿Eliminar definitivamente "${u.name}"?\n\nLas ventas que hizo se conservan pero pierden el link al cajero. Si solo querés ocultarlo sin borrar, abrí el editor y desmarcá "Activo".`,
+                        )
+                      ) {
+                        return
+                      }
+                      try {
+                        await api.usersDelete(u.id)
+                        await load()
+                        toast({ variant: 'success', title: 'Usuario eliminado' })
+                      } catch (err) {
+                        toast({
+                          variant: 'destructive',
+                          title: 'No se pudo eliminar',
+                          description: err instanceof Error ? err.message : String(err),
+                        })
                       }
                     }}
                   >
