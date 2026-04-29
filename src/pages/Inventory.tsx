@@ -37,6 +37,7 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, BoxEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
+import { useIsAdmin } from '@/hooks/useRole'
 import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
 import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
@@ -47,6 +48,7 @@ import { cn } from '@/lib/utils'
 
 export function Inventory() {
   const { toast } = useToast()
+  const isAdmin = useIsAdmin()
   const [search, setSearch] = useState('')
   const [items, setItems] = useState<Product[]>([])
   const [editing, setEditing] = useState<Product | null>(null)
@@ -124,22 +126,28 @@ export function Inventory() {
             >
               <Printer className="h-4 w-4" /> Imprimir reposición
             </Button>
-            <Button variant="outline" onClick={() => setCsvOpen(true)}>
-              <FileUp className="h-4 w-4" /> Importar CSV
-            </Button>
-            <Button asChild variant="outline">
-              <Link to="/ajustes?tab=categories">
-                <Tag className="h-4 w-4" /> Categorías
-              </Link>
-            </Button>
+            {isAdmin && (
+              <>
+                <Button variant="outline" onClick={() => setCsvOpen(true)}>
+                  <FileUp className="h-4 w-4" /> Importar CSV
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/ajustes?tab=categories">
+                    <Tag className="h-4 w-4" /> Categorías
+                  </Link>
+                </Button>
+              </>
+            )}
             <Button asChild variant="outline">
               <Link to="/inventario/pistolear">
                 <ScanBarcode className="h-4 w-4" /> Pistolear
               </Link>
             </Button>
-            <Button onClick={() => setCreating(true)}>
-              <Plus className="h-4 w-4" /> Nuevo producto
-            </Button>
+            {isAdmin && (
+              <Button onClick={() => setCreating(true)}>
+                <Plus className="h-4 w-4" /> Nuevo producto
+              </Button>
+            )}
           </>
         }
       />
@@ -256,19 +264,21 @@ export function Inventory() {
                 <Pencil className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              title={
-                category === '__all__'
-                  ? 'Subir o bajar todos los precios por %'
-                  : `Cambiar precios de ${category === '__none__' ? 'productos sin categoría' : category} en %`
-              }
-              onClick={() => setBulkOpen(true)}
-            >
-              <Percent className="h-3.5 w-3.5" />
-              Precios
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                title={
+                  category === '__all__'
+                    ? 'Subir o bajar todos los precios por %'
+                    : `Cambiar precios de ${category === '__none__' ? 'productos sin categoría' : category} en %`
+                }
+                onClick={() => setBulkOpen(true)}
+              >
+                <Percent className="h-3.5 w-3.5" />
+                Precios
+              </Button>
+            )}
           </div>
           <div className="flex overflow-hidden rounded-md border border-border">
             {(

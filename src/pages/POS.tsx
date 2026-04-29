@@ -41,6 +41,7 @@ import { QuickKeysPanel } from '@/components/common/QuickKeysPanel'
 import { WeightDialog } from '@/components/common/WeightDialog'
 import { FontScaleDialog } from '@/components/common/FontScaleDialog'
 import { useSession } from '@/stores/session'
+import { useIsAdmin } from '@/hooks/useRole'
 import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
@@ -96,6 +97,7 @@ export function POS() {
   const cash = useSession((s) => s.cash)
   const currentUser = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
+  const isAdmin = useIsAdmin()
   const { toast } = useToast()
 
   const [search, setSearch] = useState('')
@@ -397,7 +399,7 @@ export function POS() {
           <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
           <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
           <NavBtn to="/reportes" icon={BarChart3} label="Reportes" hint="F4" />
-          <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />
+          {isAdmin && <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />}
         </nav>
       </div>
 

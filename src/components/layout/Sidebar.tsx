@@ -17,21 +17,24 @@ import { useSession } from '@/stores/session'
 import { Wordmark } from '@/components/brand/Logo'
 import { Kbd } from '@/components/common/Kbd'
 import { FontScaleDialog } from '@/components/common/FontScaleDialog'
+import { useIsAdmin } from '@/hooks/useRole'
 
-const ITEMS = [
-  { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1' },
-  { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2' },
-  { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3' },
-  { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4' },
-  { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6' },
-  { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9' },
+const ALL_ITEMS = [
+  { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1', adminOnly: false },
+  { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2', adminOnly: false },
+  { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3', adminOnly: false },
+  { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4', adminOnly: false },
+  { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6', adminOnly: false },
+  { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9', adminOnly: true },
 ]
 
 export function Sidebar() {
   const cash = useSession((s) => s.cash)
   const user = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
+  const isAdmin = useIsAdmin()
   const [fontDlg, setFontDlg] = useState(false)
+  const ITEMS = ALL_ITEMS.filter((i) => !i.adminOnly || isAdmin)
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
       <div className="flex h-[60px] items-center border-b border-border/40 px-5">

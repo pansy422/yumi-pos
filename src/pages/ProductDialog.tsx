@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/common/MoneyInput'
 import { CategoryCombobox } from '@/components/common/CategoryCombobox'
 import { useToast } from '@/hooks/useToast'
+import { useIsAdmin } from '@/hooks/useRole'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { Product, ProductInput } from '@shared/types'
@@ -155,6 +156,7 @@ export function ProductDialog({
   defaultBarcode?: string
 }) {
   const { toast } = useToast()
+  const isAdmin = useIsAdmin()
   const [form, setForm] = useState<Form>(empty)
   const [saving, setSaving] = useState(false)
   const [archived, setArchived] = useState(false)
@@ -329,7 +331,14 @@ export function ProductDialog({
             </button>
           </div>
         ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={cn('grid gap-4 sm:grid-cols-2', !isAdmin && 'pointer-events-none opacity-90')}>
+          {!isAdmin && (
+            <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[12px] text-warning">
+              <span className="font-semibold">Solo lectura</span>
+              <span>—</span>
+              <span>Pedile al administrador que edite este producto.</span>
+            </div>
+          )}
           <div className="sm:col-span-2 flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/8 px-3 py-2 text-xs text-primary">
             {form.is_weight ? <Scale className="h-3.5 w-3.5" /> : <Box className="h-3.5 w-3.5" />}
             <span className="font-medium">
@@ -543,7 +552,7 @@ export function ProductDialog({
 
         {step === 'form' && (
           <DialogFooter className="sm:justify-between">
-            {product ? (
+            {product && isAdmin ? (
               <Button
                 variant="ghost"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -557,11 +566,13 @@ export function ProductDialog({
             )}
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-                Cancelar
+                {isAdmin ? 'Cancelar' : 'Cerrar'}
               </Button>
-              <Button onClick={save} disabled={saving || confirmDelete}>
-                {saving ? 'Guardando…' : 'Guardar'}
-              </Button>
+              {isAdmin && (
+                <Button onClick={save} disabled={saving || confirmDelete}>
+                  {saving ? 'Guardando…' : 'Guardar'}
+                </Button>
+              )}
             </div>
           </DialogFooter>
         )}
