@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   BarChart3,
@@ -8,12 +9,14 @@ import {
   Receipt,
   Settings as Cog,
   ShoppingCart,
+  Type,
   User as UserIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSession } from '@/stores/session'
 import { Wordmark } from '@/components/brand/Logo'
 import { Kbd } from '@/components/common/Kbd'
+import { FontScaleDialog } from '@/components/common/FontScaleDialog'
 
 const ITEMS = [
   { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1' },
@@ -28,6 +31,7 @@ export function Sidebar() {
   const cash = useSession((s) => s.cash)
   const user = useSession((s) => s.user)
   const logout = useSession((s) => s.logout)
+  const [fontDlg, setFontDlg] = useState(false)
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border/60 bg-background/70 backdrop-blur-xl backdrop-saturate-150">
       <div className="flex h-[60px] items-center border-b border-border/40 px-5">
@@ -110,15 +114,25 @@ export function Sidebar() {
               </div>
             </div>
           </div>
-          <button
-            onClick={logout}
-            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-            title="Cerrar sesión"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setFontDlg(true)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Tamaño de letra (F8)"
+            >
+              <Type className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={logout}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              title="Cerrar sesión"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
+      <FontScaleDialog open={fontDlg} onOpenChange={setFontDlg} />
       <div className="flex items-center justify-between border-t border-border/60 px-4 py-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
           <HelpCircle className="h-3.5 w-3.5" />
