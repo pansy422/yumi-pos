@@ -60,6 +60,12 @@ export function Cash() {
   const { toast } = useToast()
   const cash = useSession((s) => s.cash)
   const refresh = useSession((s) => s.refresh)
+  const userCount = useSession((s) => s.userCount)
+  const currentUser = useSession((s) => s.user)
+  // Si hay usuarios creados pero ninguno logueado, no se puede abrir
+  // la caja — sin saber quién la abre, las ventas no quedarían
+  // asignadas a nadie y se rompe la auditoría.
+  const needsLogin = userCount > 0 && !currentUser
 
   const [openDlg, setOpenDlg] = useState(false)
   const [closeDlg, setCloseDlg] = useState(false)
@@ -134,7 +140,12 @@ export function Cash() {
                 </Button>
               </>
             ) : (
-              <Button variant="success" onClick={() => setOpenDlg(true)}>
+              <Button
+                variant="success"
+                onClick={() => setOpenDlg(true)}
+                disabled={needsLogin}
+                title={needsLogin ? 'Iniciá sesión primero' : undefined}
+              >
                 <DoorOpen className="h-4 w-4" /> Abrir caja
               </Button>
             )}

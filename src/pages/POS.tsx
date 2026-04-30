@@ -100,10 +100,7 @@ export function POS() {
   const isAdmin = useIsAdmin()
   const { toast } = useToast()
 
-  const [search, setSearch] = useState('')
-  const [results, setResults] = useState<Product[]>([])
-  const [searchOpen, setSearchOpen] = useState(false)
-  const searchInputRef = useRef<HTMLInputElement>(null)
+  const inlineSearchRef = useRef<HTMLInputElement>(null)
   const cartScrollRef = useRef<HTMLDivElement>(null)
   const lastRowRef = useRef<HTMLTableRowElement>(null)
   const [payOpen, setPayOpen] = useState(false)
@@ -299,13 +296,16 @@ export function POS() {
   )
 
   useScanner({
-    enabled: !payOpen && !searchOpen && !weightProduct,
+    enabled: !payOpen && !weightProduct,
     onScan: handleScan,
   })
 
+  // Ctrl+B enfoca la barra inline de búsqueda. Antes abría un modal
+  // (SearchDialog) duplicando funcionalidad — la barra inline ya está
+  // siempre visible, así que solo le damos foco.
   useShortcut({ key: 'b', ctrl: true }, () => {
-    setSearchOpen(true)
-    setTimeout(() => searchInputRef.current?.focus(), 30)
+    inlineSearchRef.current?.focus()
+    inlineSearchRef.current?.select()
   })
 
   useShortcut(
@@ -321,18 +321,9 @@ export function POS() {
   )
 
   useShortcut({ key: 'Escape' }, () => {
-    if (payOpen || searchOpen) return
+    if (payOpen) return
     if (items.length > 0) clear()
   })
-
-  useEffect(() => {
-    if (!searchOpen) return
-    const t = setTimeout(async () => {
-      const list = await api.productsList({ search })
-      setResults(list)
-    }, 120)
-    return () => clearTimeout(t)
-  }, [search, searchOpen])
 
   const sub = subtotal()
   const tot = total()
@@ -421,10 +412,6 @@ export function POS() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => setSearchOpen(true)}>
-            <Search className="h-4 w-4" /> Buscar
-            <Kbd className="ml-1">Ctrl B</Kbd>
-          </Button>
           <Button
             variant="outline"
             onClick={() => setHeldOpen(true)}
@@ -478,11 +465,12 @@ export function POS() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={inlineSearchRef}
                   value={inlineSearch}
                   onChange={(e) => setInlineSearch(e.target.value)}
                   onFocus={() => setInlineFocused(true)}
                   onBlur={() => setTimeout(() => setInlineFocused(false), 150)}
-                  placeholder="Buscar producto por nombre, código o SKU…"
+                  placeholder="Buscar producto por nombre, código o SKU…  (Ctrl + B)"
                   className="h-11 pl-9"
                   data-scanner-scope="capture"
                 />
@@ -831,20 +819,6 @@ export function POS() {
           </div>
         </div>
       </div>
-
-      <SearchDialog
-        open={searchOpen}
-        onOpenChange={setSearchOpen}
-        search={search}
-        setSearch={setSearch}
-        results={results}
-        onPick={(p) => {
-          tryAddProduct(p)
-          setSearchOpen(false)
-          setSearch('')
-        }}
-        searchInputRef={searchInputRef}
-      />
 
       <WeightDialog
         open={!!weightProduct}
@@ -1321,71 +1295,6 @@ function HeldTicketsDialog({
             })}
           </ul>
         )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function SearchDialog({
-  open,
-  onOpenChange,
-  search,
-  setSearch,
-  results,
-  onPick,
-  searchInputRef,
-}: {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  search: string
-  setSearch: (s: string) => void
-  results: Product[]
-  onPick: (p: Product) => void
-  searchInputRef: React.RefObject<HTMLInputElement>
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Buscar producto</DialogTitle>
-          <DialogDescription>Por nombre, código o SKU</DialogDescription>
-        </DialogHeader>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={searchInputRef}
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Escribe para buscar…"
-            className="pl-9 h-11"
-          />
-        </div>
-        <div className="max-h-80 overflow-auto">
-          {results.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              {search ? 'Sin resultados' : 'Empieza a escribir'}
-            </p>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {results.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex cursor-pointer items-center justify-between gap-4 rounded-md px-2 py-2.5 transition-colors hover:bg-accent/60"
-                  onClick={() => onPick(p)}
-                >
-                  <div>
-                    <div className="font-medium">{p.name}</div>
-                    <div className="mono text-xs text-muted-foreground">
-                      {p.barcode ?? 'sin código'} · stock {p.stock}
-                    </div>
-                  </div>
-                  <div className="num font-semibold">{formatCLP(p.price)}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </DialogContent>
     </Dialog>
   )

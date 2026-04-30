@@ -65,6 +65,20 @@ export function open(
 ): CashSession {
   if (current()) throw new Error('Ya hay una caja abierta. Ciérrala antes de abrir otra.')
   const db = getDb()
+  // Si el sistema tiene usuarios creados, exigimos saber quién abre la
+  // caja — sin esto, las ventas y movimientos no quedan asignadas a
+  // nadie y se rompe la auditoría. La cajera DEBE estar logueada.
+  // En modo single-user (sin usuarios creados) permitimos null.
+  if (!cashierId) {
+    const userRow = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE active = 1`).get() as
+      | { c: number }
+      | undefined
+    if (userRow && Number(userRow.c) > 0) {
+      throw new Error(
+        'Tenés que iniciar sesión antes de abrir la caja. Cerrá la app, volvé a abrirla y ingresá con tu PIN.',
+      )
+    }
+  }
   const id = randomUUID()
   db.prepare(
     `INSERT INTO cash_sessions (id, opening_amount, notes, opened_by_id) VALUES (?, ?, ?, ?)`,
@@ -168,6 +182,16 @@ export function close(
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
   const db = getDb()
+  // Mismo principio que en open(): si hay users, alguien tiene que
+  // estar logueado para cerrar.
+  if (!cashierId) {
+    const userRow = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE active = 1`).get() as
+      | { c: number }
+      | undefined
+    if (userRow && Number(userRow.c) > 0) {
+      throw new Error('Tenés que iniciar sesión antes de cerrar la caja.')
+    }
+  }
   const expected = expectedClose(open.id)
   const counted = Math.round(countedAmount)
   const difference = counted - expected
@@ -193,6 +217,14 @@ export function move(
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
   const db = getDb()
+  if (!cashierId) {
+    const userRow = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE active = 1`).get() as
+      | { c: number }
+      | undefined
+    if (userRow && Number(userRow.c) > 0) {
+      throw new Error('Tenés que iniciar sesión antes de registrar movimientos de caja.')
+    }
+  }
   const id = randomUUID()
   db.prepare(
     `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id)
