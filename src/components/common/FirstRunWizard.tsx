@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Check, Printer, Store } from 'lucide-react'
+import { ArrowRight, Check, Printer, Store, UserCog } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -12,21 +12,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Wordmark } from '@/components/brand/Logo'
-import { Numpad } from './Numpad'
-import { MoneyInput } from './MoneyInput'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import { formatCLP } from '@shared/money'
 import type { DetectedPrinter, PrinterSettings, StoreSettings } from '@shared/types'
 
-const STEPS = ['welcome', 'store', 'printer', 'cash'] as const
+const STEPS = ['welcome', 'store', 'printer', 'admin'] as const
 type Step = (typeof STEPS)[number]
 
 export function FirstRunWizard() {
   const settings = useSession((s) => s.settings)
-  const cash = useSession((s) => s.cash)
   const refresh = useSession((s) => s.refresh)
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
@@ -34,8 +30,17 @@ export function FirstRunWizard() {
 
   const [store, setStore] = useState<StoreSettings | null>(null)
   const [printer, setPrinter] = useState<PrinterSettings | null>(null)
-  const [openingAmount, setOpeningAmount] = useState(0)
   const [printers, setPrinters] = useState<DetectedPrinter[]>([])
+
+  // Admin inicial — para que la primera caja siempre quede asignada al
+  // dueño. Antes el wizard abría la caja sin cajero (porque todavía no
+  // había users), generando "caja huérfana": abierta sin dueño,
+  // ventas sin asignar. El nuevo flujo es: configurar tienda → configurar
+  // impresora → crear admin → cerrar wizard. La caja la abre el admin
+  // después de loguearse desde Caja → Abrir caja, ya con su nombre.
+  const [adminName, setAdminName] = useState('')
+  const [adminPin, setAdminPin] = useState('')
+  const [savingAdmin, setSavingAdmin] = useState(false)
 
   useEffect(() => {
     if (!settings) return
@@ -60,6 +65,8 @@ export function FirstRunWizard() {
 
   const total = STEPS.length
   const idx = STEPS.indexOf(step)
+  const adminPinValid = /^\d{4,6}$/.test(adminPin)
+  const canFinish = adminName.trim().length > 0 && adminPinValid
 
   return (
     <Dialog
@@ -109,7 +116,7 @@ export function FirstRunWizard() {
                 Hola
               </h2>
               <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-                Configurá tu tienda, conectá la impresora y abrí tu primera caja.
+                Configurá tu tienda, conectá la impresora y creá tu usuario admin.
                 Toma menos de 2 minutos.
               </p>
             </div>
@@ -158,7 +165,7 @@ export function FirstRunWizard() {
             <div className="space-y-4 animate-fade-in">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Printer className="h-4 w-4 text-primary" />
-                Si no tienes impresora todavía, puedes saltar este paso
+                Si no tenés impresora todavía, podés saltar este paso
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-card p-4">
                 <div>
@@ -173,11 +180,11 @@ export function FirstRunWizard() {
               {printer.enabled && (
                 <>
                   <div className="space-y-1">
-                    <Label>Selecciona una impresora detectada</Label>
+                    <Label>Seleccioná una impresora detectada</Label>
                     <div className="max-h-40 overflow-auto rounded-md border">
                       {printers.length === 0 ? (
                         <p className="px-3 py-3 text-sm text-muted-foreground">
-                          No se detectaron impresoras. Puedes editar manualmente la interfaz luego.
+                          No se detectaron impresoras. Podés editar manualmente la interfaz luego.
                         </p>
                       ) : (
                         <ul className="divide-y">
@@ -229,28 +236,54 @@ export function FirstRunWizard() {
             </div>
           )}
 
-          {step === 'cash' && (
-            <div className="grid gap-4 sm:grid-cols-2 animate-fade-in">
-              <div className="space-y-3">
-                <div className="text-sm text-muted-foreground leading-relaxed">
-                  Apertura de caja: ¿con cuánto efectivo arrancás?
-                </div>
-                <div className="rounded-xl border border-border/60 bg-gradient-to-br from-brand-1/6 via-muted/30 to-brand-2/4 p-5 text-center">
-                  <div className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
-                    Monto inicial
-                  </div>
-                  <div className="num mt-2 text-[32px] font-semibold leading-none tracking-display brand-text">
-                    {formatCLP(openingAmount)}
-                  </div>
-                </div>
-                <MoneyInput value={openingAmount} onValueChange={setOpeningAmount} />
-                {cash && (
-                  <p className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-                    Ya hay una caja abierta — se mantiene la actual.
+          {step === 'admin' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                <UserCog className="mt-0.5 h-4 w-4 text-primary" />
+                <div>
+                  <div className="text-foreground">Tu usuario administrador</div>
+                  <p className="mt-0.5 text-[12px] leading-relaxed">
+                    Sin un usuario no se pueden cobrar ventas a nombre de nadie ni
+                    abrir caja. Creá el tuyo ahora — después podés agregar más
+                    cajeros desde Ajustes → Usuarios.
                   </p>
-                )}
+                </div>
               </div>
-              <Numpad value={openingAmount} onChange={setOpeningAmount} />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label>Tu nombre *</Label>
+                  <Input
+                    autoFocus
+                    value={adminName}
+                    onChange={(e) => setAdminName(e.target.value)}
+                    placeholder="ej. Vicente"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label>PIN de 4 a 6 dígitos *</Label>
+                  <Input
+                    type="password"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={adminPin}
+                    onChange={(e) =>
+                      setAdminPin(e.target.value.replace(/[^\d]/g, '').slice(0, 6))
+                    }
+                    placeholder="• • • •"
+                    className="num text-center text-xl tracking-[0.4em]"
+                  />
+                  {adminPin.length > 0 && !adminPinValid && (
+                    <p className="text-[11px] text-warning">Solo dígitos, entre 4 y 6.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-[11px] text-muted-foreground">
+                <strong className="text-foreground">Tip:</strong> al cerrar este
+                asistente, la app te va a pedir el PIN para entrar. Anotalo en
+                un lugar seguro — si lo perdés tenés que reinstalar.
+              </div>
             </div>
           )}
         </div>
@@ -264,7 +297,7 @@ export function FirstRunWizard() {
             Atrás
           </Button>
           <div className="flex items-center gap-2">
-            {step !== 'welcome' && step !== 'cash' && (
+            {step !== 'welcome' && step !== 'admin' && (
               <Button variant="outline" onClick={() => setStep(STEPS[idx + 1])}>
                 Saltar
               </Button>
@@ -273,22 +306,34 @@ export function FirstRunWizard() {
               <Button onClick={() => setStep('store')}>
                 Empezar <ArrowRight className="h-4 w-4" />
               </Button>
-            ) : step === 'cash' ? (
+            ) : step === 'admin' ? (
               <Button
                 variant="success"
+                disabled={!canFinish || savingAdmin}
                 onClick={async () => {
-                  await api.settingsSet({ store, printer })
-                  if (!cash && openingAmount >= 0) {
-                    try {
-                      await api.cashOpen(openingAmount, 'Apertura inicial')
-                    } catch {
-                      // ignore — user can open later
-                    }
+                  setSavingAdmin(true)
+                  try {
+                    await api.settingsSet({ store, printer })
+                    await api.usersSave({
+                      name: adminName.trim(),
+                      pin: adminPin,
+                      role: 'admin',
+                      active: true,
+                    })
+                    await finish()
+                  } catch (err) {
+                    toast({
+                      variant: 'destructive',
+                      title: 'No se pudo crear el usuario',
+                      description: err instanceof Error ? err.message : String(err),
+                    })
+                  } finally {
+                    setSavingAdmin(false)
                   }
-                  await finish()
                 }}
               >
-                Terminar y vender <Check className="h-4 w-4" />
+                {savingAdmin ? 'Creando…' : 'Terminar y entrar'}{' '}
+                <Check className="h-4 w-4" />
               </Button>
             ) : (
               <Button
