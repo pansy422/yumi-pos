@@ -16,6 +16,7 @@ import {
   openDrawer,
   printLowStockHw,
   printReceipt as printReceiptHw,
+  printSlowMovingHw,
   printTest,
   printZReportHw,
 } from './printer/thermal'
@@ -132,6 +133,9 @@ export function registerIpc(): void {
     products.importMany(rows),
   )
   handle(IPC.productsCritical, () => products.critical())
+  handle(IPC.productsSlowMoving, (opts: Parameters<typeof products.slowMoving>[0]) =>
+    products.slowMoving(opts),
+  )
   handle(IPC.categoriesRename, (from: string, to: string) => ({
     updated: products.renameCategory(from, to),
   }))
@@ -268,6 +272,11 @@ export function registerIpc(): void {
     const list = products.critical()
     const s = settingsRepo.getAll()
     await printLowStockHw(list, s.store, s.printer)
+  })
+  handleSafe(IPC.printSlowMoving, async (days: number) => {
+    const list = products.slowMoving({ days })
+    const s = settingsRepo.getAll()
+    await printSlowMovingHw(list, days, s.store, s.printer)
   })
 
   handle(IPC.backupExport, () => exportBackup())

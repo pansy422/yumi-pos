@@ -11,6 +11,7 @@ export const IPC = {
   productsAdjustStock: 'products:adjustStock',
   productsImport: 'products:import',
   productsCritical: 'products:critical',
+  productsSlowMoving: 'products:slowMoving',
   categoriesRename: 'categories:rename',
   categoriesCrud: 'categories:crud',
   categoriesSaveMeta: 'categories:saveMeta',
@@ -50,6 +51,7 @@ export const IPC = {
   cashHistory: 'cash:history',
   printZReport: 'printer:zreport',
   printLowStock: 'printer:lowStock',
+  printSlowMoving: 'printer:slowMoving',
 
   reportDaily: 'report:daily',
   reportRange: 'report:range',

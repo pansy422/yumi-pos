@@ -34,6 +34,23 @@ export type ProductInput = {
 
 export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
 
+export type SlowMovingProduct = {
+  id: string
+  name: string
+  category: string | null
+  stock: number
+  cost: number
+  is_weight: 0 | 1
+  /** ISO timestamp UTC de la última venta no anulada. null si nunca se vendió. */
+  last_sold_at: string | null
+  /** Días desde la última venta (entero). null si nunca se vendió. */
+  days_since_sold: number | null
+  /** Días desde que se creó el producto. */
+  days_since_created: number
+  /** Valor inmovilizado en pesos (cost × stock, /1000 para peso). */
+  stock_value: number
+}
+
 export type CartItem = {
   product_id: string
   barcode: string | null
@@ -354,6 +371,7 @@ export type Api = {
   productsAdjustStock: (id: string, delta: number, note?: string) => Promise<Product>
   productsImport: (rows: ProductInput[]) => Promise<{ created: number; updated: number }>
   productsCritical: () => Promise<Product[]>
+  productsSlowMoving: (opts: { days: number }) => Promise<SlowMovingProduct[]>
   categoriesRename: (from: string, to: string) => Promise<{ updated: number }>
   categoriesCrud: () => Promise<Category[]>
   categoriesSaveMeta: (input: CategoryInput) => Promise<Category>
@@ -424,6 +442,7 @@ export type Api = {
   }) => Promise<CashSessionSummary[]>
   printZReport: (sessionId: string) => Promise<Result<void>>
   printLowStock: () => Promise<Result<void>>
+  printSlowMoving: (days: number) => Promise<Result<void>>
 
   reportDaily: (date: string) => Promise<DailyReport>
   reportRange: (from: string, to: string) => Promise<RangeReport>
