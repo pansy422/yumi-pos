@@ -334,7 +334,11 @@ export type SlowMovingProduct = {
  */
 export function slowMoving(opts: { days: number }): SlowMovingProduct[] {
   const db = getDb()
-  const days = Math.max(1, Math.min(365, Math.round(opts.days)))
+  const rawDays = Number.isFinite(opts.days) ? Math.round(opts.days) : 30
+  const days = Math.max(1, Math.min(365, rawDays))
+  // El intervalo va como parámetro bind, no interpolado en el string.
+  // La validación JS de arriba ya lo blindaría, pero esto es lo correcto.
+  const offset = `-${days} days`
   const rows = db
     .prepare(
       `SELECT p.id, p.name, p.category, p.stock, p.cost, p.is_weight, p.created_at,
@@ -346,14 +350,14 @@ export function slowMoving(opts: { days: number }): SlowMovingProduct[] {
         GROUP BY p.id
        HAVING (
                 last_sold_at IS NULL
-                AND date(p.created_at, 'localtime') < date('now', 'localtime', '-${days} days')
+                AND date(p.created_at, 'localtime') < date('now', 'localtime', ?)
               )
-              OR last_sold_at < datetime('now', '-${days} days')
+              OR last_sold_at < datetime('now', ?)
         ORDER BY (CASE WHEN last_sold_at IS NULL THEN 1 ELSE 0 END),
                  last_sold_at ASC,
                  p.name COLLATE NOCASE`,
     )
-    .all() as {
+    .all(offset, offset) as {
     id: string
     name: string
     category: string | null
