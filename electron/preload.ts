@@ -38,6 +38,7 @@ const api = {
   productsAdjustStock: invoke(IPC.productsAdjustStock),
   productsImport: invoke(IPC.productsImport),
   productsCritical: invoke(IPC.productsCritical),
+  productsSlowMoving: invoke(IPC.productsSlowMoving),
   categoriesRename: invoke(IPC.categoriesRename),
   categoriesCrud: invoke(IPC.categoriesCrud),
   categoriesSaveMeta: invoke(IPC.categoriesSaveMeta),
@@ -77,6 +78,7 @@ const api = {
   cashHistory: invoke(IPC.cashHistory),
   printZReport: invoke(IPC.printZReport),
   printLowStock: invoke(IPC.printLowStock),
+  printSlowMoving: invoke(IPC.printSlowMoving),
 
   reportDaily: invoke(IPC.reportDaily),
   reportRange: invoke(IPC.reportRange),

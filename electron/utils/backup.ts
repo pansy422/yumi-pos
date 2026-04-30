@@ -1,7 +1,50 @@
 import { app, dialog } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
+import Database from 'better-sqlite3'
 import { closeDb, getDb, getDbPath, initDb } from '../db'
+
+/**
+ * Antes de sobrescribir la DB en uso con un archivo elegido por la cajera,
+ * lo abrimos en modo readonly y verificamos que tenga las tablas mínimas
+ * de Yumi POS. Si la cajera eligió por error otro .db (de otra app, una
+ * descarga corrupta, etc.) abortamos y dejamos la base actual intacta.
+ */
+function validateBackupFile(filePath: string): { ok: true } | { ok: false; reason: string } {
+  if (!fs.existsSync(filePath)) {
+    return { ok: false, reason: 'El archivo no existe.' }
+  }
+  const stat = fs.statSync(filePath)
+  if (stat.size < 1024) {
+    return { ok: false, reason: 'El archivo está vacío o es demasiado chico para ser un respaldo.' }
+  }
+  let probe: Database.Database | null = null
+  try {
+    probe = new Database(filePath, { readonly: true, fileMustExist: true })
+    const row = probe
+      .prepare(
+        `SELECT COUNT(*) AS c FROM sqlite_master
+         WHERE type = 'table' AND name IN ('sales','products','cash_sessions')`,
+      )
+      .get() as { c: number }
+    if (Number(row.c) < 3) {
+      return {
+        ok: false,
+        reason: 'El archivo no parece un respaldo válido de Yumi POS (faltan tablas).',
+      }
+    }
+    return { ok: true }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return { ok: false, reason: `No se pudo abrir el archivo como base SQLite (${msg}).` }
+  } finally {
+    try {
+      probe?.close()
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export async function exportBackup(): Promise<{ path: string } | null> {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
@@ -28,6 +71,17 @@ export async function importBackup(): Promise<{ path: string } | null> {
     filters: [{ name: 'SQLite DB', extensions: ['db'] }],
   })
   if (result.canceled || !result.filePaths[0]) return null
+
+  const check = validateBackupFile(result.filePaths[0])
+  if (!check.ok) {
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Respaldo inválido',
+      message: 'No se puede restaurar este archivo.',
+      detail: check.reason,
+    })
+    return null
+  }
 
   const confirm = await dialog.showMessageBox({
     type: 'warning',

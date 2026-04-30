@@ -239,6 +239,68 @@ export function formatLowStockReport(
   tp.newLine()
 }
 
+export function formatSlowMovingReport(
+  tp: ThermalPrinter,
+  products: import('../../shared/types').SlowMovingProduct[],
+  store: StoreSettings,
+  days: number,
+  width: number,
+): void {
+  const w = width > 0 ? width : 42
+  tp.alignCenter()
+  tp.bold(true)
+  tp.setTextDoubleHeight()
+  tp.println(store.name || 'Yumi POS')
+  tp.setTextNormal()
+  tp.bold(false)
+  tp.println('PRODUCTOS SIN ROTACION')
+  tp.println(`Sin venta en ${days} dias`)
+  tp.println(
+    new Date().toLocaleString('es-CL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }),
+  )
+  tp.println('-'.repeat(w))
+
+  if (products.length === 0) {
+    tp.alignCenter()
+    tp.println('Todos los productos rotaron')
+    tp.newLine()
+    tp.newLine()
+    return
+  }
+
+  tp.alignLeft()
+  tp.bold(true)
+  tp.println(pad('Producto', 'Ult. venta', w))
+  tp.bold(false)
+  tp.println('-'.repeat(w))
+
+  for (const p of products) {
+    const left = p.name.length > w - 12 ? p.name.slice(0, w - 12) : p.name
+    const right =
+      p.days_since_sold == null
+        ? 'nunca'
+        : p.days_since_sold === 0
+          ? 'hoy'
+          : `${p.days_since_sold}d`
+    tp.println(pad(left, right, w))
+    const stockStr = p.is_weight === 1 ? formatWeight(p.stock) : String(p.stock)
+    tp.println(`  Stock ${stockStr} · ${formatCLP(p.stock_value)} inmovilizado`)
+  }
+
+  const totalValue = products.reduce((a, p) => a + p.stock_value, 0)
+  tp.println('-'.repeat(w))
+  tp.println(pad('Total productos', String(products.length), w))
+  tp.println(pad('Valor inmovilizado', formatCLP(totalValue), w))
+  tp.newLine()
+  tp.newLine()
+}
+
 export function formatTestPage(tp: ThermalPrinter, store: StoreSettings, width: number): void {
   const w = width > 0 ? width : 42
   tp.alignCenter()

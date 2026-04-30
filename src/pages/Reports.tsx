@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { TrendingDown, TrendingUp } from 'lucide-react'
+import { Printer, Snail, TrendingDown, TrendingUp } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,9 +10,10 @@ import { PageHeader } from '@/components/common/PageHeader'
 import { Sparkline } from '@/components/common/Sparkline'
 import { Donut } from '@/components/common/Donut'
 import { ChartEmptyArt, EmptyState } from '@/components/common/EmptyState'
+import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, todayISO } from '@shared/money'
-import type { DailyReport, RangeReport } from '@shared/types'
+import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import type { DailyReport, RangeReport, SlowMovingProduct } from '@shared/types'
 import { cn } from '@/lib/utils'
 
 const PAY_LABEL: Record<string, string> = {
@@ -31,12 +33,16 @@ export function Reports() {
           <TabsList>
             <TabsTrigger value="daily">Diario</TabsTrigger>
             <TabsTrigger value="range">Por rango</TabsTrigger>
+            <TabsTrigger value="slow">Sin rotación</TabsTrigger>
           </TabsList>
           <TabsContent value="daily">
             <DailyView />
           </TabsContent>
           <TabsContent value="range">
             <RangeView />
+          </TabsContent>
+          <TabsContent value="slow">
+            <SlowMovingView />
           </TabsContent>
         </Tabs>
       </div>
@@ -459,6 +465,168 @@ function CategoryBreakdown({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+const SLOW_THRESHOLDS = [7, 15, 30, 60] as const
+type SlowThreshold = (typeof SLOW_THRESHOLDS)[number]
+
+function SlowMovingView() {
+  const [days, setDays] = useState<SlowThreshold>(30)
+  const [items, setItems] = useState<SlowMovingProduct[]>([])
+  const [loading, setLoading] = useState(true)
+  const [printing, setPrinting] = useState(false)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    setLoading(true)
+    api.productsSlowMoving({ days }).then((rows) => {
+      setItems(rows)
+      setLoading(false)
+    })
+  }, [days])
+
+  const totalValue = items.reduce((a, i) => a + i.stock_value, 0)
+  const neverSold = items.filter((i) => i.last_sold_at === null).length
+
+  const handlePrint = async () => {
+    setPrinting(true)
+    const r = await api.printSlowMoving(days)
+    setPrinting(false)
+    if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
+    else
+      toast({
+        variant: 'destructive',
+        title: 'No se pudo imprimir',
+        description: r.error,
+      })
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-1">
+          <Label>Sin venta en los últimos</Label>
+          <div className="flex gap-1 rounded-lg border border-border/60 bg-muted/30 p-1">
+            {SLOW_THRESHOLDS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDays(d)}
+                className={cn(
+                  'min-w-[64px] rounded-md px-3 py-1.5 text-sm font-medium transition',
+                  days === d
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {d} días
+              </button>
+            ))}
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          onClick={handlePrint}
+          disabled={printing || loading || items.length === 0}
+        >
+          <Printer className="h-4 w-4" /> Imprimir lista
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => (
+            <KPISkeleton key={i} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-4">
+          <KPI label="Productos sin rotación" value={String(items.length)} />
+          <KPI
+            label="Capital inmovilizado"
+            value={formatCLP(totalValue)}
+            accent="primary"
+            hint="Valor a costo del stock detenido"
+          />
+          <KPI
+            label="Nunca vendidos"
+            value={String(neverSold)}
+            hint={`Creados hace más de ${days} días`}
+          />
+        </div>
+      )}
+
+      {!loading && items.length === 0 ? (
+        <Card className="card-elev">
+          <EmptyState
+            illustration={<Snail className="h-10 w-10 text-muted-foreground" />}
+            title="Todo se está moviendo"
+            description={`No hay productos sin venta en los últimos ${days} días.`}
+          />
+        </Card>
+      ) : (
+        <Card className="card-elev">
+          <CardContent className="p-0">
+            <div className="border-b border-border/60 px-4 py-3 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+              Detalle
+            </div>
+            {loading ? (
+              <div className="space-y-2 p-4">
+                {[0, 1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-7" />
+                ))}
+              </div>
+            ) : (
+              <div className="max-h-[60vh] overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-card text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium">Producto</th>
+                      <th className="px-4 py-2 text-left font-medium">Categoría</th>
+                      <th className="px-4 py-2 text-right font-medium">Stock</th>
+                      <th className="px-4 py-2 text-left font-medium">Última venta</th>
+                      <th className="px-4 py-2 text-right font-medium">Días sin venta</th>
+                      <th className="px-4 py-2 text-right font-medium">Inmovilizado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((p) => (
+                      <tr key={p.id} className="border-t border-border/40">
+                        <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {p.category ?? (
+                            <span className="italic">Sin categoría</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right num">
+                          {p.is_weight === 1 ? formatWeight(p.stock) : p.stock}
+                        </td>
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {p.last_sold_at ? (
+                            <span className="mono text-xs">
+                              {p.last_sold_at.slice(0, 10)}
+                            </span>
+                          ) : (
+                            <span className="italic text-warning">Nunca vendido</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5 text-right num">
+                          {p.days_since_sold ?? `+${p.days_since_created}`}
+                        </td>
+                        <td className="px-4 py-2.5 text-right num font-semibold">
+                          {formatCLP(p.stock_value)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   )
 }
 

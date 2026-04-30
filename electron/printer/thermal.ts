@@ -3,6 +3,7 @@ import type {
   PrinterSettings,
   Product,
   SaleWithItems,
+  SlowMovingProduct,
   StoreSettings,
   ZReport,
 } from '../../shared/types'
@@ -10,6 +11,7 @@ import type { ReceiptTemplate } from '../../shared/template'
 import {
   formatLowStockReport,
   formatReceiptFromTemplate,
+  formatSlowMovingReport,
   formatTestPage,
   formatZReport,
 } from './receipt'
@@ -136,6 +138,23 @@ export async function printLowStockHw(
   const tp = buildPrinter(printer)
   await ensureConnected(tp)
   formatLowStockReport(tp, products, store, printer.width_chars)
+  tp.cut()
+  await tp.execute()
+}
+
+export async function printSlowMovingHw(
+  products: SlowMovingProduct[],
+  days: number,
+  store: StoreSettings,
+  printer: PrinterSettings,
+): Promise<void> {
+  if (!printer.enabled) throw new Error('Impresora deshabilitada en Ajustes')
+  if (!printer.interface || printer.interface.trim() === '') {
+    throw new Error('Configura la impresora antes de imprimir')
+  }
+  const tp = buildPrinter(printer)
+  await ensureConnected(tp)
+  formatSlowMovingReport(tp, products, store, days, printer.width_chars)
   tp.cut()
   await tp.execute()
 }

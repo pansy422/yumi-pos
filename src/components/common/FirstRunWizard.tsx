@@ -63,21 +63,31 @@ export function FirstRunWizard() {
     toast({ variant: 'success', title: '¡Listo para vender!' })
   }
 
-  const total = STEPS.length
-  const idx = STEPS.indexOf(step)
+  // El step "welcome" es solo una pantalla de saludo, no cuenta como
+  // paso de configuración. El header dice "3 pasos" y el contador
+  // muestra 1/3..3/3 sobre los steps reales (store, printer, admin).
+  const CONFIG_STEPS = STEPS.filter((s) => s !== 'welcome')
+  const total = CONFIG_STEPS.length
+  const configIdx = CONFIG_STEPS.indexOf(step as (typeof CONFIG_STEPS)[number])
+  const idx = STEPS.indexOf(step) // se sigue usando para navegación atrás/adelante
   const adminPinValid = /^\d{4,6}$/.test(adminPin)
   const canFinish = adminName.trim().length > 0 && adminPinValid
 
   return (
     <Dialog
       open={open}
-      onOpenChange={(v) => {
-        if (!v) finish()
+      onOpenChange={() => {
+        // No permitimos cerrar el wizard hasta que el admin step se
+        // complete y dispare finish() manualmente. Antes Escape o
+        // click afuera ejecutaban finish() saltando la creación del
+        // admin → onboarded=true sin user, app trabada.
       }}
     >
       <DialogContent
         hideClose
         className="max-w-2xl overflow-hidden p-0"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
       >
         <div className="mesh-bg border-b border-border/60 bg-card px-8 py-6">
           <div className="flex items-center gap-3">
@@ -90,20 +100,22 @@ export function FirstRunWizard() {
               </DialogDescription>
             </div>
             <div className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
-              {STEPS.map((s, i) => (
+              {CONFIG_STEPS.map((s, i) => (
                 <span
                   key={s}
                   className={cn(
                     'h-1.5 rounded-full transition-all duration-300 ease-out-quart',
-                    i <= idx
+                    configIdx >= 0 && i <= configIdx
                       ? 'w-8 brand-gradient'
                       : 'w-4 bg-muted',
                   )}
                 />
               ))}
-              <span className="num ml-2 font-medium tracking-tight">
-                {idx + 1}/{total}
-              </span>
+              {configIdx >= 0 && (
+                <span className="num ml-2 font-medium tracking-tight">
+                  {configIdx + 1}/{total}
+                </span>
+              )}
             </div>
           </div>
         </div>

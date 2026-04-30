@@ -306,6 +306,99 @@ export function critical(): Product[] {
   return rows.map(row).filter((p): p is Product => p !== null)
 }
 
+export type SlowMovingProduct = {
+  id: string
+  name: string
+  category: string | null
+  stock: number
+  cost: number
+  is_weight: 0 | 1
+  /** ISO timestamp UTC de la última venta no anulada. null si nunca se vendió. */
+  last_sold_at: string | null
+  /** Días desde la última venta. null si nunca se vendió. */
+  days_since_sold: number | null
+  /** Días desde que se creó el producto (para distinguir "nuevo" de "lento"). */
+  days_since_created: number
+  /** Valor inmovilizado en pesos = cost × stock (con corrección para peso). */
+  stock_value: number
+}
+
+/**
+ * Productos sin rotación: con stock pero sin ventas en los últimos N días.
+ * Excluye productos archivados, sin stock, y los creados hace menos del
+ * umbral (para no marcar como "lento" algo que recién entró al catálogo).
+ *
+ * - stock_value = cost × stock (con corrección /1000 si is_weight)
+ * - last_sold_at NULL → producto que nunca se vendió (entra solo si fue
+ *   creado hace más del umbral)
+ */
+export function slowMoving(opts: { days: number }): SlowMovingProduct[] {
+  const db = getDb()
+  const rawDays = Number.isFinite(opts.days) ? Math.round(opts.days) : 30
+  const days = Math.max(1, Math.min(365, rawDays))
+  // El intervalo va como parámetro bind, no interpolado en el string.
+  // La validación JS de arriba ya lo blindaría, pero esto es lo correcto.
+  const offset = `-${days} days`
+  const rows = db
+    .prepare(
+      `SELECT p.id, p.name, p.category, p.stock, p.cost, p.is_weight, p.created_at,
+              MAX(s.completed_at) AS last_sold_at
+         FROM products p
+         LEFT JOIN sale_items si ON si.product_id = p.id
+         LEFT JOIN sales s ON s.id = si.sale_id AND s.voided = 0
+        WHERE p.archived = 0 AND p.stock > 0
+        GROUP BY p.id
+       HAVING (
+                last_sold_at IS NULL
+                AND date(p.created_at, 'localtime') < date('now', 'localtime', ?)
+              )
+              OR last_sold_at < datetime('now', ?)
+        ORDER BY (CASE WHEN last_sold_at IS NULL THEN 1 ELSE 0 END),
+                 last_sold_at ASC,
+                 p.name COLLATE NOCASE`,
+    )
+    .all(offset, offset) as {
+    id: string
+    name: string
+    category: string | null
+    stock: number
+    cost: number
+    is_weight: number
+    created_at: string
+    last_sold_at: string | null
+  }[]
+
+  const now = Date.now()
+  return rows.map((r) => {
+    const isWeight = Number(r.is_weight) === 1 ? 1 : 0
+    const cost = Number(r.cost)
+    const stock = Number(r.stock)
+    const stockValue = isWeight
+      ? Math.round((cost * stock) / 1000)
+      : cost * stock
+    const parseDate = (s: string) =>
+      new Date(s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z')
+    const daysSinceCreated = Math.floor(
+      (now - parseDate(r.created_at).getTime()) / (1000 * 60 * 60 * 24),
+    )
+    const daysSinceSold = r.last_sold_at
+      ? Math.floor((now - parseDate(r.last_sold_at).getTime()) / (1000 * 60 * 60 * 24))
+      : null
+    return {
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      stock,
+      cost,
+      is_weight: isWeight,
+      last_sold_at: r.last_sold_at,
+      days_since_sold: daysSinceSold,
+      days_since_created: daysSinceCreated,
+      stock_value: stockValue,
+    }
+  })
+}
+
 export function renameCategory(from: string, to: string): number {
   const db = getDb()
   const target = to.trim() || null
