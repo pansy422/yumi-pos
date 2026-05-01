@@ -46,7 +46,7 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import { clampMoney, formatCLP, formatWeight, todayISO } from '@shared/money'
 import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -881,10 +881,36 @@ export function POS() {
         tickets={heldTickets}
         currentItemsCount={items.length}
         onRecall={async (t) => {
-          loadItems(t.items, t.discount)
+          // Antes de cargar al carrito, validamos que los productos
+          // sigan existiendo y no estén archivados (alguien pudo haber
+          // editado el catálogo entre que se guardó y se recuperó el
+          // ticket). Sin esto, el cobro fallaría con "producto no
+          // encontrado" y la cajera no entendería qué pasó.
+          const fetched = await Promise.all(
+            t.items.map((i) => api.productsGet(i.product_id)),
+          )
+          const dropped: string[] = []
+          const valid: typeof t.items = []
+          t.items.forEach((it, idx) => {
+            const p = fetched[idx]
+            if (!p || p.archived === 1) dropped.push(it.name)
+            else valid.push(it)
+          })
+          loadItems(valid, t.discount)
           await removeHeld(t.id)
           setHeldOpen(false)
-          toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
+          if (dropped.length > 0) {
+            toast({
+              variant: 'warning',
+              title:
+                dropped.length === 1
+                  ? 'Un producto del ticket ya no está disponible'
+                  : `${dropped.length} productos del ticket ya no están disponibles`,
+              description: dropped.join(', '),
+            })
+          } else {
+            toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
+          }
         }}
         onDiscard={async (t) => {
           await removeHeld(t.id)
@@ -1015,7 +1041,7 @@ function SurchargeButton({
             placeholder="ej. 500 para sumar $500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                onChange(Number(text) || 0)
+                onChange(clampMoney(Number(text) || 0))
                 setOpen(false)
               }
             }}
@@ -1036,7 +1062,7 @@ function SurchargeButton({
           </Button>
           <Button
             onClick={() => {
-              onChange(Number(text) || 0)
+              onChange(clampMoney(Number(text) || 0))
               setOpen(false)
             }}
           >
@@ -1435,9 +1461,16 @@ function PaymentDialog({
     submittingRef.current = true
     setSubmitting(true)
     try {
+      // Recomputamos las promos justo antes de cobrar — si el admin
+      // las editó (desactivó, cambió %, agregó/quitó productos) entre
+      // que se calcularon las promos visibles y el click en Cobrar,
+      // el descuento aplicado podría estar desactualizado. Esto cuesta
+      // 1 query extra pero asegura que la venta refleje el estado real.
+      const fresh = await api.promotionsCompute(items)
+      const freshAutoDiscount = fresh.applied.reduce((a, p) => a + p.amount, 0)
       const promoNote =
-        appliedPromos.length > 0
-          ? `Promos: ${appliedPromos.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
+        fresh.applied.length > 0
+          ? `Promos: ${fresh.applied.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
           : undefined
       const sale = await api.salesCreate({
         items: items.map((i) => ({
@@ -1447,9 +1480,8 @@ function PaymentDialog({
           surcharge: i.surcharge,
         })),
         // El descuento total que se persiste = manual + descuentos
-        // automáticos por promociones. Las promos se loggean en `note`
-        // para tener trazabilidad mientras no haya tabla dedicada.
-        discount: discount + autoDiscount,
+        // automáticos por promociones (recomputadas arriba).
+        discount: discount + freshAutoDiscount,
         payments: lines
           .filter((l) => l.amount > 0)
           .map((l) => ({
