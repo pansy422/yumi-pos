@@ -35,12 +35,24 @@ export function LoginDialog() {
 
   React.useEffect(() => {
     if (!open) return
-    api.usersList(false).then((list) => {
-      setUsers(list)
-      setPicked((cur) => cur ?? list[0] ?? null)
-    })
+    api
+      .usersList(false)
+      .then((list) => {
+        setUsers(list)
+        setPicked((cur) => cur ?? list[0] ?? null)
+      })
+      .catch((err) => {
+        // Sin esto el dialog quedaba en blanco si la DB se trababa al
+        // arrancar — el cajero veía "¿Quién va a vender?" sin opciones
+        // y sin pista del error.
+        toast({
+          variant: 'destructive',
+          title: 'No se pudo cargar la lista de usuarios',
+          description: err instanceof Error ? err.message : String(err),
+        })
+      })
     setPin('')
-  }, [open])
+  }, [open, toast])
 
   const submit = async () => {
     if (!picked || pin.length === 0 || submitting) return

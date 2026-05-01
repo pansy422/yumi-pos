@@ -896,7 +896,12 @@ export function POS() {
             if (!p || p.archived === 1) dropped.push(it.name)
             else valid.push(it)
           })
-          loadItems(valid, t.discount)
+          // Cap el descuento al subtotal de items válidos: si por items
+          // dropeados el subtotal queda más bajo, el descuento del ticket
+          // viejo podría exceder el nuevo total y generar venta negativa.
+          const validSubtotal = valid.reduce((a, i) => a + cartLineTotal(i), 0)
+          const cappedDiscount = Math.max(0, Math.min(t.discount, validSubtotal))
+          loadItems(valid, cappedDiscount)
           await removeHeld(t.id)
           setHeldOpen(false)
           if (dropped.length > 0) {

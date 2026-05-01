@@ -68,11 +68,13 @@ export function get(id: string): Product | null {
 }
 
 export function byBarcode(barcode: string, opts: { includeArchived?: boolean } = {}): Product | null {
+  const code = (barcode ?? '').trim()
+  if (!code) return null
   const db = getDb()
   const sql = opts.includeArchived
     ? `SELECT * FROM products WHERE barcode = ?`
     : `SELECT * FROM products WHERE barcode = ? AND archived = 0`
-  return row(db.prepare(sql).get(barcode) as Record<string, unknown>)
+  return row(db.prepare(sql).get(code) as Record<string, unknown>)
 }
 
 export function create(input: ProductInput): Product {
@@ -111,6 +113,19 @@ export function update(id: string, patch: ProductPatch): Product {
       .prepare(`SELECT 1 FROM products WHERE barcode = ? AND id <> ?`)
       .get(patch.barcode, id)
     if (exists) throw new Error(`Ya existe un producto con el código ${patch.barcode}`)
+  }
+  // Cambiar is_weight cuando hay stock genera pérdida silenciosa de
+  // datos: si el producto tenía 500 unidades y ahora es por peso, ese
+  // 500 pasa a interpretarse como 500 gramos (0.5 kg). Bloqueamos el
+  // cambio salvo que stock=0 (sin datos que reinterpretar mal).
+  if (
+    patch.is_weight !== undefined &&
+    patch.is_weight !== current.is_weight &&
+    current.stock > 0
+  ) {
+    throw new Error(
+      'No se puede cambiar la unidad (peso ↔ unidad) con stock distinto de 0. Ajustá el stock a 0 primero.',
+    )
   }
   const next = {
     barcode: patch.barcode ?? current.barcode,
