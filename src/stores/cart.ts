@@ -66,6 +66,11 @@ export const useCart = create<State & Actions>()(
             lastAddedId: p.id,
           }
         }),
+      // qty se interpreta según `is_weight`: en items por unidad son
+      // unidades enteras; en items al peso son GRAMOS enteros (no kilos).
+      // El redondeo a entero acá asume eso. Para items al peso, no
+      // llamar a setQty con valor en kg — usar WeightDialog, que ya
+      // convierte kg→g antes de invocar este store.
       setQty: (productId, qty) =>
         set((s) => ({
           items: s.items

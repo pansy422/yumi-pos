@@ -67,6 +67,27 @@ export function get(id: string): Product | null {
   return row(db.prepare(`SELECT * FROM products WHERE id = ?`).get(id) as Record<string, unknown>)
 }
 
+/**
+ * Devuelve productos por id en una sola query, preservando el orden de
+ * `ids`. Si un id no existe, su slot queda en `null`. Reemplaza el patrón
+ * `Promise.all(ids.map(productsGet))` que generaba un IPC roundtrip por
+ * producto al rehidratar el carrito persistido en POS.
+ */
+export function getMany(ids: string[]): (Product | null)[] {
+  if (!Array.isArray(ids) || ids.length === 0) return []
+  const db = getDb()
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db
+    .prepare(`SELECT * FROM products WHERE id IN (${placeholders})`)
+    .all(...ids) as Record<string, unknown>[]
+  const byId = new Map<string, Product>()
+  for (const r of rows) {
+    const p = row(r)
+    if (p) byId.set(p.id, p)
+  }
+  return ids.map((id) => byId.get(id) ?? null)
+}
+
 export function byBarcode(barcode: string, opts: { includeArchived?: boolean } = {}): Product | null {
   const code = (barcode ?? '').trim()
   if (!code) return null
@@ -163,6 +184,11 @@ export function bulkPriceChange(filter: {
 }): { updated: number; oldTotal: number; newTotal: number } {
   const db = getDb()
   const field = filter.field === 'cost' ? 'cost' : 'price'
+  // Validar antes de calcular: NaN propaga a factor y el SQL devuelve
+  // NULL → todos los precios pasarían a 0. Mejor abortar con error claro.
+  if (!Number.isFinite(filter.percent)) {
+    throw new Error('El porcentaje debe ser un número válido.')
+  }
   const factor = 1 + Math.max(-99, Math.min(1000, filter.percent)) / 100
 
   const where: string[] = ['archived = 0']

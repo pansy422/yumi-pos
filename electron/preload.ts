@@ -28,6 +28,7 @@ const invoke =
 const api = {
   productsList: invoke(IPC.productsList),
   productsGet: invoke(IPC.productsGet),
+  productsGetMany: invoke(IPC.productsGetMany),
   productsByBarcode: invoke(IPC.productsByBarcode),
   productsCreate: invoke(IPC.productsCreate),
   productsUpdate: invoke(IPC.productsUpdate),
