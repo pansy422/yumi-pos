@@ -9,6 +9,21 @@ import type {
   ZReport,
 } from '../../shared/types'
 
+/**
+ * Si la UI manda un cashierId pero ese user fue borrado (por restauración
+ * de respaldo o limpieza de DB), el INSERT a cash_sessions/cash_movements
+ * falla con FOREIGN KEY y la cajera ve un error confuso. Validamos antes
+ * y devolvemos un mensaje accionable.
+ */
+function assertCashierExists(db: ReturnType<typeof getDb>, cashierId: string): void {
+  const row = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(cashierId)
+  if (!row) {
+    throw new Error(
+      'Tu sesión ya no es válida (el usuario no existe en la base). Cierra y vuelve a abrir la app para volver a iniciar sesión.',
+    )
+  }
+}
+
 function rowToSession(r: Record<string, unknown> | undefined): CashSession | null {
   if (!r) return null
   return {
@@ -78,6 +93,8 @@ export function open(
         'Tenés que iniciar sesión antes de abrir la caja. Cerrá la app, volvé a abrirla y ingresá con tu PIN.',
       )
     }
+  } else {
+    assertCashierExists(db, cashierId)
   }
   const id = randomUUID()
   db.prepare(
@@ -191,6 +208,8 @@ export function close(
     if (userRow && Number(userRow.c) > 0) {
       throw new Error('Tenés que iniciar sesión antes de cerrar la caja.')
     }
+  } else {
+    assertCashierExists(db, cashierId)
   }
   const expected = expectedClose(open.id)
   const counted = Math.round(countedAmount)
@@ -224,6 +243,8 @@ export function move(
     if (userRow && Number(userRow.c) > 0) {
       throw new Error('Tenés que iniciar sesión antes de registrar movimientos de caja.')
     }
+  } else {
+    assertCashierExists(db, cashierId)
   }
   const id = randomUUID()
   db.prepare(

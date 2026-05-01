@@ -64,6 +64,7 @@ type Range = 'today' | '7d' | '30d' | 'custom'
 export function Sales() {
   const { toast } = useToast()
   const settings = useSession((s) => s.settings)
+  const bumpSalesVersion = useSession((s) => s.bumpSalesVersion)
   const [range, setRange] = useState<Range>('today')
   const [from, setFrom] = useState(todayISO())
   const [to, setTo] = useState(todayISO())
@@ -151,6 +152,7 @@ export function Sales() {
     setVoiding(true)
     try {
       await api.salesVoid(voidTarget.id, voidReason.trim() || 'Sin motivo')
+      bumpSalesVersion()
       toast({
         variant: 'success',
         title: `Venta #${voidTarget.number} anulada`,
@@ -614,6 +616,7 @@ export function Sales() {
                 setReturning(true)
                 try {
                   const r = await api.salesReturnItems(picked.id, returns, returnReason.trim())
+                  bumpSalesVersion()
                   toast({
                     variant: 'success',
                     title: 'Devolución registrada',

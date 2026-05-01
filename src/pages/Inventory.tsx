@@ -96,10 +96,17 @@ export function Inventory() {
     (a, i) => a + (i.is_weight === 1 ? Math.round((i.cost * i.stock) / 1000) : i.cost * i.stock),
     0,
   )
-  // Producto "crítico" cuando tiene stock_min definido y bajo, o stock <= 0.
-  const lowStock = items.filter(
-    (i) => !i.archived && i.stock > 0 && i.stock_min > 0 && i.stock < i.stock_min,
-  ).length
+  // Producto "crítico" cuando:
+  //  - tiene stock_min definido y stock por debajo de ese mínimo, o
+  //  - no tiene stock_min configurado y le quedan menos de 3 unidades
+  //    (fallback para alertar aunque la cajera no haya seteado mínimos
+  //    en cada producto). No aplica a productos al peso (stock en gramos).
+  const LOW_STOCK_FLOOR = 3
+  const lowStock = items.filter((i) => {
+    if (i.archived || i.stock <= 0) return false
+    if (i.stock_min > 0) return i.stock < i.stock_min
+    return i.is_weight === 0 && i.stock < LOW_STOCK_FLOOR
+  }).length
   const outOfStock = items.filter((i) => i.stock <= 0 && !i.archived).length
   const showCriticalBanner =
     !firstLoad && lowStock + outOfStock > 0 && !search && category === '__all__'
