@@ -107,6 +107,7 @@ export function registerIpc(): void {
       products.list(q ?? {}),
   )
   handle(IPC.productsGet, (id: string) => products.get(id))
+  handle(IPC.productsGetMany, (ids: string[]) => products.getMany(ids))
   handle(IPC.productsByBarcode, (barcode: string) => products.byBarcode(barcode))
   handle(IPC.productsCreate, (input: Parameters<typeof products.create>[0]) =>
     products.create(input),

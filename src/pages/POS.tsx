@@ -127,7 +127,7 @@ export function POS() {
   useEffect(() => {
     if (items.length === 0) return
     let cancelled = false
-    Promise.all(items.map((i) => api.productsGet(i.product_id))).then((fetched) => {
+    api.productsGetMany(items.map((i) => i.product_id)).then((fetched) => {
       if (cancelled) return
       const dropped: { name: string; reason: 'deleted' | 'archived' }[] = []
       const valid: typeof items = []
@@ -886,9 +886,7 @@ export function POS() {
           // editado el catálogo entre que se guardó y se recuperó el
           // ticket). Sin esto, el cobro fallaría con "producto no
           // encontrado" y la cajera no entendería qué pasó.
-          const fetched = await Promise.all(
-            t.items.map((i) => api.productsGet(i.product_id)),
-          )
+          const fetched = await api.productsGetMany(t.items.map((i) => i.product_id))
           const dropped: string[] = []
           const valid: typeof t.items = []
           t.items.forEach((it, idx) => {

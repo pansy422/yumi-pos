@@ -361,6 +361,7 @@ export type Api = {
     category?: string | null
   }) => Promise<Product[]>
   productsGet: (id: string) => Promise<Product | null>
+  productsGetMany: (ids: string[]) => Promise<(Product | null)[]>
   productsByBarcode: (barcode: string) => Promise<Product | null>
   productsCreate: (input: ProductInput) => Promise<Product>
   productsUpdate: (id: string, patch: ProductPatch) => Promise<Product>

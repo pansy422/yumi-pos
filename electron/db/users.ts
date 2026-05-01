@@ -1,14 +1,45 @@
-import { randomUUID } from 'node:crypto'
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { getDb } from './index'
 import type { User, UserInput, UserRole } from '../../shared/types'
 
 /**
- * Hash del PIN — no es passwords serios, pero al menos no almacenamos
- * texto plano. SHA-256 hex con un salt fijo de la app.
+ * Formato de hash del PIN: `scrypt$N$r$p$saltHex$hashHex`.
+ * Sal por usuario + KDF lento (scrypt) — un PIN de 4-6 dígitos sigue
+ * siendo poco entrópico, pero ahora cada intento cuesta caro y el
+ * atacante no puede precomputar una rainbow table contra la sal fija.
+ *
+ * El formato legacy `sha256(yumi-pos|pin)` (string hex 64 chars sin $)
+ * se sigue verificando para no invalidar PINs existentes; en el primer
+ * login exitoso lo re-hasheamos al nuevo formato (ver verifyPin).
  */
+const SCRYPT_N = 16384
+const SCRYPT_R = 8
+const SCRYPT_P = 1
+const SCRYPT_KEYLEN = 32
+
 function hashPin(pin: string): string {
-  return createHash('sha256').update('yumi-pos|' + pin).digest('hex')
+  const salt = randomBytes(16)
+  const hash = scryptSync(pin, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P })
+  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString('hex')}$${hash.toString('hex')}`
+}
+
+function verifyPinHash(pin: string, stored: string): boolean {
+  if (stored.startsWith('scrypt$')) {
+    const parts = stored.split('$')
+    if (parts.length !== 6) return false
+    const [, nStr, rStr, pStr, saltHex, hashHex] = parts
+    const salt = Buffer.from(saltHex, 'hex')
+    const expected = Buffer.from(hashHex, 'hex')
+    if (expected.length === 0) return false
+    const actual = scryptSync(pin, salt, expected.length, {
+      N: Number(nStr),
+      r: Number(rStr),
+      p: Number(pStr),
+    })
+    return actual.length === expected.length && timingSafeEqual(actual, expected)
+  }
+  const legacy = createHash('sha256').update('yumi-pos|' + pin).digest('hex')
+  return stored.length === legacy.length && stored === legacy
 }
 
 function rowToUser(r: Record<string, unknown> | undefined): User | null {
@@ -152,7 +183,13 @@ export function verifyPin(userId: string, pin: string): User | null {
     )
     .get(userId) as Record<string, unknown> | undefined
   if (!r) return null
-  if (r.pin !== hashPin(pin)) return null
+  const stored = String(r.pin ?? '')
+  if (!verifyPinHash(pin, stored)) return null
+  // Auto-upgrade del hash legacy (sha256 con sal fija) al formato scrypt
+  // en el primer login exitoso. Idempotente: si ya está en scrypt$ no toca.
+  if (!stored.startsWith('scrypt$')) {
+    db.prepare(`UPDATE users SET pin = ? WHERE id = ?`).run(hashPin(pin), userId)
+  }
   return rowToUser(r)
 }
 

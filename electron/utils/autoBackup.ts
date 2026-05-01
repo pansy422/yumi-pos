@@ -63,14 +63,34 @@ export async function maybeRunAutoBackup(): Promise<{ ran: boolean; path?: strin
 
 /**
  * Programar revisiones cada 6h para que apps que llevan días abiertas
- * sigan generando un respaldo diario.
+ * sigan generando un respaldo diario. Idempotente: si se llama dos veces
+ * (p. ej. por hot-reload en dev), cancelamos el ciclo previo en lugar de
+ * acumular timers en paralelo. `before-quit` también lo cancela para que
+ * un cierre limpio no quede con un setInterval colgando.
  */
+let initialKickoff: NodeJS.Timeout | null = null
+let interval: NodeJS.Timeout | null = null
+
 export function scheduleAutoBackup() {
+  cancelAutoBackup()
   // Espera 1 minuto al iniciar para no competir con el resto del arranque.
-  setTimeout(() => {
+  initialKickoff = setTimeout(() => {
+    initialKickoff = null
     maybeRunAutoBackup()
   }, 60_000)
-  setInterval(() => {
+  interval = setInterval(() => {
     maybeRunAutoBackup()
   }, 6 * 60 * 60 * 1000)
+  app.once('before-quit', cancelAutoBackup)
+}
+
+export function cancelAutoBackup() {
+  if (initialKickoff) {
+    clearTimeout(initialKickoff)
+    initialKickoff = null
+  }
+  if (interval) {
+    clearInterval(interval)
+    interval = null
+  }
 }

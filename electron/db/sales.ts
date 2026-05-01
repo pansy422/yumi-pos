@@ -111,7 +111,15 @@ export function create(input: SaleInput): SaleWithItems {
         throw new Error(`No se puede vender "${p.name}" porque está inactivo`)
       }
       const isWeight: 0 | 1 = p.is_weight === 1 ? 1 : 0
-      const qty = Math.max(1, Math.round(it.qty))
+      // qty viene en gramos para items al peso o unidades enteras para
+      // los demás. Si llega 0, NaN o negativo, abortamos: no debe ser el
+      // backend el que adivine "querían 1" — preferimos error claro
+      // antes que cobrar mal o registrar una línea fantasma.
+      const qtyRaw = Math.round(Number(it.qty))
+      if (!Number.isFinite(qtyRaw) || qtyRaw <= 0) {
+        throw new Error(`Cantidad inválida para "${p.name}". Revisá el ticket.`)
+      }
+      const qty = qtyRaw
       // Defensa: si por bug del frontend o request manipulada llegan
       // price/surcharge negativos, los aplastamos a 0. Sin esto se podía
       // generar una venta con total negativo (dinero "saliendo" del cajón
