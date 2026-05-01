@@ -153,11 +153,18 @@ function PromoEditor({
   React.useEffect(() => {
     if (!open) return
     if (promo) {
+      // Si la BD trae un params corrupto (string raro o NaN), Number(...)
+      // devuelve NaN, el input numérico queda vacío y al guardar llega NaN
+      // al back. Caemos al default sano.
+      const safeNumber = (v: unknown, fallback: number) => {
+        const n = Number(v)
+        return Number.isFinite(n) ? n : fallback
+      }
       setName(promo.name)
       setKind(promo.kind)
       setTarget(promo.target ?? '')
-      setPercent(Number(promo.params.percent ?? 10))
-      setMinAmount(Number(promo.params.min_amount ?? 0))
+      setPercent(safeNumber(promo.params.percent, 10))
+      setMinAmount(safeNumber(promo.params.min_amount, 0))
       setActive(promo.active === 1)
     } else {
       setName('')
@@ -181,14 +188,23 @@ function PromoEditor({
     }
     setSaving(true)
     try {
+      // Defensa final: si por algún camino llegó NaN al state, no lo
+      // mandamos al back (Math.round(NaN)=NaN, JSON.stringify lo convierte
+      // a `null`, y la promo queda corrupta).
+      const safePercent = Number.isFinite(percent)
+        ? Math.max(0, Math.min(100, Math.round(percent)))
+        : 0
+      const safeMinAmount = Number.isFinite(minAmount)
+        ? Math.max(0, Math.round(minAmount))
+        : 0
       const input: PromotionInput = {
         id: promo?.id,
         name: name.trim(),
         kind,
         target: kind === 'percent_off_total' ? null : target.trim(),
         params: {
-          percent: Math.max(0, Math.min(100, Math.round(percent))),
-          min_amount: kind === 'percent_off_total' ? Math.max(0, Math.round(minAmount)) : undefined,
+          percent: safePercent,
+          min_amount: kind === 'percent_off_total' ? safeMinAmount : undefined,
         },
         active,
       }

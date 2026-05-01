@@ -503,6 +503,18 @@ export function Inventory() {
             </Button>
             <Button
               onClick={async () => {
+                // Renombrar a vacío manda los productos a "sin categoría"
+                // en masa — efecto destructivo y silencioso (no se puede
+                // deshacer en bloque). Confirmamos antes para evitar
+                // clicks accidentales.
+                if (
+                  !renameTo.trim() &&
+                  !confirm(
+                    `Vas a sacar la categoría "${renameFrom}" a todos sus productos. Quedarán sin categoría. ¿Continuar?`,
+                  )
+                ) {
+                  return
+                }
                 const r = await api.categoriesRename(renameFrom, renameTo)
                 toast({
                   variant: 'success',
