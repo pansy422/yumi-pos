@@ -76,6 +76,8 @@ export const DEFAULT_TEMPLATE: ReceiptTemplate = {
     { id: 'b_sep3', type: 'separator' },
     { id: 'b_sub', type: 'subtotal' },
     { id: 'b_disc', type: 'discount', show: 'has_discount' },
+    { id: 'b_net', type: 'net_amount' },
+    { id: 'b_tax', type: 'tax_amount' },
     { id: 'b_total', type: 'total', bold: true, size: 'large' },
     { id: 'b_sep4', type: 'separator' },
     { id: 'b_pm', type: 'payment_method' },
@@ -379,16 +381,23 @@ export function renderTemplate(
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Descuento', '-' + vars.discount))
         break
       case 'net_amount':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Neto', vars.net))
+        // Si la tienda no tiene IVA configurado (rate=0), Neto es igual
+        // al Total y no aporta info — skipeamos para no ensuciar la
+        // boleta con líneas redundantes.
+        if (Number(vars.tax_rate) > 0) {
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Neto', vars.net))
+        }
         break
       case 'tax_amount':
-        out.push(
-          baseLine(
-            { ...b, align: b.align ?? 'left' },
-            `IVA ${vars.tax_rate}%`,
-            vars.tax,
-          ),
-        )
+        if (Number(vars.tax_rate) > 0) {
+          out.push(
+            baseLine(
+              { ...b, align: b.align ?? 'left' },
+              `IVA ${vars.tax_rate}%`,
+              vars.tax,
+            ),
+          )
+        }
         break
       case 'total':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'TOTAL', vars.total))
