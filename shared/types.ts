@@ -453,7 +453,7 @@ export type Api = {
   printerList: () => Promise<DetectedPrinter[]>
   printerTest: () => Promise<Result<void>>
   printerOpenDrawer: () => Promise<Result<void>>
-  printReceipt: (saleId: string) => Promise<Result<void>>
+  printReceipt: (saleId: string, opts?: { reprint?: boolean }) => Promise<Result<void>>
 
   backupExport: () => Promise<{ path: string } | null>
   backupImport: () => Promise<{ path: string } | null>

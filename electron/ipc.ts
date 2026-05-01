@@ -262,11 +262,11 @@ export function registerIpc(): void {
     const s = settingsRepo.getAll()
     await openDrawer(s.printer)
   })
-  handleSafe(IPC.printReceipt, async (saleId: string) => {
+  handleSafe(IPC.printReceipt, async (saleId: string, opts?: { reprint?: boolean }) => {
     const sale = sales.getById(saleId)
     if (!sale) throw new Error('Venta no encontrada')
     const s = settingsRepo.getAll()
-    await printReceiptHw(sale, s.store, s.printer, s.receipt_template)
+    await printReceiptHw(sale, s.store, s.printer, s.receipt_template, opts)
   })
   handleSafe(IPC.printLowStock, async () => {
     const list = products.critical()

@@ -1732,7 +1732,7 @@ function PaymentDialog({
                 <Button
                   variant={printError ? 'default' : 'outline'}
                   onClick={async () => {
-                    const r = await api.printReceipt(lastSale.id)
+                    const r = await api.printReceipt(lastSale.id, { reprint: true })
                     if (!r.ok) {
                       setPrintError(r.error)
                       toast({

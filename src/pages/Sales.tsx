@@ -142,7 +142,7 @@ export function Sales() {
   }
 
   const reprint = async (saleId: string) => {
-    const r = await api.printReceipt(saleId)
+    const r = await api.printReceipt(saleId, { reprint: true })
     if (r.ok) toast({ variant: 'success', title: 'Reimprimiendo' })
     else toast({ variant: 'destructive', title: 'No se pudo imprimir', description: r.error })
   }
