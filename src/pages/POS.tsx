@@ -918,6 +918,7 @@ function NavBtn({
 function TodayCard() {
   const [data, setData] = useState<{ count: number; revenue: number; profit: number } | null>(null)
   const cashId = useSession((s) => s.cash?.id)
+  const salesVersion = useSession((s) => s.salesVersion)
 
   useEffect(() => {
     let cancelled = false
@@ -928,7 +929,7 @@ function TodayCard() {
     return () => {
       cancelled = true
     }
-  }, [cashId])
+  }, [cashId, salesVersion])
 
   return (
     <Card className="card-elev accent-border">
@@ -1323,6 +1324,7 @@ function PaymentDialog({
   const { items, discount, total, clear } = useCart()
   const cash = useSession((s) => s.cash)
   const settings = useSession((s) => s.settings)
+  const bumpSalesVersion = useSession((s) => s.bumpSalesVersion)
   const { toast } = useToast()
 
   const [lines, setLines] = useState<PaymentLine[]>([])
@@ -1429,6 +1431,7 @@ function PaymentDialog({
       })
       setLastSale(sale)
       clear()
+      bumpSalesVersion()
       if (settings?.printer.enabled && settings.printer.auto_print) {
         const r = await api.printReceipt(sale.id)
         if (!r.ok) {

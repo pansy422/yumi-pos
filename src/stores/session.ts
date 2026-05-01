@@ -11,6 +11,10 @@ type State = {
    *  hay usuarios creados — en ese caso no se exige login). */
   user: User | null
   userCount: number
+  /** Contador que se bumpea cada vez que se crea o anula una venta. Sirve
+   *  como "señal" para que widgets de stats (TodayCard, etc.) se
+   *  refresquen sin necesidad de recargar la página. */
+  salesVersion: number
 }
 
 type Actions = {
@@ -19,6 +23,9 @@ type Actions = {
   setSettings: (s: Settings) => void
   setUser: (u: User | null) => void
   logout: () => void
+  /** Llamar después de crear/anular/devolver una venta para que los
+   *  componentes que dependen de stats del día vuelvan a fetchear. */
+  bumpSalesVersion: () => void
 }
 
 export const useSession = create<State & Actions>()(
@@ -29,6 +36,7 @@ export const useSession = create<State & Actions>()(
       loading: true,
       user: null,
       userCount: 0,
+      salesVersion: 0,
       refresh: async () => {
         set({ loading: true })
         const [cash, settings, userCount, users] = await Promise.all([
@@ -56,6 +64,7 @@ export const useSession = create<State & Actions>()(
       setSettings: (settings) => set({ settings }),
       setUser: (user) => set({ user }),
       logout: () => set({ user: null }),
+      bumpSalesVersion: () => set((s) => ({ salesVersion: s.salesVersion + 1 })),
     }),
     {
       name: 'yumi-session',
