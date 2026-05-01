@@ -22,6 +22,20 @@ const COST_LINE_SQL = `(CASE WHEN is_weight = 1
                               ELSE cost_snapshot * qty
                          END)`
 
+/**
+ * Profit por venta = total (con descuento aplicado) - costo total. Antes
+ * el SQL hacía SUM(line_total - cost) por sale_items, que ignora el
+ * descuento global y sobre-reporta la ganancia. Para una venta de $100
+ * con $20 descuento y costo $40, la fórmula vieja daba $60 cuando la
+ * ganancia real es $40.
+ *
+ * Devuelve la expresión SQL (a sustituir donde antes se sumaba el
+ * profit por línea). Usar como columna en SELECT con FROM sales s.
+ */
+const PROFIT_PER_SALE_SQL = `(s.total - COALESCE((
+  SELECT SUM(${COST_LINE_SQL}) FROM sale_items WHERE sale_id = s.id
+), 0))`
+
 function topProducts(fromDate: string, toDate: string) {
   const db = getDb()
   // Agrupamos por (product_id, name_snapshot) para que productos
@@ -76,10 +90,7 @@ function byCashier(fromDate: string, toDate: string) {
               COALESCE(u.name, 'Sin asignar') AS name,
               COUNT(*) AS count,
               COALESCE(SUM(s.total),0) AS revenue,
-              COALESCE(SUM((SELECT SUM(line_total - (CASE WHEN is_weight = 1
-                                                         THEN ROUND(cost_snapshot * qty / 1000.0)
-                                                         ELSE cost_snapshot * qty END))
-                           FROM sale_items WHERE sale_id = s.id)),0) AS profit
+              COALESCE(SUM(${PROFIT_PER_SALE_SQL}),0) AS profit
          FROM sales s
          LEFT JOIN users u ON u.id = s.cashier_id
         WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
@@ -100,14 +111,20 @@ function byCategory(fromDate: string, toDate: string): CategoryRevenue[] {
   // LEFT JOIN para que las ventas de productos borrados también cuenten.
   // Caen en la categoría "Sin categoría" (__none__) — están en el
   // histórico pero ya no podemos saber a qué categoría pertenecían.
+  // Para byCategory el descuento se distribuye proporcionalmente entre
+  // líneas: cada línea "absorbe" (line_total / subtotal) × discount.
+  // Si subtotal=0 (caso imposible si hay items) protegemos con CASE.
+  const PROPORTIONAL_DISCOUNT = `(CASE WHEN s.subtotal > 0
+        THEN (si.line_total * 1.0 / s.subtotal) * s.discount
+        ELSE 0 END)`
   const rows = db
     .prepare(
       `SELECT
          COALESCE(NULLIF(TRIM(p.category), ''), '__none__') AS cat,
          COUNT(DISTINCT s.id) AS sale_count,
          SUM(si.qty) AS qty,
-         SUM(si.line_total) AS revenue,
-         SUM(si.line_total - (CASE WHEN si.is_weight = 1
+         SUM(si.line_total - ${PROPORTIONAL_DISCOUNT}) AS revenue,
+         SUM(si.line_total - ${PROPORTIONAL_DISCOUNT} - (CASE WHEN si.is_weight = 1
                                    THEN ROUND(si.cost_snapshot * si.qty / 1000.0)
                                    ELSE si.cost_snapshot * si.qty END)) AS profit
        FROM sale_items si
@@ -140,10 +157,10 @@ function totals(
   const db = getDb()
   const r = db
     .prepare(
-      `SELECT COUNT(*) AS c, COALESCE(SUM(total),0) AS rev,
-              COALESCE(SUM((SELECT SUM(line_total - ${COST_LINE_SQL}) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
-       FROM sales
-       WHERE date(completed_at, 'localtime') BETWEEN ? AND ? AND voided = 0`,
+      `SELECT COUNT(*) AS c, COALESCE(SUM(s.total),0) AS rev,
+              COALESCE(SUM(${PROFIT_PER_SALE_SQL}),0) AS profit
+       FROM sales s
+       WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0`,
     )
     .get(fromDate, toDate) as { c: number; rev: number; profit: number }
   return { sales_count: Number(r.c), revenue: Number(r.rev), profit: Number(r.profit) }
@@ -176,12 +193,12 @@ export function range(fromDate: string, toDate: string): RangeReport {
   const t = totals(fromDate, toDate)
   const dailyRows = db
     .prepare(
-      `SELECT date(completed_at, 'localtime') AS d,
+      `SELECT date(s.completed_at, 'localtime') AS d,
               COUNT(*) AS c,
-              COALESCE(SUM(total),0) AS rev,
-              COALESCE(SUM((SELECT SUM(line_total - ${COST_LINE_SQL}) FROM sale_items WHERE sale_id = sales.id)),0) AS profit
-       FROM sales
-       WHERE date(completed_at, 'localtime') BETWEEN ? AND ? AND voided = 0
+              COALESCE(SUM(s.total),0) AS rev,
+              COALESCE(SUM(${PROFIT_PER_SALE_SQL}),0) AS profit
+       FROM sales s
+       WHERE date(s.completed_at, 'localtime') BETWEEN ? AND ? AND s.voided = 0
        GROUP BY d ORDER BY d ASC`,
     )
     .all(fromDate, toDate) as { d: string; c: number; rev: number; profit: number }[]
