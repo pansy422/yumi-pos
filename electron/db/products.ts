@@ -288,9 +288,15 @@ export function reactivate(id: string, opts?: { newStock?: number }): Product {
 }
 
 /**
- * Productos que requieren reposición. Considera críticos los que tienen
- * stock <= 0 o stock < stock_min (cuando stock_min > 0).
+ * Productos que requieren reposición. Es crítico si:
+ *  - stock <= 0 (sin stock)
+ *  - stock < stock_min cuando stock_min > 0 (umbral configurado por producto)
+ *  - stock < DEFAULT_LOW_STOCK_FLOOR (3) cuando stock_min = 0 — fallback
+ *    para que la cajera reciba aviso aunque no haya configurado un mínimo
+ *    explícito en cada producto.
  */
+const DEFAULT_LOW_STOCK_FLOOR = 3
+
 export function critical(): Product[] {
   const db = getDb()
   const rows = db
@@ -299,10 +305,11 @@ export function critical(): Product[] {
        WHERE archived = 0 AND (
          stock <= 0
          OR (stock_min > 0 AND stock < stock_min)
+         OR (COALESCE(stock_min, 0) = 0 AND stock < ? AND is_weight = 0)
        )
        ORDER BY (CASE WHEN stock <= 0 THEN 0 ELSE 1 END), name COLLATE NOCASE`,
     )
-    .all() as Record<string, unknown>[]
+    .all(DEFAULT_LOW_STOCK_FLOOR) as Record<string, unknown>[]
   return rows.map(row).filter((p): p is Product => p !== null)
 }
 

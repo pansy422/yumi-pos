@@ -31,12 +31,26 @@ export const useSession = create<State & Actions>()(
       userCount: 0,
       refresh: async () => {
         set({ loading: true })
-        const [cash, settings, userCount] = await Promise.all([
+        const [cash, settings, userCount, users] = await Promise.all([
           api.cashCurrent(),
           api.settingsGet(),
           api.usersCount(),
+          api.usersList(false),
         ])
-        set({ cash, settings, userCount, loading: false })
+        // El user activo se persiste en localStorage. Si la DB se reseteó
+        // (restore de respaldo, borrado manual, etc.), el UUID guardado
+        // puede apuntar a un user que ya no existe → todas las inserciones
+        // posteriores fallarían con FOREIGN KEY constraint failed. Acá
+        // limpiamos el estado si el user persistido ya no está en la DB.
+        const persisted = useSession.getState().user
+        const stillExists = persisted ? users.some((u) => u.id === persisted.id) : true
+        set({
+          cash,
+          settings,
+          userCount,
+          loading: false,
+          user: stillExists ? persisted : null,
+        })
       },
       setCash: (cash) => set({ cash }),
       setSettings: (settings) => set({ settings }),
