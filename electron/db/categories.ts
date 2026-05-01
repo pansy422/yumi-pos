@@ -98,7 +98,12 @@ export function save(input: CategoryInput): Category {
         .prepare(`SELECT 1 FROM categories WHERE name = ? COLLATE NOCASE AND id <> ?`)
         .get(name, input.id)
       if (dup) throw new Error(`Ya existe una categoría con ese nombre: ${name}`)
-      db.prepare(`UPDATE products SET category = ? WHERE category = ?`).run(name, current.name)
+      // TRIM para captar productos que pudieron quedar con espacios
+      // accidentales en su category (ej. importados desde CSV).
+      db.prepare(`UPDATE products SET category = ? WHERE TRIM(category) = ?`).run(
+        name,
+        current.name,
+      )
     }
     db.prepare(
       `UPDATE categories SET name = ?, color = ?, default_margin = ? WHERE id = ?`,
@@ -123,13 +128,22 @@ export function remove(id: string, opts?: { reassignTo?: string | null }): void 
   const db = getDb()
   const cat = get(id)
   if (!cat) return
-  if (opts?.reassignTo !== undefined) {
-    db.prepare(`UPDATE products SET category = ? WHERE category = ?`).run(
-      opts.reassignTo,
+  if (opts?.reassignTo !== undefined && opts.reassignTo !== null) {
+    // Validamos que la categoría destino exista para no dejar productos
+    // apuntando a un nombre fantasma. Si pasaron null explícito, los
+    // dejamos sin categoría (caída a NULL).
+    const target = getByName(opts.reassignTo)
+    if (!target) {
+      throw new Error(
+        `La categoría "${opts.reassignTo}" no existe. No se puede reasignar.`,
+      )
+    }
+    db.prepare(`UPDATE products SET category = ? WHERE TRIM(category) = ?`).run(
+      target.name,
       cat.name,
     )
   } else {
-    db.prepare(`UPDATE products SET category = NULL WHERE category = ?`).run(cat.name)
+    db.prepare(`UPDATE products SET category = NULL WHERE TRIM(category) = ?`).run(cat.name)
   }
   db.prepare(`DELETE FROM categories WHERE id = ?`).run(id)
 }

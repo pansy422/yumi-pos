@@ -272,6 +272,7 @@ function RangeView() {
           <Input
             type="date"
             value={from}
+            max={to}
             onChange={(e) => setFrom(e.target.value)}
             className="w-44"
           />
@@ -281,6 +282,7 @@ function RangeView() {
           <Input
             type="date"
             value={to}
+            min={from}
             onChange={(e) => setTo(e.target.value)}
             className="w-44"
           />

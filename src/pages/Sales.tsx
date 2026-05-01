@@ -210,6 +210,7 @@ export function Sales() {
               <Input
                 type="date"
                 value={from}
+                max={to}
                 onChange={(e) => {
                   setRange('custom')
                   setFrom(e.target.value)
@@ -221,6 +222,7 @@ export function Sales() {
               <Input
                 type="date"
                 value={to}
+                min={from}
                 onChange={(e) => {
                   setRange('custom')
                   setTo(e.target.value)

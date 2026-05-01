@@ -228,7 +228,16 @@ function PromoEditor({
           </div>
           <div className="space-y-1">
             <Label>Tipo</Label>
-            <Select value={kind} onValueChange={(v) => setKind(v as PromotionKind)}>
+            <Select
+              value={kind}
+              onValueChange={(v) => {
+                setKind(v as PromotionKind)
+                // Reset target — si era percent_off_product el target era
+                // un product_id, y al cambiar a percent_off_category el
+                // CategoryCombobox lo mostraría como categoría inválida.
+                setTarget('')
+              }}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

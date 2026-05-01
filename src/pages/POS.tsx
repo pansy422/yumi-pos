@@ -46,7 +46,7 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import { clampMoney, formatCLP, formatWeight, todayISO } from '@shared/money'
 import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -881,10 +881,41 @@ export function POS() {
         tickets={heldTickets}
         currentItemsCount={items.length}
         onRecall={async (t) => {
-          loadItems(t.items, t.discount)
+          // Antes de cargar al carrito, validamos que los productos
+          // sigan existiendo y no estén archivados (alguien pudo haber
+          // editado el catálogo entre que se guardó y se recuperó el
+          // ticket). Sin esto, el cobro fallaría con "producto no
+          // encontrado" y la cajera no entendería qué pasó.
+          const fetched = await Promise.all(
+            t.items.map((i) => api.productsGet(i.product_id)),
+          )
+          const dropped: string[] = []
+          const valid: typeof t.items = []
+          t.items.forEach((it, idx) => {
+            const p = fetched[idx]
+            if (!p || p.archived === 1) dropped.push(it.name)
+            else valid.push(it)
+          })
+          // Cap el descuento al subtotal de items válidos: si por items
+          // dropeados el subtotal queda más bajo, el descuento del ticket
+          // viejo podría exceder el nuevo total y generar venta negativa.
+          const validSubtotal = valid.reduce((a, i) => a + cartLineTotal(i), 0)
+          const cappedDiscount = Math.max(0, Math.min(t.discount, validSubtotal))
+          loadItems(valid, cappedDiscount)
           await removeHeld(t.id)
           setHeldOpen(false)
-          toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
+          if (dropped.length > 0) {
+            toast({
+              variant: 'warning',
+              title:
+                dropped.length === 1
+                  ? 'Un producto del ticket ya no está disponible'
+                  : `${dropped.length} productos del ticket ya no están disponibles`,
+              description: dropped.join(', '),
+            })
+          } else {
+            toast({ variant: 'success', title: 'Ticket recuperado', description: t.name })
+          }
         }}
         onDiscard={async (t) => {
           await removeHeld(t.id)
@@ -1015,7 +1046,7 @@ function SurchargeButton({
             placeholder="ej. 500 para sumar $500"
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                onChange(Number(text) || 0)
+                onChange(clampMoney(Number(text) || 0))
                 setOpen(false)
               }
             }}
@@ -1036,7 +1067,7 @@ function SurchargeButton({
           </Button>
           <Button
             onClick={() => {
-              onChange(Number(text) || 0)
+              onChange(clampMoney(Number(text) || 0))
               setOpen(false)
             }}
           >
@@ -1199,7 +1230,10 @@ function HeldTicketsDialog({
         {tickets.length > 0 && (
           <ul className="max-h-80 divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
             {tickets.map((t) => {
-              const itemsTotal = t.items.reduce((a, i) => a + i.price * i.qty, 0)
+              // Usamos cartLineTotal para que el preview del ticket guardado
+              // incluya recargo y respete is_weight (qty en gramos / 1000),
+              // igual que cuando se carga al carrito.
+              const itemsTotal = t.items.reduce((a, i) => a + cartLineTotal(i), 0)
               const total = Math.max(0, itemsTotal - t.discount)
               const units = t.items.reduce((a, i) => a + i.qty, 0)
               const isDiscarding = pendingDiscardId === t.id
@@ -1346,6 +1380,11 @@ function PaymentDialog({
 
   const [lines, setLines] = useState<PaymentLine[]>([])
   const [submitting, setSubmitting] = useState(false)
+  // Guard sincronicamente contra doble click rápido. setSubmitting es
+  // asíncrono — un segundo click dentro del mismo tick verá submitting=false
+  // y dispararía un segundo api.salesCreate(), generando una venta duplicada.
+  // El ref se actualiza al instante y bloquea ambos casos.
+  const submittingRef = useRef(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   /**
@@ -1364,10 +1403,14 @@ function PaymentDialog({
       setShowPreview(false)
       setPrintError(null)
     } else {
-      // Por defecto una línea efectivo cubriendo todo el total
+      // Por defecto una línea efectivo cubriendo todo el total. NO
+      // incluimos `tot` en deps — si el cliente repintó el carrito
+      // mientras el dialog está abierto, no queremos pisarle al cajero
+      // las líneas que ya empezó a editar.
       setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
     }
-  }, [open, tot])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const totalAssigned = lines.reduce((a, l) => a + (l.amount || 0), 0)
   const remaining = tot - totalAssigned
@@ -1419,11 +1462,20 @@ function PaymentDialog({
 
   const submit = async () => {
     if (!canSubmit) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
+      // Recomputamos las promos justo antes de cobrar — si el admin
+      // las editó (desactivó, cambió %, agregó/quitó productos) entre
+      // que se calcularon las promos visibles y el click en Cobrar,
+      // el descuento aplicado podría estar desactualizado. Esto cuesta
+      // 1 query extra pero asegura que la venta refleje el estado real.
+      const fresh = await api.promotionsCompute(items)
+      const freshAutoDiscount = fresh.applied.reduce((a, p) => a + p.amount, 0)
       const promoNote =
-        appliedPromos.length > 0
-          ? `Promos: ${appliedPromos.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
+        fresh.applied.length > 0
+          ? `Promos: ${fresh.applied.map((p) => `${p.name} (-${p.amount})`).join('; ')}`
           : undefined
       const sale = await api.salesCreate({
         items: items.map((i) => ({
@@ -1433,9 +1485,8 @@ function PaymentDialog({
           surcharge: i.surcharge,
         })),
         // El descuento total que se persiste = manual + descuentos
-        // automáticos por promociones. Las promos se loggean en `note`
-        // para tener trazabilidad mientras no haya tabla dedicada.
-        discount: discount + autoDiscount,
+        // automáticos por promociones (recomputadas arriba).
+        discount: discount + freshAutoDiscount,
         payments: lines
           .filter((l) => l.amount > 0)
           .map((l) => ({
@@ -1463,6 +1514,7 @@ function PaymentDialog({
         description: err instanceof Error ? err.message : String(err),
       })
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }

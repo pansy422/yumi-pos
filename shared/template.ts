@@ -187,7 +187,16 @@ export function buildVars(sale: SaleWithItems, store: StoreSettings): RenderVars
     minute: '2-digit',
   })
   const { net, tax, rate } = computeTax(sale, store)
-  const surchargeTotal = sale.items.reduce((a, i) => a + i.surcharge * i.qty, 0)
+  // Para items al peso, surcharge está en $/kg y qty en gramos — hay
+  // que dividir por 1000. Sin esto el total mostraba valores absurdos
+  // si alguien usaba {{surcharge}} en una plantilla custom.
+  const surchargeTotal = sale.items.reduce(
+    (a, i) =>
+      i.is_weight === 1
+        ? a + Math.round((i.surcharge * i.qty) / 1000)
+        : a + i.surcharge * i.qty,
+    0,
+  )
   return {
     store_name: store.name || '',
     address: store.address || '',

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { clampMoney } from '../../shared/money'
 import type {
   CashMovement,
   CashSession,
@@ -99,7 +100,12 @@ export function open(
   const id = randomUUID()
   db.prepare(
     `INSERT INTO cash_sessions (id, opening_amount, notes, opened_by_id) VALUES (?, ?, ?, ?)`,
-  ).run(id, Math.round(openingAmount), notes ?? null, cashierId ?? null)
+  ).run(
+    id,
+    clampMoney(Math.max(0, Math.round(openingAmount))),
+    notes ?? null,
+    cashierId ?? null,
+  )
   return getById(id)!
 }
 
@@ -216,7 +222,14 @@ export function close(
     assertCashierExists(db, cashierId)
   }
   const expected = expectedClose(open.id)
-  const counted = Math.round(countedAmount)
+  // Defensa: rechazar montos contados negativos (typo del cajero) y
+  // clamper a $999.999.999 si por una request manipulada llega un valor
+  // gigante. La UI usa clampMoney en MoneyInput pero el backend tiene
+  // que blindarse igual.
+  if (!Number.isFinite(countedAmount) || countedAmount < 0) {
+    throw new Error('El monto contado no puede ser negativo.')
+  }
+  const counted = clampMoney(Math.round(countedAmount))
   const difference = counted - expected
   db.prepare(
     `UPDATE cash_sessions
@@ -250,11 +263,22 @@ export function move(
   } else {
     assertCashierExists(db, cashierId)
   }
+  // Defensa: kind solo puede ser uno de los 3 enums (TS lo asegura, pero
+  // si llega una request manipulada vía IPC con kind raro, lo rechazamos);
+  // amount = 0 es ruido (no afecta caja, ensucia auditoría), también lo
+  // rechazamos. clampMoney por si llega valor gigante.
+  if (kind !== 'withdraw' && kind !== 'deposit' && kind !== 'adjustment') {
+    throw new Error(`Tipo de movimiento inválido: ${String(kind)}`)
+  }
+  const safeAmount = clampMoney(Math.round(amount))
+  if (safeAmount === 0) {
+    throw new Error('El monto del movimiento no puede ser 0.')
+  }
   const id = randomUUID()
   db.prepare(
     `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(id, open.id, kind, Math.round(amount), note, cashierId ?? null)
+  ).run(id, open.id, kind, safeAmount, note, cashierId ?? null)
   return movementsById(id)!
 }
 

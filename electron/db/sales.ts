@@ -112,8 +112,12 @@ export function create(input: SaleInput): SaleWithItems {
       }
       const isWeight: 0 | 1 = p.is_weight === 1 ? 1 : 0
       const qty = Math.max(1, Math.round(it.qty))
-      const price = Math.round(it.price)
-      const surcharge = Math.round(it.surcharge ?? 0)
+      // Defensa: si por bug del frontend o request manipulada llegan
+      // price/surcharge negativos, los aplastamos a 0. Sin esto se podía
+      // generar una venta con total negativo (dinero "saliendo" del cajón
+      // sin trazabilidad en cash_movements).
+      const price = Math.max(0, Math.round(it.price))
+      const surcharge = Math.max(0, Math.round(it.surcharge ?? 0))
       if (qty > p.stock) {
         oversold.push({ name: p.name, qty, stock: p.stock, is_weight: isWeight })
       }
@@ -144,7 +148,12 @@ export function create(input: SaleInput): SaleWithItems {
     }
 
     const discount = Math.max(0, Math.round(input.discount || 0))
-    const total = Math.max(0, subtotal - discount)
+    if (discount > subtotal) {
+      throw new Error(
+        `El descuento ($${discount.toLocaleString('es-CL')}) no puede ser mayor que el subtotal ($${subtotal.toLocaleString('es-CL')}).`,
+      )
+    }
+    const total = subtotal - discount
 
     // Validar pagos: la suma de amounts debe igualar el total. Para
     // métodos efectivo, cash_received debe alcanzar el amount.

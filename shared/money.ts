@@ -4,10 +4,22 @@ export function formatCLP(n: number): string {
 }
 
 export function parseCLP(input: string | number): number {
-  if (typeof input === 'number') return Math.round(input)
+  if (typeof input === 'number') return clampMoney(Math.round(input))
   const cleaned = input.replace(/[^\d-]/g, '')
   if (cleaned === '' || cleaned === '-') return 0
-  return Math.round(Number(cleaned))
+  return clampMoney(Math.round(Number(cleaned)))
+}
+
+/**
+ * Acota un monto a un rango razonable: ±$999.999.999. Sirve como red
+ * de seguridad si el cajero pega por error un número gigante (sample:
+ * "999999999999999999") — JS lo convertiría en 1e18 y rompería los
+ * cálculos de vuelto y total. 999 millones cubre cualquier transacción
+ * imaginable de un minimarket.
+ */
+export function clampMoney(n: number): number {
+  if (!Number.isFinite(n)) return 0
+  return Math.max(-999_999_999, Math.min(999_999_999, n))
 }
 
 export function todayISO(d: Date = new Date()): string {

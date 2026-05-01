@@ -186,6 +186,8 @@ export function CsvImport({
       const errors: string[] = []
       if (!data.name || !data.name.trim()) errors.push('falta nombre')
       if (data.price == null || data.price <= 0) errors.push('precio inválido')
+      if (data.cost != null && data.cost < 0) errors.push('costo negativo')
+      if (data.stock != null && data.stock < 0) errors.push('stock negativo')
       return {
         raw: cells,
         data: errors.length === 0 ? (data as ProductInput) : null,

@@ -265,6 +265,12 @@ export function registerIpc(): void {
   handleSafe(IPC.printReceipt, async (saleId: string, opts?: { reprint?: boolean }) => {
     const sale = sales.getById(saleId)
     if (!sale) throw new Error('Venta no encontrada')
+    // La UI deshabilita el botón en boletas anuladas, pero defendemos
+    // backend igual: una venta anulada no debe imprimir comprobante de
+    // venta válida (la cajera confundiría a la clienta).
+    if (sale.voided === 1) {
+      throw new Error('No se puede imprimir el comprobante de una venta anulada.')
+    }
     const s = settingsRepo.getAll()
     await printReceiptHw(sale, s.store, s.printer, s.receipt_template, opts)
   })

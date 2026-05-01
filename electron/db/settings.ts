@@ -81,6 +81,14 @@ export function setPatch(patch: Partial<Settings>): Settings {
     if (!isValidTemplate(patch.receipt_template)) {
       throw new Error('Plantilla de boleta inválida')
     }
+    // Defensa contra plantilla vacía: si la cajera borra todos los
+    // bloques desde el editor, la boleta saldría en blanco. Mejor
+    // rechazarlo explícitamente y dejarla volver a Estándar.
+    if (patch.receipt_template.blocks.length === 0) {
+      throw new Error(
+        'La plantilla necesita al menos un bloque. Reset a "Estándar" si te equivocaste.',
+      )
+    }
     writeKey('receipt_template', patch.receipt_template)
   }
   return getAll()
