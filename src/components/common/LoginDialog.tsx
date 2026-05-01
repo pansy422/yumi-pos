@@ -138,43 +138,67 @@ export function LoginDialog() {
           </div>
 
           <div className="mt-5 space-y-5">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {users.map((u) => {
-                const active = picked?.id === u.id
-                return (
-                  <button
-                    key={u.id}
-                    onClick={() => {
-                      setPicked(u)
-                      setPin('')
-                    }}
-                    className={cn(
-                      'group flex flex-col items-center gap-1.5 rounded-lg px-3 py-3.5',
-                      'border transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out-quart',
-                      'active:scale-[0.97]',
-                      active
-                        ? 'border-primary/40 bg-primary/8 text-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.2),0_4px_16px_-8px_hsl(var(--primary)/0.3)]'
-                        : 'border-border/70 bg-card hover:border-border hover:bg-accent/50',
-                    )}
-                  >
-                    <div
+            {users.length === 1 ? (
+              // Modo "un solo usuario": no hay nada que elegir. Mostramos
+              // un pill horizontal centrado con avatar + nombre + rol, sin
+              // estado de selección — el PIN queda como único foco.
+              <div className="flex items-center justify-center gap-3 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
+                <div className="grid h-10 w-10 place-items-center rounded-full bg-primary/12 text-primary">
+                  <UserIcon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-[15px] font-semibold tracking-tight">
+                    {users[0].name}
+                  </div>
+                  <div className="text-[10px] font-medium uppercase tracking-caps text-muted-foreground">
+                    {users[0].role === 'admin' ? 'Admin' : 'Cajero'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {users.map((u) => {
+                  const active = picked?.id === u.id
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        setPicked(u)
+                        setPin('')
+                      }}
                       className={cn(
-                        'grid h-9 w-9 place-items-center rounded-full',
-                        active ? 'bg-primary/15' : 'bg-muted',
+                        'group flex flex-col items-center gap-1.5 rounded-lg px-3 py-3.5',
+                        'border transition-[background-color,border-color,transform,box-shadow] duration-200 ease-out-quart',
+                        'active:scale-[0.97]',
+                        active
+                          ? 'border-primary/40 bg-primary/8 shadow-[0_0_0_1px_hsl(var(--primary)/0.2),0_4px_16px_-8px_hsl(var(--primary)/0.3)]'
+                          : 'border-border/70 bg-card hover:border-border hover:bg-accent/50',
                       )}
                     >
-                      <UserIcon className="h-4 w-4" />
-                    </div>
-                    <span className="truncate text-sm font-medium tracking-tight">
-                      {u.name}
-                    </span>
-                    <span className="text-[10px] font-medium uppercase tracking-caps text-muted-foreground">
-                      {u.role === 'admin' ? 'Admin' : 'Cajero'}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+                      <div
+                        className={cn(
+                          'grid h-9 w-9 place-items-center rounded-full',
+                          active ? 'bg-primary/15 text-primary' : 'bg-muted text-foreground',
+                        )}
+                      >
+                        <UserIcon className="h-4 w-4" />
+                      </div>
+                      <span
+                        className={cn(
+                          'truncate text-sm font-medium tracking-tight',
+                          active ? 'text-primary' : 'text-foreground',
+                        )}
+                      >
+                        {u.name}
+                      </span>
+                      <span className="text-[10px] font-medium uppercase tracking-caps text-muted-foreground">
+                        {u.role === 'admin' ? 'Admin' : 'Cajero'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
 
             <div className="space-y-2.5">
               <Input
