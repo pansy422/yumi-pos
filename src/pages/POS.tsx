@@ -1431,16 +1431,33 @@ function PaymentDialog({
 
   const addLine = () => {
     const id = (lines.at(-1)?.id ?? 0) + 1
-    const fillAmount = Math.max(0, remaining)
-    setLines((cur) => [
-      ...cur,
-      {
-        id,
-        method: cur.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
-        amount: fillAmount,
-        cash_received: fillAmount,
-      },
-    ])
+    setLines((cur) => {
+      // Si la cajera dejó una línea de efectivo con cash_received < amount
+      // (recibió menos plata de la que está cobrando vía efectivo) y ahora
+      // pide otro método, lo más probable es que quiera pagar SOLO esa
+      // cantidad en cash y el resto con la nueva línea. Bajamos el amount
+      // de cada línea de efectivo "corta" a su cash_received para que la
+      // diferencia se libere y la nueva línea la cubra automáticamente.
+      // Sin esto la nueva línea nacía con amount=0 y la cajera tenía que
+      // bajar manualmente Pago 1 para que cuadre el total (UX confusa,
+      // riesgo de cobro mal armado).
+      const reconciled = cur.map((l) =>
+        l.method === 'efectivo' && l.cash_received < l.amount
+          ? { ...l, amount: l.cash_received }
+          : l,
+      )
+      const assigned = reconciled.reduce((a, l) => a + l.amount, 0)
+      const fillAmount = Math.max(0, tot - assigned)
+      return [
+        ...reconciled,
+        {
+          id,
+          method: reconciled.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+          amount: fillAmount,
+          cash_received: fillAmount,
+        },
+      ]
+    })
   }
 
   const fillRemainingTo = (id: number) => {
