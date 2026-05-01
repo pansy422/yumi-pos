@@ -306,6 +306,22 @@ export function wrap(text: string, width: number): string[] {
   return out
 }
 
+/**
+ * Normaliza un texto para detectar agradecimientos duplicados:
+ * "¡Gracias por tu compra!" y "¡GRACIAS POR TU COMPRA!" deben colapsar
+ * al mismo string. Sirve para no imprimir dos veces lo mismo cuando el
+ * usuario tiene un footer guardado que coincide con un bloque hardcoded
+ * de la plantilla (ej. b_thanks vs receipt_footer en installs viejos).
+ */
+function normalizeForDedup(s: string): string {
+  return s
+    .normalize('NFKD')
+    .replace(/[¡!¿?.,;:]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
 export function renderTemplate(
   template: ReceiptTemplate,
   sale: SaleWithItems,
@@ -315,6 +331,7 @@ export function renderTemplate(
   const vars = buildVars(sale, store)
   const w = width > 0 ? width : 42
   const out: RenderedLine[] = []
+  const renderedTexts = new Set<string>()
 
   const baseLine = (b: ReceiptBlock, left: string, right?: string): RenderedLine => ({
     kind: 'line',
@@ -429,7 +446,13 @@ export function renderTemplate(
         }
         break
       case 'cash_received':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Recibido', vars.received))
+        // "Recibido" solo aporta info cuando hay vuelto (recibido > cobrado).
+        // En pago exacto, Recibido = monto cobrado en efectivo y la línea
+        // es ruido. En ventas mixtas además duplica el sub-total que ya
+        // aparece en la línea EFECTIVO arriba.
+        if ((sale.change_given ?? 0) > 0) {
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Recibido', vars.received))
+        }
         break
       case 'change_given':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Vuelto', vars.change))
@@ -442,6 +465,14 @@ export function renderTemplate(
       case 'text': {
         const text = interpolate(b.value, vars)
         if (!text) break
+        // Si otro bloque text ya imprimió el mismo mensaje (ignorando
+        // mayúsculas y signos), lo skipeamos. Esto cubre el caso típico:
+        // plantilla con "¡GRACIAS POR TU COMPRA!" hardcoded + footer del
+        // store seteado a "¡Gracias por tu compra!" → boleta mostraba el
+        // agradecimiento duplicado.
+        const key = normalizeForDedup(text)
+        if (key && renderedTexts.has(key)) break
+        if (key) renderedTexts.add(key)
         for (const l of wrap(text, w)) out.push(baseLine(b, l))
         break
       }
