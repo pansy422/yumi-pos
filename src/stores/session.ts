@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { CashSession, Settings, User } from '@shared/types'
 import { api } from '@/lib/api'
+import { useCart } from '@/stores/cart'
 
 type State = {
   cash: CashSession | null
@@ -63,7 +64,13 @@ export const useSession = create<State & Actions>()(
       setCash: (cash) => set({ cash }),
       setSettings: (settings) => set({ settings }),
       setUser: (user) => set({ user }),
-      logout: () => set({ user: null }),
+      // Logout limpia también el carrito — sin esto, el siguiente cajero
+      // vería los productos que dejó cargados el cajero anterior y podría
+      // cobrar una venta a su nombre.
+      logout: () => {
+        set({ user: null })
+        useCart.getState().clear()
+      },
       bumpSalesVersion: () => set((s) => ({ salesVersion: s.salesVersion + 1 })),
     }),
     {

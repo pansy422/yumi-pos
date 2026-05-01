@@ -320,9 +320,26 @@ export function POS() {
     { allowInInput: true },
   )
 
+  // Escape vacía el ticket — pero exigimos doble Escape (dentro de 2s)
+  // para evitar perder el carrito por accidente. El primer Escape muestra
+  // un toast de aviso; el segundo confirma. Si pasan los 2s, vuelve a
+  // requerir doble.
+  const escConfirmRef = useRef<number | null>(null)
   useShortcut({ key: 'Escape' }, () => {
     if (payOpen) return
-    if (items.length > 0) clear()
+    if (items.length === 0) return
+    const now = Date.now()
+    if (escConfirmRef.current && now - escConfirmRef.current < 2000) {
+      escConfirmRef.current = null
+      clear()
+      toast({ title: 'Carrito vaciado' })
+      return
+    }
+    escConfirmRef.current = now
+    toast({
+      title: 'Presioná Escape de nuevo para vaciar el carrito',
+      description: `${items.length} producto${items.length === 1 ? '' : 's'} en el ticket.`,
+    })
   })
 
   const sub = subtotal()

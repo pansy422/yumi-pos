@@ -232,7 +232,14 @@ export function interpolate(s: string, vars: RenderVars): string {
 export function shouldShow(block: ReceiptBlock, sale: SaleWithItems): boolean {
   const cond = block.show ?? 'always'
   if (cond === 'always') return true
-  if (cond === 'cash') return sale.payment_method === 'efectivo'
+  // Mostrar bloques 'cash' si el pago fue 100% efectivo o si fue mixto
+  // y al menos uno de los métodos fue efectivo. Antes solo chequeaba
+  // payment_method === 'efectivo', dejando al cliente sin ver el
+  // recibido/vuelto en ventas mixtas que sí incluían efectivo.
+  if (cond === 'cash') {
+    if (sale.payment_method === 'efectivo') return true
+    return sale.payments?.some((p) => p.method === 'efectivo') ?? false
+  }
   if (cond === 'has_discount') return sale.discount > 0
   if (cond === 'has_change') return (sale.change_given ?? 0) > 0
   return true
