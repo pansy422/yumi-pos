@@ -1199,7 +1199,10 @@ function HeldTicketsDialog({
         {tickets.length > 0 && (
           <ul className="max-h-80 divide-y divide-border/40 overflow-auto rounded-md border border-border/40">
             {tickets.map((t) => {
-              const itemsTotal = t.items.reduce((a, i) => a + i.price * i.qty, 0)
+              // Usamos cartLineTotal para que el preview del ticket guardado
+              // incluya recargo y respete is_weight (qty en gramos / 1000),
+              // igual que cuando se carga al carrito.
+              const itemsTotal = t.items.reduce((a, i) => a + cartLineTotal(i), 0)
               const total = Math.max(0, itemsTotal - t.discount)
               const units = t.items.reduce((a, i) => a + i.qty, 0)
               const isDiscarding = pendingDiscardId === t.id
@@ -1346,6 +1349,11 @@ function PaymentDialog({
 
   const [lines, setLines] = useState<PaymentLine[]>([])
   const [submitting, setSubmitting] = useState(false)
+  // Guard sincronicamente contra doble click rápido. setSubmitting es
+  // asíncrono — un segundo click dentro del mismo tick verá submitting=false
+  // y dispararía un segundo api.salesCreate(), generando una venta duplicada.
+  // El ref se actualiza al instante y bloquea ambos casos.
+  const submittingRef = useRef(false)
   const [lastSale, setLastSale] = useState<SaleWithItems | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   /**
@@ -1364,10 +1372,14 @@ function PaymentDialog({
       setShowPreview(false)
       setPrintError(null)
     } else {
-      // Por defecto una línea efectivo cubriendo todo el total
+      // Por defecto una línea efectivo cubriendo todo el total. NO
+      // incluimos `tot` en deps — si el cliente repintó el carrito
+      // mientras el dialog está abierto, no queremos pisarle al cajero
+      // las líneas que ya empezó a editar.
       setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
     }
-  }, [open, tot])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const totalAssigned = lines.reduce((a, l) => a + (l.amount || 0), 0)
   const remaining = tot - totalAssigned
@@ -1419,6 +1431,8 @@ function PaymentDialog({
 
   const submit = async () => {
     if (!canSubmit) return
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const promoNote =
@@ -1463,6 +1477,7 @@ function PaymentDialog({
         description: err instanceof Error ? err.message : String(err),
       })
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
