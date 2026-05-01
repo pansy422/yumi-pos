@@ -349,11 +349,18 @@ export function Sales() {
                           <Button
                             size="icon"
                             variant="ghost"
+                            disabled={s.voided === 1}
                             onClick={(e) => {
                               e.stopPropagation()
+                              if (s.voided === 1) return
                               reprint(s.id)
                             }}
-                            className="opacity-0 group-hover:opacity-100"
+                            title={
+                              s.voided === 1
+                                ? 'No se puede reimprimir una venta anulada'
+                                : 'Reimprimir comprobante'
+                            }
+                            className="opacity-0 group-hover:opacity-100 disabled:opacity-30 disabled:group-hover:opacity-30"
                           >
                             <Printer className="h-4 w-4" />
                           </Button>

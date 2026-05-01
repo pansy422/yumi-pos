@@ -14,7 +14,11 @@ const DEFAULTS: Settings = {
     address: '',
     rut: '',
     phone: '',
-    receipt_footer: '¡Gracias por tu compra!',
+    // El bloque "¡GRACIAS POR TU COMPRA!" ya viene en la plantilla por
+    // defecto (b_thanks), así que el footer arranca vacío para no
+    // duplicar el agradecimiento. Si la cajera quiere agregar un mensaje
+    // extra (horario, redes, slogan), lo edita desde Ajustes → Boleta.
+    receipt_footer: '',
     tax_rate: 19,
     tax_inclusive: true,
   },

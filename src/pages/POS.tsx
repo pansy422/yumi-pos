@@ -1426,21 +1426,55 @@ function PaymentDialog({
   const updateLine = (id: number, patch: Partial<PaymentLine>) =>
     setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))
 
+  /**
+   * Cambiar método de pago de una línea sin dejar `cash_received` colgado:
+   * - A efectivo: si quedaba en 0 (vino de débito/etc.), lo equiparamos al
+   *   amount para no pintar "Falta efectivo" en una línea recién cambiada.
+   * - Desde efectivo: cash_received pierde sentido, lo limpiamos a 0.
+   */
+  const setLineMethod = (id: number, method: PaymentMethod) =>
+    setLines((cur) =>
+      cur.map((l) => {
+        if (l.id !== id) return l
+        if (method === 'efectivo') {
+          return { ...l, method, cash_received: Math.max(l.cash_received, l.amount) }
+        }
+        return { ...l, method, cash_received: 0 }
+      }),
+    )
+
   const removeLine = (id: number) =>
     setLines((cur) => cur.filter((l) => l.id !== id))
 
   const addLine = () => {
     const id = (lines.at(-1)?.id ?? 0) + 1
-    const fillAmount = Math.max(0, remaining)
-    setLines((cur) => [
-      ...cur,
-      {
-        id,
-        method: cur.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
-        amount: fillAmount,
-        cash_received: fillAmount,
-      },
-    ])
+    setLines((cur) => {
+      // Si la cajera dejó una línea de efectivo con cash_received < amount
+      // (recibió menos plata de la que está cobrando vía efectivo) y ahora
+      // pide otro método, lo más probable es que quiera pagar SOLO esa
+      // cantidad en cash y el resto con la nueva línea. Bajamos el amount
+      // de cada línea de efectivo "corta" a su cash_received para que la
+      // diferencia se libere y la nueva línea la cubra automáticamente.
+      // Sin esto la nueva línea nacía con amount=0 y la cajera tenía que
+      // bajar manualmente Pago 1 para que cuadre el total (UX confusa,
+      // riesgo de cobro mal armado).
+      const reconciled = cur.map((l) =>
+        l.method === 'efectivo' && l.cash_received < l.amount
+          ? { ...l, amount: l.cash_received }
+          : l,
+      )
+      const assigned = reconciled.reduce((a, l) => a + l.amount, 0)
+      const fillAmount = Math.max(0, tot - assigned)
+      return [
+        ...reconciled,
+        {
+          id,
+          method: reconciled.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+          amount: fillAmount,
+          cash_received: fillAmount,
+        },
+      ]
+    })
   }
 
   const fillRemainingTo = (id: number) => {
@@ -1452,7 +1486,12 @@ function PaymentDialog({
         return {
           ...l,
           amount: target,
-          cash_received: l.method === 'efectivo' ? Math.max(l.cash_received, target) : 0,
+          // En efectivo, cash_received se sincroniza con el nuevo target.
+          // Antes hacíamos Math.max para "preservar vuelto", pero si la
+          // cajera había tipeado más cash recibido que el monto anterior,
+          // y ahora cubrimos un monto MENOR, quedaba un vuelto fantasma
+          // (ej: amount baja a 5.000 pero cash_received seguía en 10.000).
+          cash_received: l.method === 'efectivo' ? target : 0,
         }
       }),
     )
@@ -1632,7 +1671,7 @@ function PaymentDialog({
                             ).map((m) => (
                               <button
                                 key={m.v}
-                                onClick={() => updateLine(line.id, { method: m.v })}
+                                onClick={() => setLineMethod(line.id, m.v)}
                                 className={cn(
                                   'rounded-md border px-1 py-1.5 text-[11px] font-medium transition-colors',
                                   line.method === m.v
@@ -1653,12 +1692,23 @@ function PaymentDialog({
                             </Label>
                             <MoneyInput
                               value={line.amount}
-                              onValueChange={(n) =>
+                              onValueChange={(n) => {
+                                // Mantener cash_received ≥ amount para que canSubmit
+                                // no se trabe. Si la cajera estaba en "pago exacto"
+                                // (cash_received === amount viejo), seguimos en
+                                // exacto con el monto nuevo. Si había vuelto
+                                // explícito (cash_received > amount), lo preservamos
+                                // pero subimos a n si n lo supera.
+                                const wasExact = line.cash_received === line.amount
                                 updateLine(line.id, {
                                   amount: n,
-                                  cash_received: isCash ? Math.max(line.cash_received, n) : 0,
+                                  cash_received: !isCash
+                                    ? 0
+                                    : wasExact
+                                      ? n
+                                      : Math.max(line.cash_received, n),
                                 })
-                              }
+                              }}
                               className="mt-1 text-lg"
                             />
                           </div>

@@ -70,7 +70,11 @@ function MarginPanel({
   useEffect(() => {
     setMarginText(String(computedMargin))
   }, [computedMargin])
-  const profit = Math.max(0, price - cost)
+  // No clampear a 0: si precio < costo el negocio pierde plata por unidad.
+  // Antes mostrábamos "+$0" y la cajera no notaba el problema. Mejor que
+  // se vea con signo y color destructivo.
+  const profit = price - cost
+  const negative = profit < 0
   const applyMargin = (margin: number) => {
     const next = Math.round(cost * (1 + margin / 100))
     onPriceChange(Math.max(0, next))
@@ -88,9 +92,20 @@ function MarginPanel({
           <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
             Ganancia
           </Label>
-          <div className="num mt-1 text-xl font-semibold leading-none tracking-display-tight text-success">
-            +${profit.toLocaleString('es-CL')}
+          <div
+            className={cn(
+              'num mt-1 text-xl font-semibold leading-none tracking-display-tight',
+              negative ? 'text-destructive' : 'text-success',
+            )}
+          >
+            {negative ? '−' : '+'}$
+            {Math.abs(profit).toLocaleString('es-CL')}
           </div>
+          {negative && (
+            <p className="mt-1 text-[10px] font-semibold uppercase tracking-caps text-destructive">
+              Margen negativo
+            </p>
+          )}
         </div>
         <div>
           <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
@@ -232,7 +247,25 @@ export function ProductDialog({
     }
     setSaving(true)
     try {
-      const toGrams = (s: string) => Math.round(parseFloat(s.replace(',', '.')) * 1000) || 0
+      // Parse de kg tolerante a formato CL/internacional:
+      //  - "1,5"    → 1.5 kg  → 1500 g
+      //  - "12.500" → 12.5 kg → 12500 g  (mantiene convención previa, placeholder)
+      //  - "1.234,5" → 1234.5 kg → 1234500 g  (punto como miles, coma como decimal)
+      //  - "12.500,5" → 12500.5 kg → 12500500 g
+      // Antes parseFloat("1.234,5".replace(',', '.')) = parseFloat("1.234.5") = 1.234
+      // y 1.234 kg se guardaba como 1234 g cuando debería haber sido 1234500 g.
+      const toGrams = (s: string) => {
+        const t = (s || '').trim()
+        if (!t) return 0
+        let normalized = t
+        if (t.includes(',')) {
+          // Latin: '.' = miles, ',' = decimal.
+          normalized = t.replace(/\./g, '').replace(',', '.')
+        }
+        const n = parseFloat(normalized)
+        if (!Number.isFinite(n) || n < 0) return 0
+        return Math.round(n * 1000)
+      }
       const stockValue = form.is_weight ? toGrams(form.stock_kg) : Math.round(form.stock) || 0
       const stockMin = form.is_weight
         ? toGrams(form.stock_min_kg)
@@ -240,8 +273,23 @@ export function ProductDialog({
       const stockMax = form.is_weight
         ? toGrams(form.stock_max_kg)
         : Math.round(form.stock_max) || 0
+      // Si ambos están seteados y max < min, el reporte de reposición pinta
+      // raro y la cajera puede pensar que es bug. Avisamos antes de guardar.
+      if (stockMin > 0 && stockMax > 0 && stockMax < stockMin) {
+        toast({
+          variant: 'warning',
+          title: 'Stock máximo menor al mínimo',
+          description: 'Revisá los umbrales: el máximo no puede ser menor que el mínimo.',
+        })
+        setSaving(false)
+        return
+      }
+      // Barcode: además de trim, sacamos espacios internos. Si la cajera
+      // pega "12 34" (típico copy/paste), futuros escaneos con "1234" no
+      // matchearían y crearía duplicado.
+      const barcodeClean = form.barcode.replace(/\s+/g, '')
       const input: ProductInput = {
-        barcode: form.barcode.trim() || null,
+        barcode: barcodeClean || null,
         name: form.name.trim(),
         sku: form.sku.trim() || null,
         category: form.category.trim() || null,

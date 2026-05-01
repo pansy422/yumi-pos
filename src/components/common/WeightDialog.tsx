@@ -48,7 +48,22 @@ export function WeightDialog({
   // porque después se redondea y la cajera ve un valor distinto al que
   // marcó la balanza). En modo "kg" sí aceptamos hasta 3 decimales para
   // ingresar gramos con precisión (0.345 kg = 345 g).
-  const sanitized = unit === 'g' ? text.replace(/[^\d]/g, '') : text.replace(',', '.')
+  // Sanitizamos múltiples separadores: si la cajera tipea "1.2.3" o "1,2,3",
+  // parseFloat se queda con "1.2" silenciosamente — preferimos colapsar a
+  // un único separador antes de parsear para que el preview refleje algo
+  // predecible.
+  const sanitized =
+    unit === 'g'
+      ? text.replace(/[^\d]/g, '')
+      : (() => {
+          const normalized = text.replace(',', '.')
+          const firstDot = normalized.indexOf('.')
+          if (firstDot === -1) return normalized
+          return (
+            normalized.slice(0, firstDot + 1) +
+            normalized.slice(firstDot + 1).replace(/\./g, '')
+          )
+        })()
   const parsed = parseFloat(sanitized)
   const grams =
     isFinite(parsed) && parsed > 0 ? Math.round(unit === 'kg' ? parsed * 1000 : parsed) : 0

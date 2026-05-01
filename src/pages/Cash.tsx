@@ -476,8 +476,16 @@ function OpenDialog({
             Cancelar
           </Button>
           <Button
-            disabled={saving}
+            disabled={saving || !Number.isFinite(amount) || amount < 0}
             onClick={async () => {
+              if (!Number.isFinite(amount) || amount < 0) {
+                toast({
+                  variant: 'warning',
+                  title: 'Monto inválido',
+                  description: 'El monto inicial no puede ser negativo.',
+                })
+                return
+              }
               setSaving(true)
               try {
                 await api.cashOpen(amount, notes || undefined, currentUser?.id ?? null)
@@ -521,13 +529,19 @@ function CloseDialog({
   const [saving, setSaving] = useState(false)
   const [printZ, setPrintZ] = useState(true)
 
+  // El campo counted arranca en 0 a propósito: si lo igualábamos a
+  // `expected` por defecto, la cajera podía pegarle Confirmar sin contar
+  // físicamente y la diferencia siempre saldría 0. Con 0 forzamos a que
+  // tipee el conteo real (o explícitamente acepte el descuadre).
+  const [touched, setTouched] = useState(false)
   useEffect(() => {
     if (open) {
-      setCounted(expected)
+      setCounted(0)
+      setTouched(false)
       setNotes('')
       setPrintZ(!!settings?.printer.enabled)
     }
-  }, [open, expected, settings])
+  }, [open, settings])
 
   const diff = counted - expected
 
@@ -541,7 +555,19 @@ function CloseDialog({
           <Stat label="Esperado" value={expected} highlight />
           <div className="space-y-1">
             <Label>Contado en caja</Label>
-            <MoneyInput value={counted} onValueChange={setCounted} autoFocus />
+            <MoneyInput
+              value={counted}
+              onValueChange={(n) => {
+                setCounted(n)
+                setTouched(true)
+              }}
+              autoFocus
+            />
+            {!touched && (
+              <p className="text-[11px] text-muted-foreground">
+                Contá físicamente el efectivo y tipea el total.
+              </p>
+            )}
           </div>
           <div
             className={`rounded-md border p-3 ${diff === 0 ? 'border-success/40 bg-success/10' : 'border-warning/40 bg-warning/10'}`}
@@ -571,10 +597,25 @@ function CloseDialog({
           </Button>
           <Button
             variant="warning"
-            disabled={saving}
+            disabled={
+              saving ||
+              !cash ||
+              !touched ||
+              !Number.isFinite(counted) ||
+              counted < 0
+            }
             onClick={async () => {
+              if (!cash) return
+              if (!Number.isFinite(counted) || counted < 0) {
+                toast({
+                  variant: 'warning',
+                  title: 'Conteo inválido',
+                  description: 'El monto contado no puede ser negativo.',
+                })
+                return
+              }
               setSaving(true)
-              const sessionId = cash?.id ?? null
+              const sessionId = cash.id
               try {
                 await api.cashClose(counted, notes || undefined, currentUser?.id ?? null)
                 onDone(diff, sessionId, printZ)
@@ -659,11 +700,24 @@ function MoveDialog({
             Cancelar
           </Button>
           <Button
-            disabled={saving || amount === 0 || !note.trim()}
+            disabled={
+              saving ||
+              !Number.isFinite(amount) ||
+              amount === 0 ||
+              !note.trim() ||
+              ((kind === 'withdraw' || kind === 'deposit') && amount < 0)
+            }
             onClick={async () => {
+              // Normalizamos el signo por kind: el back usa el monto crudo
+              // en SUM(deposit) - SUM(withdraw) + SUM(adjustment). Si la
+              // cajera tipea negativo en deposit/withdraw, el cuadre se
+              // invierte. Sólo `adjustment` admite negativos por diseño.
+              const safe =
+                kind === 'adjustment' ? amount : Math.abs(amount)
+              if (!Number.isFinite(safe) || safe === 0) return
               setSaving(true)
               try {
-                await api.cashMove(kind, amount, note.trim(), currentUser?.id ?? null)
+                await api.cashMove(kind, safe, note.trim(), currentUser?.id ?? null)
                 onDone()
               } catch (err) {
                 toast({
