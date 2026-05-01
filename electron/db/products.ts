@@ -224,9 +224,21 @@ export function adjustStock(id: string, delta: number, _note?: string): Product 
   const tx = db.transaction(() => {
     const current = get(id)
     if (!current) throw new Error('Producto no encontrado')
+    const d = Math.round(delta)
+    // Si la cajera intenta quitar más stock del que hay, abortamos en
+    // vez de dejar inventario negativo (que rompe reportes y la
+    // invariante de negocio de stock >= 0).
+    if (current.stock + d < 0) {
+      const want = current.is_weight === 1 ? `${(-d / 1000).toFixed(3)} kg` : String(-d)
+      const has =
+        current.is_weight === 1 ? `${(current.stock / 1000).toFixed(3)} kg` : String(current.stock)
+      throw new Error(
+        `No se puede quitar ${want} de "${current.name}": solo hay ${has} en stock.`,
+      )
+    }
     db.prepare(
       `UPDATE products SET stock = stock + ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(Math.round(delta), id)
+    ).run(d, id)
   })
   tx()
   return get(id)!

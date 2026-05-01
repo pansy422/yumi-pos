@@ -53,6 +53,29 @@ export function save(input: UserInput): User {
   const fontScale = clampScale(input.font_scale)
 
   if (input.id) {
+    // Bloqueamos los 2 caminos que dejarían al sistema sin admin activo:
+    //   - cambiar role 'admin' -> 'cashier' al último admin
+    //   - desactivar al último admin
+    // Sin esto, el admin se "auto-bloquea" y nadie puede crear/borrar
+    // usuarios después (mismo riesgo que cubre remove() para borrado).
+    const target = get(input.id)
+    if (target?.role === 'admin' && target.active === 1) {
+      const losingAdmin =
+        (input.role !== undefined && input.role !== 'admin') ||
+        input.active === false
+      if (losingAdmin) {
+        const row = db
+          .prepare(
+            `SELECT COUNT(*) AS c FROM users WHERE role = 'admin' AND active = 1 AND id <> ?`,
+          )
+          .get(input.id) as { c: number }
+        if (Number(row.c) === 0) {
+          throw new Error(
+            'No puedes cambiar tu rol o desactivarte: serías el último administrador. Crea otro admin primero.',
+          )
+        }
+      }
+    }
     if (input.pin) {
       db.prepare(
         `UPDATE users SET name=?, role=?, active=?, font_scale=?, pin=? WHERE id=?`,
