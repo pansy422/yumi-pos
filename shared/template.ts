@@ -76,13 +76,15 @@ export const DEFAULT_TEMPLATE: ReceiptTemplate = {
     { id: 'b_sep3', type: 'separator' },
     { id: 'b_sub', type: 'subtotal' },
     { id: 'b_disc', type: 'discount', show: 'has_discount' },
+    { id: 'b_net', type: 'net_amount' },
+    { id: 'b_tax', type: 'tax_amount' },
     { id: 'b_total', type: 'total', bold: true, size: 'large' },
     { id: 'b_sep4', type: 'separator' },
     { id: 'b_pm', type: 'payment_method' },
     { id: 'b_rec', type: 'cash_received', show: 'cash' },
-    { id: 'b_chg', type: 'change_given', show: 'cash' },
+    { id: 'b_chg', type: 'change_given', show: 'has_change' },
     { id: 'b_sp1', type: 'spacer', lines: 1 },
-    { id: 'b_thanks', type: 'text', value: 'Gracias por tu compra', align: 'center', bold: true },
+    { id: 'b_thanks', type: 'text', value: '¡GRACIAS POR TU COMPRA!', align: 'center', bold: true, size: 'large' },
     { id: 'b_footer', type: 'text', value: '{{footer}}', align: 'center' },
     { id: 'b_doctype', type: 'text', value: 'COMPROBANTE DE VENTA', align: 'center' },
     { id: 'b_sp2', type: 'spacer', lines: 2 },
@@ -110,7 +112,7 @@ export const PRESETS: { id: string; label: string; description: string; template
         { id: 'c_sep2', type: 'separator' },
         { id: 'c_total', type: 'total', bold: true, size: 'xl', align: 'right' },
         { id: 'c_pm', type: 'payment_method', align: 'right' },
-        { id: 'c_chg', type: 'change_given', show: 'cash', align: 'right' },
+        { id: 'c_chg', type: 'change_given', show: 'has_change', align: 'right' },
         { id: 'c_doctype', type: 'text', value: 'COMPROBANTE DE VENTA', align: 'center' },
         { id: 'c_sp', type: 'spacer', lines: 2 },
       ],
@@ -136,9 +138,9 @@ export const PRESETS: { id: string; label: string; description: string; template
         { id: 'i_sep4', type: 'separator' },
         { id: 'i_pm', type: 'payment_method' },
         { id: 'i_rec', type: 'cash_received', show: 'cash' },
-        { id: 'i_chg', type: 'change_given', show: 'cash' },
+        { id: 'i_chg', type: 'change_given', show: 'has_change' },
         { id: 'i_sp1', type: 'spacer', lines: 1 },
-        { id: 'i_thanks', type: 'text', value: 'Gracias por tu compra', align: 'center', bold: true },
+        { id: 'i_thanks', type: 'text', value: '¡GRACIAS POR TU COMPRA!', align: 'center', bold: true, size: 'large' },
         { id: 'i_foot', type: 'text', value: '{{footer}}', align: 'center' },
         { id: 'i_doctype', type: 'text', value: 'COMPROBANTE DE VENTA', align: 'center' },
         { id: 'i_sp2', type: 'spacer', lines: 2 },
@@ -232,7 +234,14 @@ export function interpolate(s: string, vars: RenderVars): string {
 export function shouldShow(block: ReceiptBlock, sale: SaleWithItems): boolean {
   const cond = block.show ?? 'always'
   if (cond === 'always') return true
-  if (cond === 'cash') return sale.payment_method === 'efectivo'
+  // Mostrar bloques 'cash' si el pago fue 100% efectivo o si fue mixto
+  // y al menos uno de los métodos fue efectivo. Antes solo chequeaba
+  // payment_method === 'efectivo', dejando al cliente sin ver el
+  // recibido/vuelto en ventas mixtas que sí incluían efectivo.
+  if (cond === 'cash') {
+    if (sale.payment_method === 'efectivo') return true
+    return sale.payments?.some((p) => p.method === 'efectivo') ?? false
+  }
   if (cond === 'has_discount') return sale.discount > 0
   if (cond === 'has_change') return (sale.change_given ?? 0) > 0
   return true
@@ -333,10 +342,10 @@ export function renderTemplate(
         break
       }
       case 'sale_number_and_date':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Boleta N° ${vars.number}`, vars.date))
+        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Comprobante N° ${vars.number}`, vars.date))
         break
       case 'sale_number':
-        out.push(baseLine(b, `Boleta N° ${vars.number}`))
+        out.push(baseLine(b, `Comprobante N° ${vars.number}`))
         break
       case 'date':
         out.push(baseLine(b, vars.date))
@@ -372,16 +381,23 @@ export function renderTemplate(
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Descuento', '-' + vars.discount))
         break
       case 'net_amount':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Neto', vars.net))
+        // Si la tienda no tiene IVA configurado (rate=0), Neto es igual
+        // al Total y no aporta info — skipeamos para no ensuciar la
+        // boleta con líneas redundantes.
+        if (Number(vars.tax_rate) > 0) {
+          out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'Neto', vars.net))
+        }
         break
       case 'tax_amount':
-        out.push(
-          baseLine(
-            { ...b, align: b.align ?? 'left' },
-            `IVA ${vars.tax_rate}%`,
-            vars.tax,
-          ),
-        )
+        if (Number(vars.tax_rate) > 0) {
+          out.push(
+            baseLine(
+              { ...b, align: b.align ?? 'left' },
+              `IVA ${vars.tax_rate}%`,
+              vars.tax,
+            ),
+          )
+        }
         break
       case 'total':
         out.push(baseLine({ ...b, align: b.align ?? 'left' }, 'TOTAL', vars.total))

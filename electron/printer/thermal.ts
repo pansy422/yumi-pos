@@ -69,6 +69,7 @@ export async function printReceipt(
   store: StoreSettings,
   printer: PrinterSettings,
   template: ReceiptTemplate,
+  opts?: { reprint?: boolean },
 ): Promise<void> {
   if (!printer.enabled) throw new Error('Impresora deshabilitada en Ajustes')
   if (!printer.interface || printer.interface.trim() === '') {
@@ -79,7 +80,14 @@ export async function printReceipt(
 
   // Boleta para el cliente
   formatReceiptFromTemplate(tp, sale, store, template, printer.width_chars)
-  if (printer.open_drawer_on_cash && sale.payment_method === 'efectivo') {
+  // El cajón solo se abre en la PRIMERA impresión post-venta. En las
+  // reimpresiones (desde Ventas → Reimprimir) NO se abre, porque el
+  // dinero ya entró cuando se hizo la venta original.
+  if (
+    !opts?.reprint &&
+    printer.open_drawer_on_cash &&
+    sale.payment_method === 'efectivo'
+  ) {
     tp.openCashDrawer()
   }
   tp.cut()

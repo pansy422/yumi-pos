@@ -165,10 +165,14 @@ export function buildZReport(sessionId: string): ZReport {
   const session = getById(sessionId)
   if (!session) throw new Error('Sesión de caja no encontrada')
   const sum = summary(sessionId)
+  // COUNT(DISTINCT sp.sale_id) — si una venta dividida tiene 2 pagos en
+  // efectivo, COUNT(*) los contaría como 2 ventas distintas. Lo que la
+  // cajera quiere ver es cantidad de boletas con ese método, no número
+  // de líneas de pago.
   const byPayment = db
     .prepare(
       `SELECT sp.method AS method,
-              COUNT(*) AS count,
+              COUNT(DISTINCT sp.sale_id) AS count,
               COALESCE(SUM(sp.amount),0) AS total
        FROM sale_payments sp
        JOIN sales s ON s.id = sp.sale_id
