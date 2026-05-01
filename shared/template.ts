@@ -84,7 +84,7 @@ export const DEFAULT_TEMPLATE: ReceiptTemplate = {
     { id: 'b_rec', type: 'cash_received', show: 'cash' },
     { id: 'b_chg', type: 'change_given', show: 'has_change' },
     { id: 'b_sp1', type: 'spacer', lines: 1 },
-    { id: 'b_thanks', type: 'text', value: 'Gracias por tu compra', align: 'center', bold: true, size: 'large' },
+    { id: 'b_thanks', type: 'text', value: '¡GRACIAS POR TU COMPRA!', align: 'center', bold: true, size: 'large' },
     { id: 'b_footer', type: 'text', value: '{{footer}}', align: 'center' },
     { id: 'b_doctype', type: 'text', value: 'COMPROBANTE DE VENTA', align: 'center' },
     { id: 'b_sp2', type: 'spacer', lines: 2 },
@@ -140,7 +140,7 @@ export const PRESETS: { id: string; label: string; description: string; template
         { id: 'i_rec', type: 'cash_received', show: 'cash' },
         { id: 'i_chg', type: 'change_given', show: 'has_change' },
         { id: 'i_sp1', type: 'spacer', lines: 1 },
-        { id: 'i_thanks', type: 'text', value: 'Gracias por tu compra', align: 'center', bold: true, size: 'large' },
+        { id: 'i_thanks', type: 'text', value: '¡GRACIAS POR TU COMPRA!', align: 'center', bold: true, size: 'large' },
         { id: 'i_foot', type: 'text', value: '{{footer}}', align: 'center' },
         { id: 'i_doctype', type: 'text', value: 'COMPROBANTE DE VENTA', align: 'center' },
         { id: 'i_sp2', type: 'spacer', lines: 2 },
@@ -342,10 +342,10 @@ export function renderTemplate(
         break
       }
       case 'sale_number_and_date':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Boleta N° ${vars.number}`, vars.date))
+        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Comprobante N° ${vars.number}`, vars.date))
         break
       case 'sale_number':
-        out.push(baseLine(b, `Boleta N° ${vars.number}`))
+        out.push(baseLine(b, `Comprobante N° ${vars.number}`))
         break
       case 'date':
         out.push(baseLine(b, vars.date))
