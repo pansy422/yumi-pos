@@ -13,12 +13,21 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP } from '@shared/money'
+import { formatCLP, formatWeight } from '@shared/money'
 import { cn } from '@/lib/utils'
 import type { ProductInput } from '@shared/types'
 
 const REQUIRED_HEADERS = ['name', 'price'] as const
-const OPTIONAL_HEADERS = ['barcode', 'sku', 'category', 'cost', 'stock'] as const
+const OPTIONAL_HEADERS = [
+  'barcode',
+  'sku',
+  'category',
+  'cost',
+  'stock',
+  'is_weight',
+  'stock_min',
+  'stock_max',
+] as const
 type Header = (typeof REQUIRED_HEADERS)[number] | (typeof OPTIONAL_HEADERS)[number]
 
 const HEADER_ALIASES: Record<string, Header> = {
@@ -39,9 +48,28 @@ const HEADER_ALIASES: Record<string, Header> = {
   price: 'price',
   precio: 'price',
   'precio venta': 'price',
+  'precio por kg': 'price',
+  'precio kg': 'price',
   stock: 'stock',
   cantidad: 'stock',
   inventario: 'stock',
+  'stock kg': 'stock',
+  is_weight: 'is_weight',
+  peso: 'is_weight',
+  'por peso': 'is_weight',
+  'es peso': 'is_weight',
+  unidad: 'is_weight',
+  tipo: 'is_weight',
+  stock_min: 'stock_min',
+  'stock minimo': 'stock_min',
+  'stock mínimo': 'stock_min',
+  minimo: 'stock_min',
+  mínimo: 'stock_min',
+  stock_max: 'stock_max',
+  'stock maximo': 'stock_max',
+  'stock máximo': 'stock_max',
+  maximo: 'stock_max',
+  máximo: 'stock_max',
 }
 
 type ParsedRow = {
@@ -104,6 +132,55 @@ function parseNumber(s: string): number {
   return Math.round(Number(s.replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')) || 0)
 }
 
+/**
+ * Parser decimal tolerante a formato latino e internacional. Pensado
+ * para stock en kg (ej. "12,5", "12.5", "1.234,5"). A diferencia de
+ * parseNumber, NO trata el punto como separador de miles cuando es el
+ * único separador presente — eso truncaría "12.5" → 125.
+ */
+function parseDecimal(s: string): number {
+  const t = (s || '').trim()
+  if (!t) return 0
+  let normalized = t.replace(/[^\d.,\-]/g, '')
+  if (normalized.includes(',')) {
+    // Convención latina: '.' = miles, ',' = decimal.
+    normalized = normalized.replace(/\./g, '').replace(',', '.')
+  }
+  const n = parseFloat(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Acepta tanto banderas booleanas (1/0, sí/no, true/false) como
+ * etiquetas de unidad (peso, kg, kilo, unidad, u). Cualquier valor que
+ * no matchee con "peso" se interpreta como por unidad — más seguro
+ * tratar producto raro como unidad que como kg.
+ */
+function parseIsWeight(s: string): 0 | 1 {
+  const v = (s || '').toLowerCase().trim()
+  if (!v) return 0
+  if (
+    [
+      '1',
+      'si',
+      'sí',
+      'yes',
+      'y',
+      'true',
+      'peso',
+      'por peso',
+      'kg',
+      'kilo',
+      'kilos',
+      'gramo',
+      'gramos',
+    ].includes(v)
+  ) {
+    return 1
+  }
+  return 0
+}
+
 export function CsvImport({
   open,
   onOpenChange,
@@ -155,6 +232,14 @@ export function CsvImport({
     }
     const parsed: ParsedRow[] = matrix.slice(1).map((cells) => {
       const data: Partial<ProductInput> = {}
+      // Buffers crudos para stock cuando is_weight depende de otra columna
+      // que puede aparecer en cualquier orden en el CSV. Los resolvemos al
+      // final con el is_weight ya conocido.
+      let rawStock = ''
+      let rawStockMin = ''
+      let rawStockMax = ''
+      let isWeight: 0 | 1 = 0
+      let sawIsWeight = false
       for (let i = 0; i < detected.length; i++) {
         const h = detected[i]
         if (!h) continue
@@ -164,7 +249,9 @@ export function CsvImport({
             data.name = value
             break
           case 'barcode':
-            data.barcode = value || null
+            // Strip espacios internos para que escaneos posteriores hagan
+            // match exacto con lo guardado.
+            data.barcode = value.replace(/\s+/g, '') || null
             break
           case 'sku':
             data.sku = value || null
@@ -179,15 +266,51 @@ export function CsvImport({
             data.price = parseNumber(value)
             break
           case 'stock':
-            data.stock = parseNumber(value)
+            rawStock = value
+            break
+          case 'stock_min':
+            rawStockMin = value
+            break
+          case 'stock_max':
+            rawStockMax = value
+            break
+          case 'is_weight':
+            isWeight = parseIsWeight(value)
+            sawIsWeight = true
             break
         }
+      }
+      data.is_weight = isWeight
+      // Para productos al peso interpretamos stock/min/max como kg y los
+      // convertimos a gramos (la unidad canónica interna). Para unidad,
+      // usamos parseNumber que redondea a entero.
+      if (isWeight === 1) {
+        data.stock = Math.round(parseDecimal(rawStock) * 1000)
+        data.stock_min = Math.round(parseDecimal(rawStockMin) * 1000)
+        data.stock_max = Math.round(parseDecimal(rawStockMax) * 1000)
+      } else {
+        data.stock = rawStock ? parseNumber(rawStock) : 0
+        data.stock_min = rawStockMin ? parseNumber(rawStockMin) : 0
+        data.stock_max = rawStockMax ? parseNumber(rawStockMax) : 0
       }
       const errors: string[] = []
       if (!data.name || !data.name.trim()) errors.push('falta nombre')
       if (data.price == null || data.price <= 0) errors.push('precio inválido')
       if (data.cost != null && data.cost < 0) errors.push('costo negativo')
       if (data.stock != null && data.stock < 0) errors.push('stock negativo')
+      if (
+        data.stock_min != null &&
+        data.stock_max != null &&
+        data.stock_min > 0 &&
+        data.stock_max > 0 &&
+        data.stock_max < data.stock_min
+      ) {
+        errors.push('stock máx menor al mín')
+      }
+      // Aviso silencioso (no bloquea): si se vio una columna is_weight
+      // con valor que no matcheó nada conocido, se trata como unidad.
+      // Lo dejamos pasar para que un CSV con la columna vacía igual entre.
+      void sawIsWeight
       return {
         raw: cells,
         data: errors.length === 0 ? (data as ProductInput) : null,
@@ -225,10 +348,17 @@ export function CsvImport({
   }
 
   const downloadTemplate = () => {
+    // Para productos al peso (is_weight=1), stock/stock_min/stock_max van
+    // en KG (decimal: "12,5" o "12.5"). Para por unidad, en unidades enteras.
+    // Precio siempre es por la unidad de venta: $/unidad para por unidad,
+    // $/kg para por peso.
     const csv =
-      'name,barcode,sku,category,cost,price,stock\n' +
-      '"Coca-Cola 500ml",7801234567890,COCA500,Bebidas,800,1290,10\n' +
-      '"Pan amasado",,,Panadería,150,350,0\n'
+      'name,barcode,sku,category,cost,price,stock,is_weight,stock_min,stock_max\n' +
+      '"Coca-Cola 500ml",7801234567890,COCA500,Bebidas,800,1290,10,0,3,0\n' +
+      '"Pan amasado",,,Panadería,150,350,0,0,0,0\n' +
+      '"Jamón de pavo",,,Cecinas,5500,8990,2.5,1,0.5,5\n' +
+      '"Tomate",,,Verduras,800,1500,12.5,kg,2,0\n' +
+      '"Queso mantecoso",,,Cecinas,7800,12990,3,peso,1,0\n'
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -271,7 +401,23 @@ export function CsvImport({
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Columnas reconocidas: <span className="mono">name (obligatorio), price (obligatorio), barcode, sku, category, cost, stock</span>. Soporta los nombres en español también.
+            Columnas reconocidas: <span className="mono">name</span> (obligatorio),{' '}
+            <span className="mono">price</span> (obligatorio),{' '}
+            <span className="mono">barcode</span>, <span className="mono">sku</span>,{' '}
+            <span className="mono">category</span>, <span className="mono">cost</span>,{' '}
+            <span className="mono">stock</span>, <span className="mono">is_weight</span>,{' '}
+            <span className="mono">stock_min</span>, <span className="mono">stock_max</span>.
+            Soporta nombres en español.
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            <strong>Productos al peso:</strong> poné{' '}
+            <span className="mono">is_weight=1</span> (también acepta{' '}
+            <span className="mono">peso</span>, <span className="mono">kg</span>,{' '}
+            <span className="mono">sí</span>). El <span className="mono">price</span> se interpreta
+            como precio por kg, y <span className="mono">stock</span> /{' '}
+            <span className="mono">stock_min</span> / <span className="mono">stock_max</span> en
+            kilos (admite decimales: <span className="mono">2.5</span> o{' '}
+            <span className="mono">2,5</span>).
           </p>
 
           {rows.length > 0 && (
@@ -296,41 +442,62 @@ export function CsvImport({
                       <th className="px-2 py-1 text-left">Nombre</th>
                       <th className="px-2 py-1 text-left">Código</th>
                       <th className="px-2 py-1 text-left">Categoría</th>
+                      <th className="px-2 py-1 text-left">Tipo</th>
                       <th className="px-2 py-1 text-right">Precio</th>
                       <th className="px-2 py-1 text-right">Stock</th>
                       <th className="px-2 py-1 text-left">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r, i) => (
-                      <tr
-                        key={i}
-                        className={cn(
-                          'border-t border-border/40',
-                          r.error && 'bg-destructive/5',
-                        )}
-                      >
-                        <td className="px-2 py-1.5 text-xs text-muted-foreground">{i + 2}</td>
-                        <td className="px-2 py-1.5">{r.data?.name ?? r.raw[0]}</td>
-                        <td className="px-2 py-1.5 mono text-xs text-muted-foreground">
-                          {r.data?.barcode ?? '—'}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">
-                          {r.data?.category ?? <span className="text-muted-foreground">—</span>}
-                        </td>
-                        <td className="px-2 py-1.5 text-right num">
-                          {r.data ? formatCLP(r.data.price) : '—'}
-                        </td>
-                        <td className="px-2 py-1.5 text-right num">{r.data?.stock ?? 0}</td>
-                        <td className="px-2 py-1.5">
-                          {r.error ? (
-                            <span className="text-xs text-destructive">{r.error}</span>
-                          ) : (
-                            <span className="text-xs text-success">Listo</span>
+                    {rows.map((r, i) => {
+                      const isWeight = r.data?.is_weight === 1
+                      return (
+                        <tr
+                          key={i}
+                          className={cn(
+                            'border-t border-border/40',
+                            r.error && 'bg-destructive/5',
                           )}
-                        </td>
-                      </tr>
-                    ))}
+                        >
+                          <td className="px-2 py-1.5 text-xs text-muted-foreground">{i + 2}</td>
+                          <td className="px-2 py-1.5">{r.data?.name ?? r.raw[0]}</td>
+                          <td className="px-2 py-1.5 mono text-xs text-muted-foreground">
+                            {r.data?.barcode ?? '—'}
+                          </td>
+                          <td className="px-2 py-1.5 text-xs">
+                            {r.data?.category ?? <span className="text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-2 py-1.5 text-xs">
+                            {isWeight ? (
+                              <Badge variant="secondary" className="text-[10px]">
+                                Peso (kg)
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">Unidad</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-right num">
+                            {r.data
+                              ? `${formatCLP(r.data.price)}${isWeight ? '/kg' : ''}`
+                              : '—'}
+                          </td>
+                          <td className="px-2 py-1.5 text-right num">
+                            {r.data
+                              ? isWeight
+                                ? formatWeight(r.data.stock ?? 0)
+                                : (r.data.stock ?? 0)
+                              : 0}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            {r.error ? (
+                              <span className="text-xs text-destructive">{r.error}</span>
+                            ) : (
+                              <span className="text-xs text-success">Listo</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
