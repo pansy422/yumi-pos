@@ -46,7 +46,7 @@ import { EmptyState, ChartEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
-import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import { formatCLP, formatDateTimeCL, formatWeight, todayISO } from '@shared/money'
 import { cn } from '@/lib/utils'
 import type { PaymentMethod, Sale, SaleWithItems } from '@shared/types'
 
@@ -324,13 +324,7 @@ export function Sales() {
                           </div>
                         </td>
                         <td className="px-4 py-2.5 mono text-xs text-muted-foreground">
-                          {new Date(s.completed_at).toLocaleString('es-CL', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                          {formatDateTimeCL(s.completed_at)}
                         </td>
                         <td className="px-4 py-2.5 text-xs">
                           {s.cashier_name ? (
@@ -386,7 +380,7 @@ export function Sales() {
                   {picked.voided ? <Badge variant="destructive">Anulada</Badge> : null}
                 </DialogTitle>
                 <DialogDescription>
-                  {new Date(picked.completed_at).toLocaleString('es-CL')} ·{' '}
+                  {formatDateTimeCL(picked.completed_at)} ·{' '}
                   {PAY_LABEL[picked.payment_method]}
                 </DialogDescription>
               </DialogHeader>

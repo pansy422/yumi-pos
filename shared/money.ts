@@ -30,6 +30,37 @@ export function todayISO(d: Date = new Date()): string {
 }
 
 /**
+ * Formatea una fecha ISO (yyyy-mm-dd o yyyy-mm-ddTHH:MM:SS...) a la
+ * convención chilena dd-mm-yyyy. Para mostrar al usuario; nunca para
+ * almacenar (la BD usa ISO siempre). Antes mostrábamos `2026-05-04`
+ * directo en tablas y un cajero CL podía leer eso como "4 de mayo" o
+ * "5 de abril" según el dia.
+ */
+export function formatDateCL(iso: string): string {
+  if (!iso) return ''
+  // Acepta tanto "2026-05-04" como "2026-05-04T13:45:00".
+  const datePart = iso.slice(0, 10)
+  const m = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return iso
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
+
+/**
+ * Formatea fecha + hora en convención chilena: "04-05-2026 14:30".
+ * Usa la TZ local del SO. Para boletas, listados y reportes.
+ */
+export function formatDateTimeCL(iso: string | Date): string {
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${day}-${month}-${year} ${hh}:${mm}`
+}
+
+/**
  * Formatea una cantidad almacenada en gramos a "Ng" o "N.NNN kg" según
  * sea más legible. Por debajo de 1 kg usa gramos enteros; arriba usa kg
  * con 3 decimales.

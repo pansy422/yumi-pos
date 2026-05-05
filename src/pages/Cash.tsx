@@ -35,7 +35,7 @@ import { MoneyInput } from '@/components/common/MoneyInput'
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
-import { formatCLP } from '@shared/money'
+import { formatCLP, formatDateTimeCL } from '@shared/money'
 import type { CashMovement, CashSessionSummary } from '@shared/types'
 
 /** Parsea timestamp SQLite (UTC sin sufijo) a Date local correcta. */
@@ -46,7 +46,7 @@ function parseDate(s: string | null): Date | null {
 }
 function fmtDate(s: string | null): string {
   const d = parseDate(s)
-  return d ? d.toLocaleString('es-CL') : '—'
+  return d ? formatDateTimeCL(d) : '—'
 }
 
 const KIND_LABEL: Record<CashMovement['kind'], string> = {

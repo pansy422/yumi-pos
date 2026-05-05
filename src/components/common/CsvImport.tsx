@@ -78,7 +78,7 @@ type ParsedRow = {
   error?: string
 }
 
-function parseCsv(text: string): string[][] {
+function parseCsv(text: string, delim: ',' | ';'): string[][] {
   const lines: string[][] = []
   let cur = ''
   let row: string[] = []
@@ -92,7 +92,7 @@ function parseCsv(text: string): string[][] {
       } else {
         inQuotes = !inQuotes
       }
-    } else if (c === ',' && !inQuotes) {
+    } else if (c === delim && !inQuotes) {
       row.push(cur)
       cur = ''
     } else if ((c === '\n' || c === '\r') && !inQuotes) {
@@ -127,27 +127,52 @@ function normalizeHeader(h: string): Header | null {
   return (HEADER_ALIASES[key] ?? null) as Header | null
 }
 
-function parseNumber(s: string): number {
-  if (!s) return 0
-  return Math.round(Number(s.replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '')) || 0)
+/**
+ * Parser robusto de números numéricos (enteros para CLP, decimales para
+ * peso). Detecta el separador decimal por la última ocurrencia, así
+ * funciona con formato CL (`1.500,50`), formato US copiado por error
+ * (`1,500.50`), miles encadenados (`1.500.000`), o sin separadores.
+ *
+ * Antes el parser hacía `replace(/\./g,'')` ciegamente y un input US
+ * `1,500.50` quedaba como 2 (estripaba el punto, dejaba "1,50050",
+ * pasaba por replace(',', '.') → "1.50050"). Resultado: precios o
+ * costos importados a $2 sin que la cajera notara.
+ */
+function parseNumeric(s: string): number {
+  const t = (s || '').trim().replace(/[^\d.,\-]/g, '')
+  if (!t) return 0
+  const lastDot = t.lastIndexOf('.')
+  const lastComma = t.lastIndexOf(',')
+  let normalized = t
+  if (lastDot >= 0 && lastComma >= 0) {
+    if (lastDot > lastComma) {
+      // US: "1,500.50" → coma es miles, punto es decimal.
+      normalized = t.replace(/,/g, '')
+    } else {
+      // CL/EU: "1.500,50" → punto es miles, coma es decimal.
+      normalized = t.replace(/\./g, '').replace(',', '.')
+    }
+  } else if (lastComma >= 0) {
+    // Sólo coma: convención CL como decimal ("1500,5" → 1500.5).
+    normalized = t.replace(',', '.')
+  } else if (lastDot >= 0) {
+    // Sólo punto. Múltiples puntos o patrón estricto xxx.yyy con
+    // 3 dígitos al final → separador de miles. Si no, decimal.
+    const dots = (t.match(/\./g) || []).length
+    if (dots > 1 || /^-?\d{1,3}\.\d{3}$/.test(t)) {
+      normalized = t.replace(/\./g, '')
+    }
+  }
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : 0
 }
 
-/**
- * Parser decimal tolerante a formato latino e internacional. Pensado
- * para stock en kg (ej. "12,5", "12.5", "1.234,5"). A diferencia de
- * parseNumber, NO trata el punto como separador de miles cuando es el
- * único separador presente — eso truncaría "12.5" → 125.
- */
+function parseNumber(s: string): number {
+  return Math.round(parseNumeric(s))
+}
+
 function parseDecimal(s: string): number {
-  const t = (s || '').trim()
-  if (!t) return 0
-  let normalized = t.replace(/[^\d.,\-]/g, '')
-  if (normalized.includes(',')) {
-    // Convención latina: '.' = miles, ',' = decimal.
-    normalized = normalized.replace(/\./g, '').replace(',', '.')
-  }
-  const n = parseFloat(normalized)
-  return Number.isFinite(n) ? n : 0
+  return parseNumeric(s)
 }
 
 /**
@@ -205,12 +230,18 @@ export function CsvImport({
   }, [open])
 
   const handleFile = async (file: File) => {
-    const text = await file.text()
+    let text = await file.text()
+    // Excel-CL guarda CSV con BOM UTF-8 (﻿). Si no lo descartamos,
+    // la primera cabecera queda con el BOM dentro y normalizeHeader falla
+    // → toast "Faltan columnas obligatorias" aunque el archivo es correcto.
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
     const firstLine = text.split(/\r?\n/, 1)[0] ?? ''
     const delim = detectDelimiter(firstLine)
-    const normalized =
-      delim === ';' ? text.replace(/;/g, ',').replace(/,(?=,)/g, ',') : text
-    const matrix = parseCsv(normalized)
+    // Antes hacíamos text.replace(/;/g, ',') antes de parsear con coma,
+    // pero eso destruía cualquier `;` dentro de campos quoteados (un
+    // producto con nombre "Jamón ; oferta" quedaba con coma → desplazaba
+    // todas las columnas a la derecha). El parser ahora respeta el delim.
+    const matrix = parseCsv(text, delim)
     if (matrix.length < 2) {
       toast({
         variant: 'destructive',
@@ -349,15 +380,18 @@ export function CsvImport({
 
   const downloadTemplate = () => {
     // Para productos al peso (is_weight=1), stock/stock_min/stock_max van
-    // en KG (decimal: "12,5" o "12.5"). Para por unidad, en unidades enteras.
-    // Precio siempre es por la unidad de venta: $/unidad para por unidad,
-    // $/kg para por peso.
+    // en KG (decimal con coma: "12,5"). Para por unidad, en unidades enteras.
+    // Precio siempre es por la unidad de venta: $/unidad o $/kg.
+    // Prefijamos BOM UTF-8 (﻿) para que Excel-CL abra los acentos
+    // correctamente ("Panadería" en vez de "PanaderÃ­a"). El parser de
+    // import descarta el BOM al cargar.
     const csv =
+      '﻿' +
       'name,barcode,sku,category,cost,price,stock,is_weight,stock_min,stock_max\n' +
       '"Coca-Cola 500ml",7801234567890,COCA500,Bebidas,800,1290,10,0,3,0\n' +
       '"Pan amasado",,,Panadería,150,350,0,0,0,0\n' +
-      '"Jamón de pavo",,,Cecinas,5500,8990,2.5,1,0.5,5\n' +
-      '"Tomate",,,Verduras,800,1500,12.5,kg,2,0\n' +
+      '"Jamón de pavo",,,Cecinas,5500,8990,"2,5",1,"0,5",5\n' +
+      '"Tomate",,,Verduras,800,1500,"12,5",kg,2,0\n' +
       '"Queso mantecoso",,,Cecinas,7800,12990,3,peso,1,0\n'
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)

@@ -224,9 +224,9 @@ export function paymentLabel(m: string): string {
     case 'efectivo':
       return 'EFECTIVO'
     case 'debito':
-      return 'DEBITO'
+      return 'DÉBITO'
     case 'credito':
-      return 'CREDITO'
+      return 'CRÉDITO'
     case 'transferencia':
       return 'TRANSFERENCIA'
     case 'mixto':
@@ -368,10 +368,10 @@ export function renderTemplate(
         break
       }
       case 'sale_number_and_date':
-        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Comprobante N° ${vars.number}`, vars.date))
+        out.push(baseLine({ ...b, align: b.align ?? 'left' }, `Boleta N° ${vars.number}`, vars.date))
         break
       case 'sale_number':
-        out.push(baseLine(b, `Comprobante N° ${vars.number}`))
+        out.push(baseLine(b, `Boleta N° ${vars.number}`))
         break
       case 'date':
         out.push(baseLine(b, vars.date))

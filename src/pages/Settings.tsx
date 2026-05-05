@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { formatDateTimeCL } from '@shared/money'
 import {
   AlertCircle,
   CheckCircle2,
@@ -717,7 +718,7 @@ function DataTab({ info }: { info: { version: string; dbPath: string; userDataPa
               k="Último respaldo automático"
               v={
                 settings.backup.last_run
-                  ? new Date(settings.backup.last_run).toLocaleString('es-CL')
+                  ? formatDateTimeCL(settings.backup.last_run)
                   : 'nunca'
               }
             />
