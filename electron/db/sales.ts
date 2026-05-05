@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
-import { lineTotal } from '../../shared/money'
+import { formatWeight, lineTotal } from '../../shared/money'
 import type {
   PaymentMethod,
   Sale,
@@ -147,8 +147,8 @@ export function create(input: SaleInput): SaleWithItems {
     if (oversold.length > 0) {
       const detail = oversold
         .map((o) => {
-          const want = o.is_weight ? `${(o.qty / 1000).toFixed(3)} kg` : `${o.qty}`
-          const has = o.is_weight ? `${(o.stock / 1000).toFixed(3)} kg` : `${o.stock}`
+          const want = o.is_weight ? formatWeight(o.qty) : `${o.qty}`
+          const has = o.is_weight ? formatWeight(o.stock) : `${o.stock}`
           return `${o.name} (pediste ${want}, hay ${has})`
         })
         .join('; ')

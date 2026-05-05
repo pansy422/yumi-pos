@@ -12,7 +12,7 @@ import { Donut } from '@/components/common/Donut'
 import { ChartEmptyArt, EmptyState } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { formatCLP, formatWeight, todayISO } from '@shared/money'
+import { formatCLP, formatDateCL, formatWeight, todayISO } from '@shared/money'
 import type { DailyReport, RangeReport, SlowMovingProduct } from '@shared/types'
 import { cn } from '@/lib/utils'
 
@@ -357,7 +357,7 @@ function RangeView() {
                   <tbody>
                     {report!.daily.map((d) => (
                       <tr key={d.date} className="border-t border-border/40">
-                        <td className="px-4 py-2.5 mono text-xs">{d.date}</td>
+                        <td className="px-4 py-2.5 mono text-xs">{formatDateCL(d.date)}</td>
                         <td className="px-4 py-2.5 text-right num">{d.count}</td>
                         <td className="px-4 py-2.5 text-right num">{formatCLP(d.revenue)}</td>
                         <td className="px-4 py-2.5 text-right num text-success">
@@ -607,7 +607,7 @@ function SlowMovingView() {
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {p.last_sold_at ? (
                             <span className="mono text-xs">
-                              {p.last_sold_at.slice(0, 10)}
+                              {formatDateCL(p.last_sold_at)}
                             </span>
                           ) : (
                             <span className="italic text-warning">Nunca vendido</span>

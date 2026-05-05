@@ -188,6 +188,20 @@ export function ProductDialog({
       return
     }
     if (product) {
+      // Formato CL para mostrar kg en el input: "100" en vez de "100.000"
+      // (que en convención chilena se lee como "cien mil" y confunde).
+      // Coma como decimal, sin ceros sobrantes. El parser de save() acepta
+      // ambos formatos al guardar, así que el roundtrip es seguro.
+      const kgText = (grams: number) => {
+        if (grams === 0) return '0'
+        const kg = grams / 1000
+        if (Number.isInteger(kg)) return String(kg)
+        return kg
+          .toFixed(3)
+          .replace(/0+$/, '')
+          .replace(/\.$/, '')
+          .replace('.', ',')
+      }
       setForm({
         barcode: product.barcode ?? '',
         name: product.name,
@@ -199,12 +213,9 @@ export function ProductDialog({
         stock_min: product.stock_min ?? 0,
         stock_max: product.stock_max ?? 0,
         is_weight: product.is_weight === 1,
-        stock_kg:
-          product.is_weight === 1 ? (product.stock / 1000).toFixed(3) : String(product.stock),
-        stock_min_kg:
-          product.is_weight === 1 ? ((product.stock_min ?? 0) / 1000).toFixed(3) : '0',
-        stock_max_kg:
-          product.is_weight === 1 ? ((product.stock_max ?? 0) / 1000).toFixed(3) : '0',
+        stock_kg: product.is_weight === 1 ? kgText(product.stock) : String(product.stock),
+        stock_min_kg: product.is_weight === 1 ? kgText(product.stock_min ?? 0) : '0',
+        stock_max_kg: product.is_weight === 1 ? kgText(product.stock_max ?? 0) : '0',
       })
       setArchived(product.archived === 1)
       setStep('form')

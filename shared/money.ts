@@ -30,14 +30,64 @@ export function todayISO(d: Date = new Date()): string {
 }
 
 /**
+ * Formatea una fecha ISO (yyyy-mm-dd o yyyy-mm-ddTHH:MM:SS...) a la
+ * convención chilena dd-mm-yyyy. Para mostrar al usuario; nunca para
+ * almacenar (la BD usa ISO siempre). Antes mostrábamos `2026-05-04`
+ * directo en tablas y un cajero CL podía leer eso como "4 de mayo" o
+ * "5 de abril" según el dia.
+ */
+export function formatDateCL(iso: string): string {
+  if (!iso) return ''
+  // Acepta tanto "2026-05-04" como "2026-05-04T13:45:00".
+  const datePart = iso.slice(0, 10)
+  const m = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return iso
+  return `${m[3]}-${m[2]}-${m[1]}`
+}
+
+/**
+ * Formatea fecha + hora en convención chilena: "04-05-2026 14:30".
+ * Usa la TZ local del SO. Para boletas, listados y reportes.
+ */
+export function formatDateTimeCL(iso: string | Date): string {
+  const d = iso instanceof Date ? iso : new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${day}-${month}-${year} ${hh}:${mm}`
+}
+
+/**
  * Formatea una cantidad almacenada en gramos a "Ng" o "N.NNN kg" según
  * sea más legible. Por debajo de 1 kg usa gramos enteros; arriba usa kg
  * con 3 decimales.
  */
+/**
+ * Formatea gramos a string legible. < 1 kg → "850 g". >= 1 kg → "1,5 kg",
+ * "100 kg", "12,345 kg".
+ *
+ * Convención chilena: coma como separador decimal, sin decimales cuando
+ * el valor es entero. Antes usábamos `.toFixed(3)` y mostrábamos "100.000 kg"
+ * para 100 kg, que en CL se lee como "cien mil kilos" (lectura ambigua y
+ * confusa para el usuario). Tampoco agregamos separador de miles para
+ * los kilos: "1500 kg" en vez de "1.500 kg" (un minimarket raramente
+ * pasa de 1000 kg de algo, y el separador agrega más confusión que claridad).
+ */
 export function formatWeight(grams: number): string {
   const g = Math.max(0, Math.round(grams))
   if (g < 1000) return `${g} g`
-  return `${(g / 1000).toFixed(3)} kg`
+  const kg = g / 1000
+  if (g % 1000 === 0) return `${kg} kg`
+  // Hasta 3 decimales, coma como separador, sin ceros sobrantes.
+  const text = kg
+    .toFixed(3)
+    .replace(/0+$/, '')
+    .replace(/\.$/, '')
+    .replace('.', ',')
+  return `${text} kg`
 }
 
 /**

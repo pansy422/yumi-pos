@@ -122,7 +122,7 @@ export function WeightDialog({
                 const v = unit === 'g' ? e.target.value.replace(/[^\d]/g, '') : e.target.value
                 setText(v)
               }}
-              placeholder={unit === 'kg' ? 'ej. 0.345' : 'ej. 345'}
+              placeholder={unit === 'kg' ? 'ej. 0,345' : 'ej. 345'}
               className="h-12 text-2xl text-center num"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submit()
@@ -138,10 +138,27 @@ export function WeightDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setText(unit === 'kg' ? v.toFixed(3) : String(v))}
+                  onClick={() => {
+                    if (unit === 'g') {
+                      setText(String(v))
+                      return
+                    }
+                    // kg: "0,5" en vez de "0.500" para que el preview no
+                    // confunda al cajero con la convención CL.
+                    const text = Number.isInteger(v)
+                      ? String(v)
+                      : v
+                          .toFixed(3)
+                          .replace(/0+$/, '')
+                          .replace(/\.$/, '')
+                          .replace('.', ',')
+                    setText(text)
+                  }}
                   className="num text-xs"
                 >
-                  {v} {unit}
+                  {/* Coma decimal en CL: 0,5 kg en vez de 0.5 kg */}
+                  {unit === 'kg' && !Number.isInteger(v) ? String(v).replace('.', ',') : v}{' '}
+                  {unit}
                 </Button>
               ))}
             </div>

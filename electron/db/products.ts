@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { formatWeight } from '../../shared/money'
 import { getDb } from './index'
 import { ensureExists as ensureCategoryExists } from './categories'
 import type {
@@ -270,9 +271,9 @@ export function adjustStock(id: string, delta: number, _note?: string): Product 
     // vez de dejar inventario negativo (que rompe reportes y la
     // invariante de negocio de stock >= 0).
     if (current.stock + d < 0) {
-      const want = current.is_weight === 1 ? `${(-d / 1000).toFixed(3)} kg` : String(-d)
+      const want = current.is_weight === 1 ? formatWeight(-d) : String(-d)
       const has =
-        current.is_weight === 1 ? `${(current.stock / 1000).toFixed(3)} kg` : String(current.stock)
+        current.is_weight === 1 ? formatWeight(current.stock) : String(current.stock)
       throw new Error(
         `No se puede quitar ${want} de "${current.name}": solo hay ${has} en stock.`,
       )
