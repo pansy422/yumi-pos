@@ -138,7 +138,22 @@ export function WeightDialog({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setText(unit === 'kg' ? v.toFixed(3) : String(v))}
+                  onClick={() => {
+                    if (unit === 'g') {
+                      setText(String(v))
+                      return
+                    }
+                    // kg: "0,5" en vez de "0.500" para que el preview no
+                    // confunda al cajero con la convención CL.
+                    const text = Number.isInteger(v)
+                      ? String(v)
+                      : v
+                          .toFixed(3)
+                          .replace(/0+$/, '')
+                          .replace(/\.$/, '')
+                          .replace('.', ',')
+                    setText(text)
+                  }}
                   className="num text-xs"
                 >
                   {v} {unit}

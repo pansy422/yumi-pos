@@ -34,10 +34,29 @@ export function todayISO(d: Date = new Date()): string {
  * sea más legible. Por debajo de 1 kg usa gramos enteros; arriba usa kg
  * con 3 decimales.
  */
+/**
+ * Formatea gramos a string legible. < 1 kg → "850 g". >= 1 kg → "1,5 kg",
+ * "100 kg", "12,345 kg".
+ *
+ * Convención chilena: coma como separador decimal, sin decimales cuando
+ * el valor es entero. Antes usábamos `.toFixed(3)` y mostrábamos "100.000 kg"
+ * para 100 kg, que en CL se lee como "cien mil kilos" (lectura ambigua y
+ * confusa para el usuario). Tampoco agregamos separador de miles para
+ * los kilos: "1500 kg" en vez de "1.500 kg" (un minimarket raramente
+ * pasa de 1000 kg de algo, y el separador agrega más confusión que claridad).
+ */
 export function formatWeight(grams: number): string {
   const g = Math.max(0, Math.round(grams))
   if (g < 1000) return `${g} g`
-  return `${(g / 1000).toFixed(3)} kg`
+  const kg = g / 1000
+  if (g % 1000 === 0) return `${kg} kg`
+  // Hasta 3 decimales, coma como separador, sin ceros sobrantes.
+  const text = kg
+    .toFixed(3)
+    .replace(/0+$/, '')
+    .replace(/\.$/, '')
+    .replace('.', ',')
+  return `${text} kg`
 }
 
 /**
