@@ -11,6 +11,7 @@ import * as users from './db/users'
 import * as categoriesRepo from './db/categories'
 import * as heldTicketsRepo from './db/heldTickets'
 import * as stock from './db/stock'
+import * as fund from './db/cashFund'
 import { setCurrentUserId } from './db/session'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
@@ -231,11 +232,7 @@ export function registerIpc(): void {
     (amt: number, notes?: string, cashierId?: string | null) =>
       cash.open(amt, notes, cashierId ?? null),
   )
-  handle(
-    IPC.cashClose,
-    (amt: number, notes?: string, cashierId?: string | null) =>
-      cash.close(amt, notes, cashierId ?? null),
-  )
+  handle(IPC.cashClose, (input: Parameters<typeof cash.close>[0]) => cash.close(input))
   handle(
     IPC.cashMove,
     (
@@ -243,7 +240,19 @@ export function registerIpc(): void {
       amt: number,
       note: string,
       cashierId?: string | null,
-    ) => cash.move(kind, amt, note, cashierId ?? null),
+      opts?: { counterparty?: string },
+    ) => cash.move(kind, amt, note, cashierId ?? null, opts),
+  )
+  handle(IPC.cashLastRegisterFloat, () => cash.lastRegisterFloat())
+  handle(IPC.fundBalance, () => fund.balance())
+  handle(IPC.fundList, (opts?: Parameters<typeof fund.list>[0]) => fund.list(opts))
+  handle(IPC.fundAdd, (input: Parameters<typeof fund.add>[0]) => fund.add(input))
+  handle(IPC.fundSinceLastCount, () => ({
+    last_count_at: fund.lastCountAt(),
+    movements: fund.sinceLastCount(),
+  }))
+  handle(IPC.fundCount, (counted: number, userId?: string | null, note?: string) =>
+    fund.count(counted, userId ?? null, note),
   )
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))

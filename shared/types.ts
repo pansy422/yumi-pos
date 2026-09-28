@@ -182,6 +182,10 @@ export type CashSession = {
   counted_close: number | null
   difference: number | null
   notes: string | null
+  /** Efectivo que quedó en el cajón al cerrar (fondo fijo). */
+  register_float: number | null
+  /** Explicación obligatoria cuando contado ≠ esperado. */
+  difference_note: string | null
   /** Cajero que abrió la sesión. null si era anónimo / borrado. */
   opened_by_id: string | null
   opened_by_name: string | null
@@ -303,12 +307,61 @@ export type CashMovement = {
   kind: CashMovementKind
   amount: number
   note: string | null
+  /** Motivo (obligatorio en retiros). */
+  reason: string | null
+  /** A quién se entregó el efectivo (obligatorio en retiros). */
+  counterparty: string | null
   created_at: string
   sale_id: string | null
   /** Quién hizo el movimiento. null para movimientos de venta antiguos
    * (sale_id != null) o cuando el user fue borrado. */
   cashier_id: string | null
   cashier_name: string | null
+}
+
+export type CashCloseDestinationKind = 'fondo' | 'proveedor' | 'dueño' | 'otro'
+
+export type CashCloseDestination = {
+  kind: CashCloseDestinationKind
+  amount: number
+  /** Nombre del proveedor (obligatorio en `proveedor`). */
+  name?: string
+  /** Motivo (obligatorio en `otro`). */
+  reason?: string
+}
+
+export type CashCloseInput = {
+  /** Efectivo físico contado en el cajón. */
+  counted: number
+  /** Lo que queda en el cajón para mañana. */
+  register_float: number
+  /** Reparto de (contado − queda). Debe sumar exacto. */
+  destinations: CashCloseDestination[]
+  /** Obligatoria si contado ≠ esperado. */
+  difference_note?: string
+  notes?: string
+  cashier_id?: string | null
+}
+
+export type CashFundMovement = {
+  id: number
+  kind: CashFundMovementKind
+  /** Positivo entra al fondo, negativo sale. */
+  amount: number
+  reason: string
+  counterparty: string | null
+  purchase_id: number | null
+  cash_session_id: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
+
+export type CashFundCount = {
+  balance_before: number
+  counted: number
+  difference: number
+  movement: CashFundMovement | null
 }
 
 /** Resumen de una sesión cerrada con conteo de ventas/movimientos para
@@ -353,11 +406,23 @@ export type BackupSettings = {
   keep_last: number
 }
 
+export type CashSettings = {
+  /** Fondo fijo que queda en el cajón al cerrar (propuesto en el cierre). */
+  register_float: number
+}
+
+export type ReconciliationSettings = {
+  /** Día del cuadre semanal: 1 = lunes … 7 = domingo. */
+  weekday: number
+}
+
 export type Settings = {
   store: StoreSettings
   printer: PrinterSettings
   flags: AppFlags
   backup: BackupSettings
+  cash: CashSettings
+  reconciliation: ReconciliationSettings
   receipt_template: ReceiptTemplate
 }
 
@@ -495,17 +560,32 @@ export type Api = {
     notes?: string,
     cashierId?: string | null,
   ) => Promise<CashSession>
-  cashClose: (
-    countedAmount: number,
-    notes?: string,
-    cashierId?: string | null,
-  ) => Promise<CashSession>
+  cashClose: (input: CashCloseInput) => Promise<CashSession>
   cashMove: (
     kind: 'withdraw' | 'deposit' | 'adjustment',
     amount: number,
     note: string,
     cashierId?: string | null,
+    opts?: { counterparty?: string },
   ) => Promise<CashMovement>
+  /** Fondo fijo propuesto para la próxima apertura (último cierre o ajuste). */
+  cashLastRegisterFloat: () => Promise<number>
+  fundBalance: () => Promise<number>
+  fundList: (opts?: {
+    limit?: number
+    from?: string
+    to?: string
+    kind?: CashFundMovementKind
+  }) => Promise<CashFundMovement[]>
+  fundAdd: (input: {
+    kind: CashFundMovementKind
+    amount: number
+    reason: string
+    counterparty?: string | null
+    user_id?: string | null
+  }) => Promise<CashFundMovement>
+  fundSinceLastCount: () => Promise<{ last_count_at: string | null; movements: CashFundMovement[] }>
+  fundCount: (counted: number, userId?: string | null, note?: string) => Promise<CashFundCount>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>

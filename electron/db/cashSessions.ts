@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
 import { nowIso } from './sql'
+import * as fund from './cashFund'
+import * as settingsRepo from './settings'
 import { clampMoney } from '../../shared/money'
 import type {
+  CashCloseInput,
   CashMovement,
   CashSession,
   CashSessionSummary,
@@ -37,6 +40,8 @@ function rowToSession(r: Record<string, unknown> | undefined): CashSession | nul
     counted_close: r.counted_close == null ? null : Number(r.counted_close),
     difference: r.difference == null ? null : Number(r.difference),
     notes: (r.notes as string | null) ?? null,
+    register_float: r.register_float == null ? null : Number(r.register_float),
+    difference_note: (r.difference_note as string | null) ?? null,
     opened_by_id: (r.opened_by_id as string | null) ?? null,
     opened_by_name: (r.opened_by_name as string | null) ?? null,
     closed_by_id: (r.closed_by_id as string | null) ?? null,
@@ -203,14 +208,42 @@ export function buildZReport(sessionId: string): ZReport {
   }
 }
 
-export function close(
-  countedAmount: number,
-  notes?: string,
-  cashierId?: string | null,
-): CashSession {
+/**
+ * Fondo fijo propuesto para la próxima apertura: lo que quedó en el
+ * cajón en el último cierre; si nunca se cerró con el flujo nuevo, el
+ * valor de Ajustes (`cash.register_float`).
+ */
+export function lastRegisterFloat(): number {
+  const db = getDb()
+  const r = db
+    .prepare(
+      `SELECT register_float FROM cash_sessions
+        WHERE closed_at IS NOT NULL AND register_float IS NOT NULL
+        ORDER BY closed_at DESC LIMIT 1`,
+    )
+    .get() as { register_float: number } | undefined
+  if (r && Number.isFinite(Number(r.register_float))) return Number(r.register_float)
+  return settingsRepo.getAll().cash.register_float
+}
+
+/**
+ * Cierre de caja BLOQUEADO (auditoría sep-2026): no se cierra sin
+ *  1. contado físico,
+ *  2. lo que queda en el cajón para mañana (fondo fijo),
+ *  3. el reparto exacto del resto en destinos (fondo / proveedor /
+ *     dueño / otro) — la suma debe ser contado − queda,
+ *  4. explicación si contado ≠ esperado.
+ * Al confirmar se crean los movimientos del fondo: todo lo que sale del
+ * cajón entra al fondo (`in_from_register`) y, si el destino no es el
+ * fondo, sale en el mismo acto (`out_supplier` / `out_owner` /
+ * `out_expense`). Así el fondo es el libro único de efectivo fuera del
+ * cajón y el neto queda ligado a la sesión.
+ */
+export function close(input: CashCloseInput): CashSession {
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
   const db = getDb()
+  const cashierId = input.cashier_id ?? null
   // Mismo principio que en open(): si hay users, alguien tiene que
   // estar logueado para cerrar.
   if (!cashierId) {
@@ -228,21 +261,114 @@ export function close(
   // clamper a $999.999.999 si por una request manipulada llega un valor
   // gigante. La UI usa clampMoney en MoneyInput pero el backend tiene
   // que blindarse igual.
-  if (!Number.isFinite(countedAmount) || countedAmount < 0) {
+  if (!Number.isFinite(input.counted) || input.counted < 0) {
     throw new Error('El monto contado no puede ser negativo.')
   }
-  const counted = clampMoney(Math.round(countedAmount))
+  const counted = clampMoney(Math.round(input.counted))
+  if (!Number.isFinite(input.register_float) || input.register_float < 0) {
+    throw new Error('Lo que queda en cajón no puede ser negativo.')
+  }
+  const registerFloat = clampMoney(Math.round(input.register_float))
+  if (registerFloat > counted) {
+    throw new Error(
+      `Lo que queda en cajón ($${registerFloat.toLocaleString('es-CL')}) no puede superar el contado ($${counted.toLocaleString('es-CL')}).`,
+    )
+  }
+  const toWithdraw = counted - registerFloat
+  const destinations = (input.destinations ?? []).map((d) => ({
+    kind: d.kind,
+    amount: clampMoney(Math.round(Number(d.amount))),
+    name: (d.name ?? '').trim(),
+    reason: (d.reason ?? '').trim(),
+  }))
+  for (const d of destinations) {
+    if (!['fondo', 'proveedor', 'dueño', 'otro'].includes(d.kind)) {
+      throw new Error(`Destino inválido: ${String(d.kind)}`)
+    }
+    if (!Number.isFinite(d.amount) || d.amount <= 0) {
+      throw new Error('Cada destino del retiro necesita un monto mayor a 0.')
+    }
+    if (d.kind === 'proveedor' && !d.name) {
+      throw new Error('Indica el nombre del proveedor al que se le entrega el efectivo.')
+    }
+    if (d.kind === 'otro' && !d.reason) {
+      throw new Error('Indica el motivo del destino "otro".')
+    }
+  }
+  const sumDest = destinations.reduce((a, d) => a + d.amount, 0)
+  if (sumDest !== toWithdraw) {
+    throw new Error(
+      `Los destinos suman $${sumDest.toLocaleString('es-CL')} pero se retiran $${toWithdraw.toLocaleString('es-CL')} (contado − queda en cajón). Tienen que ser iguales.`,
+    )
+  }
   const difference = counted - expected
-  db.prepare(
-    `UPDATE cash_sessions
-       SET closed_at = ?,
-           expected_close = ?,
-           counted_close = ?,
-           difference = ?,
-           closed_by_id = ?,
-           notes = COALESCE(?, notes)
-     WHERE id = ?`,
-  ).run(nowIso(), expected, counted, difference, cashierId ?? null, notes ?? null, open.id)
+  const differenceNote = (input.difference_note ?? '').trim()
+  if (difference !== 0 && !differenceNote) {
+    throw new Error(
+      `Hay una diferencia de $${difference.toLocaleString('es-CL')} entre contado y esperado. Explica el motivo para poder cerrar.`,
+    )
+  }
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE cash_sessions
+         SET closed_at = ?,
+             expected_close = ?,
+             counted_close = ?,
+             difference = ?,
+             closed_by_id = ?,
+             register_float = ?,
+             difference_note = ?,
+             notes = COALESCE(?, notes)
+       WHERE id = ?`,
+    ).run(
+      nowIso(),
+      expected,
+      counted,
+      difference,
+      cashierId,
+      registerFloat,
+      differenceNote || null,
+      input.notes?.trim() || null,
+      open.id,
+    )
+    const stamp = new Date().toLocaleDateString('es-CL')
+    for (const d of destinations) {
+      fund.addWith(db, {
+        kind: 'in_from_register',
+        amount: d.amount,
+        reason: `Cierre de caja ${stamp}`,
+        cash_session_id: open.id,
+        user_id: cashierId,
+      })
+      if (d.kind === 'proveedor') {
+        fund.addWith(db, {
+          kind: 'out_supplier',
+          amount: d.amount,
+          reason: `Pago a proveedor al cierre ${stamp}`,
+          counterparty: d.name,
+          cash_session_id: open.id,
+          user_id: cashierId,
+        })
+      } else if (d.kind === 'dueño') {
+        fund.addWith(db, {
+          kind: 'out_owner',
+          amount: d.amount,
+          reason: `Retiro del dueño al cierre ${stamp}`,
+          counterparty: 'Dueño',
+          cash_session_id: open.id,
+          user_id: cashierId,
+        })
+      } else if (d.kind === 'otro') {
+        fund.addWith(db, {
+          kind: 'out_expense',
+          amount: d.amount,
+          reason: d.reason,
+          cash_session_id: open.id,
+          user_id: cashierId,
+        })
+      }
+    }
+  })()
   return getById(open.id)!
 }
 
@@ -251,6 +377,7 @@ export function move(
   amount: number,
   note: string,
   cashierId?: string | null,
+  opts?: { counterparty?: string },
 ): CashMovement {
   const open = current()
   if (!open) throw new Error('No hay caja abierta')
@@ -276,11 +403,32 @@ export function move(
   if (safeAmount === 0) {
     throw new Error('El monto del movimiento no puede ser 0.')
   }
+  const reason = (note ?? '').trim()
+  const counterparty = (opts?.counterparty ?? '').trim()
+  // Salidas del cajón durante el día: sin motivo Y destinatario no se
+  // guardan. En septiembre 2026 salieron $3,63M del cajón y solo el pan
+  // tenía registro.
+  if (kind === 'withdraw') {
+    if (!reason) throw new Error('Indica el motivo del retiro (para qué salió el efectivo).')
+    if (!counterparty) throw new Error('Indica el destinatario del retiro (a quién se le entregó).')
+  } else if (!reason) {
+    throw new Error('Indica el motivo del movimiento.')
+  }
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, open.id, kind, safeAmount, note, cashierId ?? null, nowIso())
+    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, reason, counterparty, cashier_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    open.id,
+    kind,
+    safeAmount,
+    counterparty ? `${reason} · ${counterparty}` : reason,
+    reason,
+    counterparty || null,
+    cashierId ?? null,
+    nowIso(),
+  )
   return movementsById(id)!
 }
 
@@ -291,6 +439,8 @@ function movementRow(r: Record<string, unknown>): CashMovement {
     kind: r.kind as CashMovement['kind'],
     amount: Number(r.amount),
     note: (r.note as string | null) ?? null,
+    reason: (r.reason as string | null) ?? null,
+    counterparty: (r.counterparty as string | null) ?? null,
     sale_id: (r.sale_id as string | null) ?? null,
     created_at: r.created_at as string,
     cashier_id: (r.cashier_id as string | null) ?? null,

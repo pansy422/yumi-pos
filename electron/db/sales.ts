@@ -71,6 +71,23 @@ export function create(input: SaleInput): SaleWithItems {
     if (hasCash && !session) {
       throw new Error('Debes abrir la caja antes de cobrar en efectivo')
     }
+    // Con usuarios creados, toda venta tiene responsable. Sin usuarios
+    // (modo single-user) se permite null.
+    if (!input.cashier_id) {
+      const userRow = db.prepare(`SELECT COUNT(*) AS c FROM users WHERE active = 1`).get() as
+        | { c: number }
+        | undefined
+      if (userRow && Number(userRow.c) > 0) {
+        throw new Error('Tenés que iniciar sesión con tu PIN antes de cobrar: la venta necesita un cajero responsable.')
+      }
+    } else {
+      const u = db.prepare(`SELECT 1 FROM users WHERE id = ?`).get(input.cashier_id)
+      if (!u) {
+        throw new Error(
+          'Tu sesión ya no es válida (el usuario no existe en la base). Cierra y vuelve a abrir la app para volver a iniciar sesión.',
+        )
+      }
+    }
 
     // Resolver y validar productos contra la base
     const itemsResolved: {

@@ -161,6 +161,15 @@ export function formatZReport(
     tp.println(pad('DIFERENCIA', fmt(z.session.difference ?? 0), Math.floor(w / 2)))
     tp.setTextNormal()
     tp.bold(false)
+    if (z.session.difference_note) {
+      for (const line of z.session.difference_note.match(/.{1,42}/g) ?? [z.session.difference_note]) {
+        tp.println(line)
+      }
+    }
+    if (z.session.register_float != null) {
+      tp.println(pad('Queda en cajon', fmt(z.session.register_float), w))
+      tp.println(pad('Retirado', fmt(z.session.counted_close - z.session.register_float), w))
+    }
   }
   tp.println('-'.repeat(w))
   if (z.session.notes) {
