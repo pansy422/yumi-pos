@@ -1354,7 +1354,8 @@ function HeldTicketsDialog({
 
 type PaymentLine = {
   id: number
-  method: PaymentMethod
+  /** null hasta que el cajero elige: no hay medio de pago por defecto. */
+  method: PaymentMethod | null
   amount: number
   cash_received: number
 }
@@ -1403,11 +1404,12 @@ function PaymentDialog({
       setShowPreview(false)
       setPrintError(null)
     } else {
-      // Por defecto una línea efectivo cubriendo todo el total. NO
-      // incluimos `tot` en deps — si el cliente repintó el carrito
-      // mientras el dialog está abierto, no queremos pisarle al cajero
-      // las líneas que ya empezó a editar.
-      setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
+      // Una línea por el total SIN medio de pago: el cajero tiene que
+      // elegirlo (decisión sep-2026: las boletas marcadas "efectivo" que
+      // fueron débito descuadraban la caja). NO incluimos `tot` en deps —
+      // si el cliente repintó el carrito mientras el dialog está abierto,
+      // no queremos pisarle al cajero las líneas que ya empezó a editar.
+      setLines([{ id: 1, method: null, amount: tot, cash_received: 0 }])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -1418,20 +1420,26 @@ function PaymentDialog({
   const cashShortage = lines.some(
     (l) => l.method === 'efectivo' && l.cash_received < l.amount,
   )
+  const methodMissing = lines.some((l) => l.method === null)
   const needsCashOpen = hasCash && !cash
   const cashChange = lines
     .filter((l) => l.method === 'efectivo')
     .reduce((a, l) => a + Math.max(0, (l.cash_received || 0) - l.amount), 0)
   const canSubmit =
-    !submitting && remaining === 0 && !cashShortage && !needsCashOpen && lines.length > 0
+    !submitting &&
+    remaining === 0 &&
+    !cashShortage &&
+    !methodMissing &&
+    !needsCashOpen &&
+    lines.length > 0
 
   const updateLine = (id: number, patch: Partial<PaymentLine>) =>
     setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))
 
   /**
-   * Cambiar método de pago de una línea sin dejar `cash_received` colgado:
-   * - A efectivo: si quedaba en 0 (vino de débito/etc.), lo equiparamos al
-   *   amount para no pintar "Falta efectivo" en una línea recién cambiada.
+   * Cambiar método de pago de una línea:
+   * - A efectivo: cash_received arranca en 0 para que el cajero tipee lo
+   *   que recibió (el vuelto se calcula de ahí). Hay botón "Exacto".
    * - Desde efectivo: cash_received pierde sentido, lo limpiamos a 0.
    */
   const setLineMethod = (id: number, method: PaymentMethod) =>
@@ -1439,7 +1447,7 @@ function PaymentDialog({
       cur.map((l) => {
         if (l.id !== id) return l
         if (method === 'efectivo') {
-          return { ...l, method, cash_received: Math.max(l.cash_received, l.amount) }
+          return { ...l, method, cash_received: l.method === 'efectivo' ? l.cash_received : 0 }
         }
         return { ...l, method, cash_received: 0 }
       }),
@@ -1471,9 +1479,9 @@ function PaymentDialog({
         ...reconciled,
         {
           id,
-          method: reconciled.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+          method: null,
           amount: fillAmount,
-          cash_received: fillAmount,
+          cash_received: 0,
         },
       ]
     })
@@ -1527,9 +1535,9 @@ function PaymentDialog({
         // automáticos por promociones (recomputadas arriba).
         discount: discount + freshAutoDiscount,
         payments: lines
-          .filter((l) => l.amount > 0)
+          .filter((l) => l.amount > 0 && l.method !== null)
           .map((l) => ({
-            method: l.method,
+            method: l.method as PaymentMethod,
             amount: l.amount,
             cash_received: l.method === 'efectivo' ? l.cash_received : undefined,
           })),
@@ -1623,7 +1631,9 @@ function PaymentDialog({
                         'rounded-lg border p-3 transition-colors',
                         overshort
                           ? 'border-destructive/40 bg-destructive/10'
-                          : 'border-border/60 bg-card/30',
+                          : line.method === null
+                            ? 'border-warning/40 bg-warning/5'
+                            : 'border-border/60 bg-card/30',
                       )}
                     >
                       <div className="mb-2 flex items-center justify-between">
@@ -1658,8 +1668,13 @@ function PaymentDialog({
 
                       <div className="space-y-2">
                         <div>
-                          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
-                            Método
+                          <Label
+                            className={cn(
+                              'text-[10px] font-semibold uppercase tracking-caps',
+                              line.method === null ? 'text-warning' : 'text-muted-foreground',
+                            )}
+                          >
+                            {line.method === null ? 'Elige el medio de pago' : 'Método'}
                           </Label>
                           <div className="mt-1 grid grid-cols-5 gap-1">
                             {(
@@ -1716,16 +1731,26 @@ function PaymentDialog({
                           </div>
                           {isCash && (
                             <div>
-                              <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
-                                Efectivo recibido
-                              </Label>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+                                  Efectivo recibido
+                                </Label>
+                                <button
+                                  type="button"
+                                  className="text-[10px] font-semibold uppercase tracking-caps text-primary hover:underline"
+                                  onClick={() => updateLine(line.id, { cash_received: line.amount })}
+                                >
+                                  Exacto
+                                </button>
+                              </div>
                               <MoneyInput
+                                key={`cash-${line.id}`}
                                 value={line.cash_received}
                                 onValueChange={(n) =>
                                   updateLine(line.id, { cash_received: n })
                                 }
                                 className="mt-1 text-lg"
-                                autoFocus={idx === 0}
+                                autoFocus
                               />
                             </div>
                           )}

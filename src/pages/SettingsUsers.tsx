@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/hooks/useToast'
 import { useSession } from '@/stores/session'
 import { api } from '@/lib/api'
+import { formatDateCL } from '@shared/money'
 import type { User, UserInput, UserRole } from '@shared/types'
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -73,8 +74,8 @@ export function UsersTab() {
             <div>
               <div className="text-foreground">Usuarios y PIN</div>
               <p className="text-[11px]">
-                Cuando hay al menos 1 usuario activo, al abrir la app se pide PIN. Cada venta
-                queda asociada al cajero que la cobró.
+                Cuando hay al menos 1 usuario activo, al abrir la app se pide PIN. Ventas,
+                retiros, compras, mermas y cierres quedan a nombre de quien los hizo.
               </p>
             </div>
           </div>
@@ -83,6 +84,19 @@ export function UsersTab() {
           </Button>
         </CardContent>
       </Card>
+
+      {items.length > 0 && !items.some((u) => u.role === 'cashier' && u.active === 1) && (
+        <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning">
+          <UserIcon className="mt-0.5 h-4 w-4" />
+          <div>
+            <div className="font-medium">Falta al menos un cajero con PIN</div>
+            <p className="mt-0.5 text-[11px] opacity-90">
+              Ventas, retiros, compras, mermas y cierres quedan a nombre de quien inició sesión.
+              Cada persona que atiende necesita su propio usuario: no compartan el PIN del admin.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Card className="card-elev">
         <CardContent className="p-0">
@@ -112,12 +126,7 @@ export function UsersTab() {
                       )}
                     </div>
                     <div className="text-[11px] text-muted-foreground">
-                      Creado{' '}
-                      {new Date(u.created_at).toLocaleDateString('es-CL', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                      })}
+                      Creado {formatDateCL(u.created_at)}
                     </div>
                   </div>
                   <Button
