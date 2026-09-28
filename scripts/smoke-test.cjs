@@ -360,9 +360,34 @@ function main() {
       'Fecha;Descripción;Cargo;Abono;Saldo\n28/09/2026;Abono Transbank;;1.980;100.000\n28/09/2026;Transferencia de Juan;;9.900;109.900\n',
     )
     assert(bank.length === 2 && bank[1].credit === 9900, 'parser de cartola BCI (; y miles con punto)', JSON.stringify(bank))
+    throwsWith(
+      () =>
+        reconciliation.confirm({
+          week_start: wk,
+          data: { ...cur, bank_rows: bank, explanations: {} },
+          user_id: admin.id,
+        }),
+      /explicar|pendiente/i,
+      'confirmar con diferencias sin explicar se rechaza (cierre de caja con −500)',
+    )
+    throwsWith(
+      () =>
+        reconciliation.confirm({
+          week_start: wk,
+          data: { ...cur, bank_rows: bank, explanations: { cash_sessions: { note: 'vuelto', pending: false } } },
+          user_id: cashier.id,
+        }),
+      /administrador/i,
+      'solo un admin confirma',
+    )
+    const explanations = {
+      cash_sessions: { note: 'Faltó un vuelto, revisado', pending: false },
+      inventory: { note: '', pending: true },
+      cards: { note: '', pending: true },
+    }
     const confirmed = reconciliation.confirm({
       week_start: wk,
-      data: { ...cur, bank_rows: bank, explanations: {} },
+      data: { ...cur, bank_rows: bank, explanations },
       user_id: admin.id,
     })
     assert(confirmed.week_start === wk && !!confirmed.confirmed_at, 'cuadre confirmado')

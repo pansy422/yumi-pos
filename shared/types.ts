@@ -122,6 +122,155 @@ export type WriteoffReport = {
   }[]
 }
 
+// ── Cuadre semanal ──────────────────────────────────────────────────────
+
+export type BankRow = {
+  /** AAAA-MM-DD */
+  date: string
+  description: string
+  debit: number
+  credit: number
+  balance: number | null
+}
+
+export type ReconciliationStatus = {
+  /** true ⇒ la pantalla de venta se bloquea hasta confirmar. */
+  required: boolean
+  week_start: string
+  week_end: string
+  confirmed: boolean
+  has_activity: boolean
+  weekday: number
+}
+
+export type ReconciliationExplanation = { note: string; pending: boolean }
+
+export type WeekReconciliation = {
+  week_start: string
+  week_end: string
+  generated_at: string
+  sales: {
+    count: number
+    total: number
+    by_method: { method: PaymentMethod; count: number; total: number }[]
+    by_day: {
+      date: string
+      efectivo: number
+      debito: number
+      credito: number
+      transferencia: number
+      otro: number
+      total: number
+    }[]
+  }
+  purchases: {
+    count: number
+    total: number
+    by_method: { method: string; count: number; total: number }[]
+    by_supplier: { supplier: string; count: number; total: number }[]
+  }
+  cash: {
+    cash_sales: number
+    withdrawals_total: number
+    withdrawals: {
+      amount: number
+      reason: string
+      counterparty: string | null
+      created_at: string
+      user_name: string | null
+    }[]
+    sessions: {
+      id: string
+      opened_at: string
+      closed_at: string | null
+      opening_amount: number
+      expected_close: number | null
+      counted_close: number | null
+      difference: number | null
+      difference_note: string | null
+      register_float: number | null
+    }[]
+    sessions_difference: number
+    fund_start: number
+    fund_in_from_register: number
+    /** Negativo. */
+    fund_out_total: number
+    fund_adjustments: number
+    fund_out_by_kind: { kind: string; total: number; count: number }[]
+    fund_out: {
+      kind: string
+      amount: number
+      reason: string
+      counterparty: string | null
+      created_at: string
+      user_name: string | null
+    }[]
+    fund_end_calc: number
+  }
+  cards: {
+    expected_total: number
+    received_total: number | null
+    rows: {
+      settle_date: string
+      sales_days: string[]
+      expected: number
+      received: number | null
+      difference: number | null
+      flagged: boolean
+    }[]
+  }
+  transfers: {
+    expected_total: number
+    received_total: number | null
+    rows: {
+      sale_number: number
+      date: string
+      amount: number
+      matched: boolean | null
+      bank_date: string | null
+    }[]
+    unmatched_count: number | null
+  }
+  inventory: {
+    value_start: number
+    entries: number
+    returns: number
+    /** Vendido a costo según líneas de venta (neto de devoluciones). */
+    sold_cost: number
+    /** Vendido a costo según movimientos de stock. */
+    sold_movements: number
+    /** Parte vendida sin stock (el historial quedó negativo). */
+    sold_without_stock: number
+    writeoffs: number
+    manual: number
+    value_end_calc: number
+    value_end_real: number
+    difference: number
+    movements_count: number
+  }
+  carried_pending: { key: string; note: string; week_start: string }[]
+  bank_rows: BankRow[]
+  bank_rows_count: number
+  manual: { fund_counted: number | null; bank_balance: number | null }
+  explanations: Record<string, ReconciliationExplanation>
+}
+
+export type WeeklyReconciliationRecord = {
+  id: number
+  week_start: string
+  week_end: string
+  confirmed_at: string
+  user_id: string | null
+  user_name: string | null
+  data: WeekReconciliation | null
+}
+
+export type ReconciliationConfirmInput = {
+  week_start: string
+  data: WeekReconciliation
+  user_id?: string | null
+}
+
 export type StockMovementKind =
   | 'sale'
   | 'return'
@@ -674,6 +823,17 @@ export type Api = {
   writeoffsCreate: (input: WriteoffInput) => Promise<StockWriteoff>
   writeoffsList: (q: { from?: string; to?: string; limit?: number }) => Promise<StockWriteoff[]>
   writeoffsReport: (q: { month: string }) => Promise<WriteoffReport>
+
+  reconciliationStatus: () => Promise<ReconciliationStatus>
+  reconciliationWeeks: () => Promise<{ week_start: string; week_end: string; confirmed: boolean }[]>
+  reconciliationCompute: (
+    weekStart: string,
+    opts?: { bank_rows?: BankRow[] },
+  ) => Promise<WeekReconciliation>
+  reconciliationConfirm: (input: ReconciliationConfirmInput) => Promise<WeeklyReconciliationRecord>
+  reconciliationGet: (weekStart: string) => Promise<WeeklyReconciliationRecord | null>
+  reconciliationHistory: (limit?: number) => Promise<WeeklyReconciliationRecord[]>
+  reconciliationParseBci: (text: string) => Promise<BankRow[]>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>

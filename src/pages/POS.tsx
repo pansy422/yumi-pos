@@ -6,6 +6,7 @@ import {
   Box,
   DollarSign,
   DoorOpen,
+  Lock,
   LogOut,
   Minus,
   PauseCircle,
@@ -47,8 +48,14 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { clampMoney, formatCLP, formatDateTimeCL, formatWeight, todayISO } from '@shared/money'
-import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
+import { clampMoney, formatCLP, formatDateCL, formatDateTimeCL, formatWeight, todayISO } from '@shared/money'
+import type {
+  AppliedPromotion,
+  PaymentMethod,
+  Product,
+  ReconciliationStatus,
+  SaleWithItems,
+} from '@shared/types'
 import {
   Dialog,
   DialogContent,
@@ -168,6 +175,24 @@ export function POS() {
   useEffect(() => {
     if (!heldLoaded) refreshHeld()
   }, [heldLoaded, refreshHeld])
+
+  // Cuadre de los lunes: si la semana anterior no está confirmada (a
+  // partir del día configurado), la venta se bloquea hasta que un admin
+  // lo haga. Se consulta al montar y cada vez que cambia la caja.
+  const [reconBlock, setReconBlock] = useState<ReconciliationStatus | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    api
+      .reconciliationStatus()
+      .then((st) => {
+        if (!cancelled) setReconBlock(st.required ? st : null)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [cash])
+  const blocked = !!reconBlock
 
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
@@ -307,7 +332,7 @@ export function POS() {
   )
 
   useScanner({
-    enabled: !payOpen && !weightProduct,
+    enabled: !payOpen && !weightProduct && !blocked,
     onScan: handleScan,
   })
 
@@ -322,6 +347,7 @@ export function POS() {
   useShortcut(
     { key: 'F5' },
     () => {
+      if (blocked) return
       if (items.length === 0) {
         toast({ variant: 'warning', title: 'Carrito vacío' })
         return
@@ -358,7 +384,40 @@ export function POS() {
   const totalUnits = items.reduce((a, i) => a + i.qty, 0)
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
+      {reconBlock && (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-background/85 backdrop-blur-sm">
+          <div className="max-w-md rounded-xl border border-destructive/40 bg-card p-6 text-center shadow-lg">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <Lock className="h-6 w-6" />
+            </div>
+            <h2 className="mt-3 font-display text-xl font-semibold tracking-display-tight">
+              Falta el cuadre de la semana pasada
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              La semana del {formatDateCL(reconBlock.week_start)} al {formatDateCL(reconBlock.week_end)}{' '}
+              no tiene cuadre confirmado. La venta queda bloqueada hasta que un administrador lo
+              complete.
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              {isAdmin ? (
+                <Button asChild>
+                  <Link to="/cuadre">
+                    <Scale className="h-4 w-4" /> Hacer el cuadre
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={logout}>
+                  <LogOut className="h-4 w-4" /> Cambiar de usuario
+                </Button>
+              )}
+              <Button asChild variant="outline">
+                <Link to="/caja">Ir a Caja</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Barra superior premium tipo macOS: glass + branding + estado
           + navegación admin. Sticky para que la cajera no la pierda al
           scrollear el ticket. */}

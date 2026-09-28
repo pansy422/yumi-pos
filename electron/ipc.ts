@@ -14,6 +14,7 @@ import * as stock from './db/stock'
 import * as fund from './db/cashFund'
 import * as purchases from './db/purchases'
 import * as writeoffs from './db/writeoffs'
+import * as reconciliation from './db/reconciliation'
 import { openReceipt, pickReceipt } from './utils/receipts'
 import { setCurrentUserId } from './db/session'
 import { exportBackup, importBackup } from './utils/backup'
@@ -279,6 +280,20 @@ export function registerIpc(): void {
   )
   handle(IPC.writeoffsList, (q: Parameters<typeof writeoffs.list>[0]) => writeoffs.list(q ?? {}))
   handle(IPC.writeoffsReport, (q: Parameters<typeof writeoffs.report>[0]) => writeoffs.report(q))
+
+  handle(IPC.reconciliationStatus, () => reconciliation.status())
+  handle(IPC.reconciliationWeeks, () => reconciliation.weeks())
+  handle(
+    IPC.reconciliationCompute,
+    (weekStart: string, opts?: Parameters<typeof reconciliation.compute>[1]) =>
+      reconciliation.compute(weekStart, opts),
+  )
+  handle(IPC.reconciliationConfirm, (input: Parameters<typeof reconciliation.confirm>[0]) =>
+    reconciliation.confirm(input),
+  )
+  handle(IPC.reconciliationGet, (weekStart: string) => reconciliation.get(weekStart))
+  handle(IPC.reconciliationHistory, (limit?: number) => reconciliation.history(limit))
+  handle(IPC.reconciliationParseBci, (text: string) => reconciliation.parseBciCsv(text))
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
   handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))
