@@ -54,13 +54,18 @@ export const useSession = create<State & Actions>()(
           // limpiamos el estado si el user persistido ya no está en la DB.
           const persisted = useSession.getState().user
           const stillExists = persisted ? users.some((u) => u.id === persisted.id) : true
+          const user = stillExists ? persisted : null
           set({
             cash,
             settings,
             userCount,
             loading: false,
-            user: stillExists ? persisted : null,
+            user,
           })
+          // El proceso main atribuye movimientos de stock y ediciones al
+          // usuario activo; se lo recordamos en cada refresh (arranque,
+          // login, restauración de respaldo).
+          api.sessionSetUser(user?.id ?? null).catch(() => undefined)
         } catch (err) {
           // Sin try/catch, una falla aquí (DB locked, IPC roto) dejaba
           // loading=true para siempre y bloqueaba toda la app sin pista.
@@ -70,12 +75,16 @@ export const useSession = create<State & Actions>()(
       },
       setCash: (cash) => set({ cash }),
       setSettings: (settings) => set({ settings }),
-      setUser: (user) => set({ user }),
+      setUser: (user) => {
+        set({ user })
+        api.sessionSetUser(user?.id ?? null).catch(() => undefined)
+      },
       // Logout limpia también el carrito — sin esto, el siguiente cajero
       // vería los productos que dejó cargados el cajero anterior y podría
       // cobrar una venta a su nombre.
       logout: () => {
         set({ user: null })
+        api.sessionSetUser(null).catch(() => undefined)
         useCart.getState().clear()
       },
       bumpSalesVersion: () => set((s) => ({ salesVersion: s.salesVersion + 1 })),

@@ -32,7 +32,52 @@ export type ProductInput = {
   is_weight?: 0 | 1
 }
 
-export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
+export type ProductPatch = Partial<ProductInput> & {
+  archived?: 0 | 1
+  /** Obligatorio cuando `stock` cambia: queda en `stock_movements`. */
+  stock_reason?: string
+}
+
+export type PurchasePaymentMethod = 'efectivo' | 'transferencia' | 'debito' | 'credito'
+
+export type WriteoffReason = 'vencido' | 'dañado' | 'consumo' | 'robo' | 'conteo' | 'otro'
+
+export type CashFundMovementKind =
+  | 'in_from_register'
+  | 'out_supplier'
+  | 'out_expense'
+  | 'out_owner'
+  | 'out_transfer_swap'
+  | 'adjustment'
+
+export type StockMovementKind =
+  | 'sale'
+  | 'return'
+  | 'entry'
+  | 'writeoff'
+  | 'manual'
+  | 'archive'
+
+export type StockMovement = {
+  id: number
+  /** null si el producto fue borrado después. */
+  product_id: string | null
+  product_name: string
+  kind: StockMovementKind
+  /** Con signo: negativo sale, positivo entra. Gramos si `is_weight`. */
+  qty: number
+  /** Stock resultante. Puede ser negativo en `sale` (venta sin stock)
+   * aunque `products.stock` se mantenga en 0. */
+  stock_after: number
+  cost_snapshot: number
+  is_weight: 0 | 1
+  reason: string | null
+  ref_table: string | null
+  ref_id: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
 
 /** Totales del inventario calculados en la base sobre TODOS los productos. */
 export type ProductStats = {
@@ -400,6 +445,16 @@ export type Api = {
     percent: number
     field?: 'price' | 'cost'
   }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
+  stockMovementsForProduct: (productId: string, limit?: number) => Promise<StockMovement[]>
+  stockMovementsList: (q: {
+    from?: string
+    to?: string
+    kind?: StockMovementKind
+    search?: string
+    limit?: number
+  }) => Promise<StockMovement[]>
+  /** Avisa al proceso main quién está logueado (para atribuir movimientos). */
+  sessionSetUser: (userId: string | null) => Promise<void>
 
   heldTicketsList: () => Promise<HeldTicket[]>
   heldTicketsSave: (input: {

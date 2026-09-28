@@ -47,6 +47,9 @@ const api = {
   categoriesSaveMeta: invoke(IPC.categoriesSaveMeta),
   categoriesRemove: invoke(IPC.categoriesRemove),
   productsBulkPrice: invoke(IPC.productsBulkPrice),
+  stockMovementsForProduct: invoke(IPC.stockMovementsForProduct),
+  stockMovementsList: invoke(IPC.stockMovementsList),
+  sessionSetUser: invoke(IPC.sessionSetUser),
 
   heldTicketsList: invoke(IPC.heldTicketsList),
   heldTicketsSave: invoke(IPC.heldTicketsSave),

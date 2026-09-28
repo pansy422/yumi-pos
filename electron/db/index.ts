@@ -2,12 +2,17 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import { runMigrations } from './schema'
+import { DB_TARGET_VERSION, getDbVersion, runMigrations } from './schema'
 
 let db: Database.Database | null = null
 
 export function getDbPath(): string {
   return path.join(app.getPath('userData'), 'yumi-pos.db')
+}
+
+/** Misma carpeta que los respaldos diarios (Documentos/Yumi POS Backups). */
+export function getBackupDir(): string {
+  return path.join(app.getPath('documents'), 'Yumi POS Backups')
 }
 
 export function initDb(): Database.Database {
@@ -19,9 +24,41 @@ export function initDb(): Database.Database {
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
+  backupBeforeMigration(db)
   runMigrations(db)
   reconcileSaleCounter(db)
   return db
+}
+
+/**
+ * Respaldo automático ANTES de cada migración de esquema. Si la base ya
+ * tiene datos (versión > 0) y este build trae una versión más nueva,
+ * dejamos una copia autocontenida en la carpeta de respaldos con el
+ * nombre `yumi-pos-pre-migracion-v{N}-{fecha}.db`. Usa `VACUUM INTO`,
+ * que es sincrónico y hace checkpoint del WAL, así que el archivo se
+ * puede abrir tal cual. Estos archivos no entran en la poda de los 30
+ * respaldos diarios (prefijo distinto).
+ *
+ * Si el respaldo falla, NO migramos: preferimos que la app no arranque a
+ * cambiar el esquema sin red de seguridad. El diálogo de arranque muestra
+ * el motivo y la ruta de la base.
+ */
+function backupBeforeMigration(d: Database.Database): void {
+  const current = getDbVersion(d)
+  if (current === 0 || current >= DB_TARGET_VERSION) return
+  const dir = getBackupDir()
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const target = path.join(dir, `yumi-pos-pre-migracion-v${current}-${stamp}.db`)
+  try {
+    d.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`)
+    console.log('[db] respaldo pre-migración creado:', target)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    throw new Error(
+      `No se pudo respaldar la base antes de actualizarla (v${current} → v${DB_TARGET_VERSION}): ${msg}. Libera espacio o revisa permisos en ${dir} y vuelve a abrir la app.`,
+    )
+  }
 }
 
 /**

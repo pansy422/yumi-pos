@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { nowIso } from './sql'
 import { clampMoney } from '../../shared/money'
 import type {
   CashMovement,
@@ -99,9 +100,10 @@ export function open(
   }
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO cash_sessions (id, opening_amount, notes, opened_by_id) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO cash_sessions (id, opened_at, opening_amount, notes, opened_by_id) VALUES (?, ?, ?, ?, ?)`,
   ).run(
     id,
+    nowIso(),
     clampMoney(Math.max(0, Math.round(openingAmount))),
     notes ?? null,
     cashierId ?? null,
@@ -233,14 +235,14 @@ export function close(
   const difference = counted - expected
   db.prepare(
     `UPDATE cash_sessions
-       SET closed_at = datetime('now'),
+       SET closed_at = ?,
            expected_close = ?,
            counted_close = ?,
            difference = ?,
            closed_by_id = ?,
            notes = COALESCE(?, notes)
      WHERE id = ?`,
-  ).run(expected, counted, difference, cashierId ?? null, notes ?? null, open.id)
+  ).run(nowIso(), expected, counted, difference, cashierId ?? null, notes ?? null, open.id)
   return getById(open.id)!
 }
 
@@ -276,9 +278,9 @@ export function move(
   }
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(id, open.id, kind, safeAmount, note, cashierId ?? null)
+    `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, cashier_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, open.id, kind, safeAmount, note, cashierId ?? null, nowIso())
   return movementsById(id)!
 }
 

@@ -20,6 +20,9 @@ export const IPC = {
   categoriesSaveMeta: 'categories:saveMeta',
   categoriesRemove: 'categories:remove',
   productsBulkPrice: 'products:bulkPrice',
+  stockMovementsForProduct: 'stock:forProduct',
+  stockMovementsList: 'stock:list',
+  sessionSetUser: 'session:setUser',
 
   heldTicketsList: 'heldTickets:list',
   heldTicketsSave: 'heldTickets:save',

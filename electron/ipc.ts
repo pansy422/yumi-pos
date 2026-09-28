@@ -10,6 +10,8 @@ import * as promotions from './db/promotions'
 import * as users from './db/users'
 import * as categoriesRepo from './db/categories'
 import * as heldTicketsRepo from './db/heldTickets'
+import * as stock from './db/stock'
+import { setCurrentUserId } from './db/session'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
 import {
@@ -152,6 +154,13 @@ export function registerIpc(): void {
   handle(IPC.productsBulkPrice, (filter: Parameters<typeof products.bulkPriceChange>[0]) =>
     products.bulkPriceChange(filter),
   )
+  handle(IPC.stockMovementsForProduct, (productId: string, limit?: number) =>
+    stock.forProduct(productId, limit),
+  )
+  handle(IPC.stockMovementsList, (q: Parameters<typeof stock.list>[0]) => stock.list(q ?? {}))
+  handle(IPC.sessionSetUser, (userId: string | null) => {
+    setCurrentUserId(userId ?? null)
+  })
 
   handle(IPC.heldTicketsList, () => heldTicketsRepo.list())
   handle(IPC.heldTicketsSave, (input: Parameters<typeof heldTicketsRepo.save>[0]) =>

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { SQL_NOW, sqlToIso } from './sql'
 
 const MIGRATIONS: ((db: Database.Database) => void)[] = [
   (db) => {
@@ -255,15 +256,153 @@ const MIGRATIONS: ((db: Database.Database) => void)[] = [
       ALTER TABLE cash_movements ADD COLUMN cashier_id TEXT REFERENCES users(id);
     `)
   },
+  (db) => {
+    // ── db_version 10 — auditoría de septiembre 2026 ──────────────────
+    // Objetivo: que el sistema permita cuadrar plata, efectivo e
+    // inventario sin reconstruir nada a mano. Ver docs/CAMBIOS-V2.md.
+    //
+    // 1. Tablas nuevas: compras, mermas, fondo de efectivo, historial de
+    //    stock y cuadres semanales. Los ids de users/products son TEXT
+    //    (UUID) en este esquema, así que las FK también.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchased_at TEXT NOT NULL,
+        supplier TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        payment_method TEXT NOT NULL,
+        note TEXT,
+        receipt_path TEXT,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (${SQL_NOW})
+      );
+      CREATE INDEX IF NOT EXISTS idx_purchases_date ON purchases(purchased_at);
+      CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON purchases(supplier COLLATE NOCASE);
+
+      CREATE TABLE IF NOT EXISTS stock_writeoffs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
+        product_name TEXT NOT NULL,
+        qty REAL NOT NULL,
+        reason TEXT NOT NULL,
+        cost_snapshot INTEGER NOT NULL DEFAULT 0,
+        is_weight INTEGER NOT NULL DEFAULT 0,
+        note TEXT,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (${SQL_NOW})
+      );
+      CREATE INDEX IF NOT EXISTS idx_writeoffs_created ON stock_writeoffs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_writeoffs_product ON stock_writeoffs(product_id);
+
+      CREATE TABLE IF NOT EXISTS cash_fund_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        counterparty TEXT,
+        purchase_id INTEGER REFERENCES purchases(id) ON DELETE SET NULL,
+        cash_session_id TEXT REFERENCES cash_sessions(id) ON DELETE SET NULL,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (${SQL_NOW})
+      );
+      CREATE INDEX IF NOT EXISTS idx_fund_created ON cash_fund_movements(created_at);
+      CREATE INDEX IF NOT EXISTS idx_fund_purchase ON cash_fund_movements(purchase_id);
+
+      CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id TEXT REFERENCES products(id) ON DELETE SET NULL,
+        product_name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        qty REAL NOT NULL,
+        stock_after REAL NOT NULL,
+        cost_snapshot INTEGER NOT NULL DEFAULT 0,
+        is_weight INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        ref_table TEXT,
+        ref_id TEXT,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT NOT NULL DEFAULT (${SQL_NOW})
+      );
+      CREATE INDEX IF NOT EXISTS idx_stock_mov_product ON stock_movements(product_id);
+      CREATE INDEX IF NOT EXISTS idx_stock_mov_created ON stock_movements(created_at);
+      CREATE INDEX IF NOT EXISTS idx_stock_mov_kind ON stock_movements(kind);
+
+      CREATE TABLE IF NOT EXISTS weekly_reconciliations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week_start TEXT NOT NULL UNIQUE,
+        week_end TEXT NOT NULL,
+        data_json TEXT NOT NULL,
+        confirmed_at TEXT NOT NULL,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL
+      );
+    `)
+    // 2. Retiros con motivo y destinatario; fondo fijo que queda en el
+    //    cajón al cerrar y explicación de la diferencia.
+    db.exec(`
+      ALTER TABLE cash_movements ADD COLUMN reason TEXT;
+      ALTER TABLE cash_movements ADD COLUMN counterparty TEXT;
+      ALTER TABLE cash_sessions ADD COLUMN register_float INTEGER;
+      ALTER TABLE cash_sessions ADD COLUMN difference_note TEXT;
+    `)
+    // 3. Fechas: todo a ISO 8601 UTC con T y Z. `datetime('now')` dejaba
+    //    "2026-09-28 14:30:00" (espacio, sin Z) y `sales` ya venía en ISO
+    //    desde JS; los rangos entre tablas daban resultados distintos.
+    //    strftime devuelve NULL si el valor no se puede interpretar, y en
+    //    ese caso lo dejamos como está en vez de violar NOT NULL.
+    const DATE_COLUMNS: [string, string][] = [
+      ['products', 'created_at'],
+      ['products', 'updated_at'],
+      ['cash_sessions', 'opened_at'],
+      ['cash_sessions', 'closed_at'],
+      ['cash_movements', 'created_at'],
+      ['categories', 'created_at'],
+      ['users', 'created_at'],
+      ['promotions', 'created_at'],
+      ['held_tickets', 'created_at'],
+      ['sale_payments', 'created_at'],
+      ['sales', 'started_at'],
+      ['sales', 'completed_at'],
+    ]
+    for (const [table, col] of DATE_COLUMNS) {
+      db.exec(
+        `UPDATE ${table}
+            SET ${col} = ${sqlToIso(col)}
+          WHERE ${col} IS NOT NULL
+            AND ${col} NOT LIKE '%T%'
+            AND ${sqlToIso(col)} IS NOT NULL`,
+      )
+    }
+    // 4/5. Settings nuevos (`cash.register_float`, `reconciliation.weekday`)
+    //    viven en DEFAULTS de settings.ts — no hace falta sembrarlos. La
+    //    semilla del fondo de efectivo (movimiento `adjustment` con el
+    //    efectivo real del día del despliegue) la registra el dueño desde
+    //    Caja → Fondo → "Registrar saldo inicial": el monto no se puede
+    //    adivinar desde una migración.
+  },
 ]
 
-export function runMigrations(db: Database.Database): void {
-  db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+/** Versión de esquema que produce este build. */
+export const DB_TARGET_VERSION = MIGRATIONS.length
+
+export function getDbVersion(db: Database.Database): number {
+  const hasMeta = db
+    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '_meta'`)
+    .get()
+  if (!hasMeta) return 0
   const row = db.prepare(`SELECT value FROM _meta WHERE key = 'db_version'`).get() as
     | { value: string }
     | undefined
-  const current = row ? Number(row.value) : 0
-  const target = MIGRATIONS.length
+  return row ? Number(row.value) : 0
+}
+
+/**
+ * Aplica las migraciones pendientes hasta `target` (por defecto, todas).
+ * El parámetro existe para que el smoke test pueda construir una base
+ * en una versión anterior y verificar la migración real.
+ */
+export function runMigrations(db: Database.Database, target = MIGRATIONS.length): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)`)
+  const current = getDbVersion(db)
 
   if (current >= target) return
 

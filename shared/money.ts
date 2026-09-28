@@ -45,19 +45,61 @@ export function formatDateCL(iso: string): string {
   return `${m[3]}-${m[2]}-${m[1]}`
 }
 
+/** Zona horaria en la que se muestra TODA fecha al usuario. */
+export const CL_TZ = 'America/Santiago'
+
 /**
- * Formatea fecha + hora en convención chilena: "04-05-2026 14:30".
- * Usa la TZ local del SO. Para boletas, listados y reportes.
+ * Convierte un timestamp guardado en la base a Date. La base guarda ISO
+ * UTC con `T` y `Z` (desde la migración 10); los respaldos anteriores
+ * pueden traer el formato viejo de SQLite `YYYY-MM-DD HH:MM:SS` (UTC sin
+ * sufijo) o un `YYYY-MM-DD` suelto. Todos se interpretan como UTC.
+ */
+export function parseDbDate(s: string | null | undefined): Date | null {
+  if (!s) return null
+  const t = s.trim()
+  if (!t) return null
+  let iso = t
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) iso = t + 'T00:00:00Z'
+  else if (!t.includes('T')) iso = t.replace(' ', 'T') + 'Z'
+  else if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(t)) iso = t + 'Z'
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * Formatea fecha + hora en convención chilena: "04-05-2026 14:30",
+ * siempre en hora de Chile (`America/Santiago`), sin importar la zona
+ * horaria del PC. Para boletas, listados y reportes.
  */
 export function formatDateTimeCL(iso: string | Date): string {
-  const d = iso instanceof Date ? iso : new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${day}-${month}-${year} ${hh}:${mm}`
+  const d = iso instanceof Date ? iso : parseDbDate(iso)
+  if (!d || isNaN(d.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('es-CL', {
+    timeZone: CL_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  const hh = get('hour') === '24' ? '00' : get('hour')
+  return `${get('day')}-${get('month')}-${get('year')} ${hh}:${get('minute')}`
+}
+
+/** Fecha `YYYY-MM-DD` de un timestamp, en hora de Chile. */
+export function dateCL(iso: string | Date): string {
+  const d = iso instanceof Date ? iso : parseDbDate(iso)
+  if (!d) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CL_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? ''
+  return `${get('year')}-${get('month')}-${get('day')}`
 }
 
 /**

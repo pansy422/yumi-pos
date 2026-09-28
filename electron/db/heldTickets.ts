@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { nowIso } from './sql'
 import type { CartItem, HeldTicket } from '../../shared/types'
 
 function rowToTicket(r: Record<string, unknown>): HeldTicket {
@@ -44,12 +45,13 @@ export function save(input: {
   if (!name) throw new Error('El ticket en espera necesita un nombre')
   const id = 'h_' + randomUUID().replace(/-/g, '').slice(0, 12)
   db.prepare(
-    `INSERT INTO held_tickets (id, name, items_json, discount) VALUES (?, ?, ?, ?)`,
+    `INSERT INTO held_tickets (id, name, items_json, discount, created_at) VALUES (?, ?, ?, ?, ?)`,
   ).run(
     id,
     name,
     JSON.stringify(input.items ?? []),
     Math.max(0, Math.round(input.discount ?? 0)),
+    nowIso(),
   )
   // Mantener máximo 30 tickets, los más antiguos se descartan. 30 es
   // suficiente para un día de trabajo y evita que la tabla crezca sin

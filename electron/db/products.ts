@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { formatWeight } from '../../shared/money'
 import { getDb } from './index'
 import { ensureExists as ensureCategoryExists } from './categories'
+import { applyStockMovement } from './stock'
+import { nowIso, SQL_NOW } from './sql'
 import type {
   Product,
   ProductInput,
@@ -177,34 +179,53 @@ export function byBarcode(barcode: string, opts: { includeArchived?: boolean } =
   return row(db.prepare(sql).get(code) as Record<string, unknown>)
 }
 
-export function create(input: ProductInput): Product {
+export function create(input: ProductInput, opts?: { user_id?: string | null }): Product {
   const db = getDb()
   const id = randomUUID()
   if (input.barcode) {
     const exists = db.prepare(`SELECT 1 FROM products WHERE barcode = ?`).get(input.barcode)
     if (exists) throw new Error(`Ya existe un producto con el código ${input.barcode}`)
   }
-  db.prepare(
-    `INSERT INTO products (id, barcode, name, sku, cost, price, stock, stock_min, stock_max, category, is_weight)
-     VALUES (@id, @barcode, @name, @sku, @cost, @price, @stock, @stock_min, @stock_max, @category, @is_weight)`,
-  ).run({
-    id,
-    barcode: input.barcode ?? null,
-    name: input.name.trim(),
-    sku: input.sku ?? null,
-    cost: Math.round(input.cost),
-    price: Math.round(input.price),
-    stock: Math.round(input.stock ?? 0),
-    stock_min: Math.round(input.stock_min ?? 0),
-    stock_max: Math.round(input.stock_max ?? 0),
-    category: input.category ?? null,
-    is_weight: input.is_weight === 1 ? 1 : 0,
-  })
+  const initialStock = Math.max(0, Math.round(input.stock ?? 0))
+  const now = nowIso()
+  db.transaction(() => {
+    // El stock inicial entra como movimiento `entry` (no se escribe
+    // directo en la fila) para que el historial arranque desde 0.
+    db.prepare(
+      `INSERT INTO products (id, barcode, name, sku, cost, price, stock, stock_min, stock_max, category, is_weight, created_at, updated_at)
+       VALUES (@id, @barcode, @name, @sku, @cost, @price, 0, @stock_min, @stock_max, @category, @is_weight, @now, @now)`,
+    ).run({
+      id,
+      barcode: input.barcode ?? null,
+      name: input.name.trim(),
+      sku: input.sku ?? null,
+      cost: Math.round(input.cost),
+      price: Math.round(input.price),
+      stock_min: Math.round(input.stock_min ?? 0),
+      stock_max: Math.round(input.stock_max ?? 0),
+      category: input.category ?? null,
+      is_weight: input.is_weight === 1 ? 1 : 0,
+      now,
+    })
+    if (initialStock > 0) {
+      applyStockMovement(db, {
+        product_id: id,
+        kind: 'entry',
+        qty: initialStock,
+        reason: 'Alta de producto',
+        user_id: opts?.user_id,
+      })
+    }
+  })()
   if (input.category) ensureCategoryExists(input.category)
   return get(id)!
 }
 
-export function update(id: string, patch: ProductPatch): Product {
+export function update(
+  id: string,
+  patch: ProductPatch,
+  opts?: { stock_kind?: 'manual' | 'entry'; user_id?: string | null },
+): Product {
   const db = getDb()
   const current = get(id)
   if (!current) throw new Error('Producto no encontrado')
@@ -233,18 +254,47 @@ export function update(id: string, patch: ProductPatch): Product {
     sku: patch.sku ?? current.sku,
     cost: Math.round(patch.cost ?? current.cost),
     price: Math.round(patch.price ?? current.price),
-    stock: Math.round(patch.stock ?? current.stock),
     stock_min: Math.round(patch.stock_min ?? current.stock_min),
     stock_max: Math.round(patch.stock_max ?? current.stock_max),
     category: patch.category ?? current.category,
     is_weight: (patch.is_weight ?? current.is_weight) === 1 ? 1 : 0,
     archived: patch.archived ?? current.archived,
   }
-  db.prepare(
-    `UPDATE products SET barcode=@barcode, name=@name, sku=@sku, cost=@cost, price=@price,
-     stock=@stock, stock_min=@stock_min, stock_max=@stock_max, category=@category,
-     is_weight=@is_weight, archived=@archived, updated_at=datetime('now') WHERE id=@id`,
-  ).run({ id, ...next })
+  // El stock NO se escribe con el resto de la ficha: si cambió, pasa por
+  // el historial como movimiento con motivo obligatorio.
+  const targetStock = patch.stock === undefined ? current.stock : Math.round(patch.stock)
+  const stockDelta = targetStock - current.stock
+  const stockReason = (patch.stock_reason ?? '').trim()
+  if (stockDelta !== 0 && !stockReason) {
+    throw new Error(
+      'Para cambiar el stock desde la ficha hay que indicar un motivo (queda en el historial). Si es mercadería vencida o dañada, usa Vencidos y mermas.',
+    )
+  }
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE products SET barcode=@barcode, name=@name, sku=@sku, cost=@cost, price=@price,
+       stock_min=@stock_min, stock_max=@stock_max, category=@category,
+       is_weight=@is_weight, archived=@archived, updated_at=${SQL_NOW} WHERE id=@id`,
+    ).run({ id, ...next })
+    if (stockDelta !== 0) {
+      applyStockMovement(db, {
+        product_id: id,
+        kind: opts?.stock_kind ?? 'manual',
+        qty: stockDelta,
+        reason: stockReason,
+        user_id: opts?.user_id,
+      })
+    }
+    if (next.archived !== current.archived) {
+      applyStockMovement(db, {
+        product_id: id,
+        kind: 'archive',
+        qty: 0,
+        reason: next.archived === 1 ? 'Archivado' : 'Reactivado',
+        user_id: opts?.user_id,
+      })
+    }
+  })()
   if (next.category) ensureCategoryExists(next.category)
   return get(id)!
 }
@@ -296,7 +346,7 @@ export function bulkPriceChange(filter: {
   const result = db
     .prepare(
       `UPDATE products SET ${field} = MAX(0, ROUND(${field} * ${factor})),
-       updated_at = datetime('now') ${whereSql}`,
+       updated_at = ${SQL_NOW} ${whereSql}`,
     )
     .run(params)
 
@@ -309,9 +359,23 @@ export function bulkPriceChange(filter: {
 
 export function archive(id: string, archived: boolean): void {
   const db = getDb()
-  db.prepare(
-    `UPDATE products SET archived = ?, updated_at = datetime('now') WHERE id = ?`,
-  ).run(archived ? 1 : 0, id)
+  const current = get(id)
+  if (!current) throw new Error('Producto no encontrado')
+  if ((current.archived === 1) === archived) return
+  db.transaction(() => {
+    db.prepare(`UPDATE products SET archived = ?, updated_at = ${SQL_NOW} WHERE id = ?`).run(
+      archived ? 1 : 0,
+      id,
+    )
+    // Queda en el historial: un producto archivado con stock sigue
+    // teniendo mercadería aunque no aparezca en el POS.
+    applyStockMovement(db, {
+      product_id: id,
+      kind: 'archive',
+      qty: 0,
+      reason: archived ? 'Archivado' : 'Reactivado',
+    })
+  })()
 }
 
 /**
@@ -351,28 +415,29 @@ export function deleteHard(id: string): void {
   db.prepare(`DELETE FROM products WHERE id = ?`).run(id)
 }
 
-export function adjustStock(id: string, delta: number, _note?: string): Product {
+/**
+ * Ajuste de stock con motivo. Entradas (delta > 0) quedan como `entry`;
+ * bajas como `manual` (motivo obligatorio). Para vencidos / dañados usar
+ * `writeoffs.create`, que además alimenta el reporte de mermas.
+ */
+export function adjustStock(
+  id: string,
+  delta: number,
+  note?: string,
+  opts?: { user_id?: string | null },
+): Product {
   const db = getDb()
-  const tx = db.transaction(() => {
-    const current = get(id)
-    if (!current) throw new Error('Producto no encontrado')
-    const d = Math.round(delta)
-    // Si la cajera intenta quitar más stock del que hay, abortamos en
-    // vez de dejar inventario negativo (que rompe reportes y la
-    // invariante de negocio de stock >= 0).
-    if (current.stock + d < 0) {
-      const want = current.is_weight === 1 ? formatWeight(-d) : String(-d)
-      const has =
-        current.is_weight === 1 ? formatWeight(current.stock) : String(current.stock)
-      throw new Error(
-        `No se puede quitar ${want} de "${current.name}": solo hay ${has} en stock.`,
-      )
-    }
-    db.prepare(
-      `UPDATE products SET stock = stock + ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(d, id)
-  })
-  tx()
+  const d = Math.round(delta)
+  if (!Number.isFinite(d) || d === 0) throw new Error('La cantidad del ajuste no puede ser 0.')
+  db.transaction(() => {
+    applyStockMovement(db, {
+      product_id: id,
+      kind: d > 0 ? 'entry' : 'manual',
+      qty: d,
+      reason: (note ?? '').trim() || (d > 0 ? 'Ingreso de mercadería' : ''),
+      user_id: opts?.user_id,
+    })
+  })()
   return get(id)!
 }
 
@@ -392,9 +457,14 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
         `"${active.name}" se vende por peso. Ajusta su stock manualmente desde Inventario (en kg).`,
       )
     }
-    db.prepare(
-      `UPDATE products SET stock = stock + 1, updated_at = datetime('now') WHERE id = ?`,
-    ).run(active.id)
+    db.transaction(() => {
+      applyStockMovement(db, {
+        product_id: active.id,
+        kind: 'entry',
+        qty: 1,
+        reason: 'Pistoleo de stock',
+      })
+    })()
     return { kind: 'incremented', product: get(active.id)! }
   }
   if (opts?.newProduct) {
@@ -417,18 +487,27 @@ export function scanIn(barcode: string, opts?: { newProduct?: ProductInput }): S
  */
 export function reactivate(id: string, opts?: { newStock?: number }): Product {
   const db = getDb()
-  if (opts?.newStock != null) {
-    db.prepare(
-      `UPDATE products SET archived = 0, stock = ?, updated_at = datetime('now') WHERE id = ?`,
-    ).run(Math.max(0, Math.round(opts.newStock)), id)
-  } else {
-    db.prepare(
-      `UPDATE products SET archived = 0, updated_at = datetime('now') WHERE id = ?`,
-    ).run(id)
-  }
-  const p = get(id)
-  if (!p) throw new Error('Producto no encontrado')
-  return p
+  const current = get(id)
+  if (!current) throw new Error('Producto no encontrado')
+  db.transaction(() => {
+    db.prepare(`UPDATE products SET archived = 0, updated_at = ${SQL_NOW} WHERE id = ?`).run(id)
+    if (current.archived === 1) {
+      applyStockMovement(db, { product_id: id, kind: 'archive', qty: 0, reason: 'Reactivado' })
+    }
+    if (opts?.newStock != null) {
+      const target = Math.max(0, Math.round(opts.newStock))
+      const delta = target - current.stock
+      if (delta !== 0) {
+        applyStockMovement(db, {
+          product_id: id,
+          kind: delta > 0 ? 'entry' : 'manual',
+          qty: delta,
+          reason: 'Reactivación con conteo de stock',
+        })
+      }
+    }
+  })()
+  return get(id)!
 }
 
 /**
@@ -502,7 +581,7 @@ export function slowMoving(opts: { days: number }): SlowMovingProduct[] {
                 last_sold_at IS NULL
                 AND date(p.created_at, 'localtime') < date('now', 'localtime', ?)
               )
-              OR last_sold_at < datetime('now', ?)
+              OR last_sold_at < strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?)
         ORDER BY (CASE WHEN last_sold_at IS NULL THEN 1 ELSE 0 END),
                  last_sold_at ASC,
                  p.name COLLATE NOCASE`,
@@ -553,7 +632,7 @@ export function renameCategory(from: string, to: string): number {
   const db = getDb()
   const target = to.trim() || null
   const result = db
-    .prepare(`UPDATE products SET category = ?, updated_at = datetime('now') WHERE category = ?`)
+    .prepare(`UPDATE products SET category = ?, updated_at = ${SQL_NOW} WHERE category = ?`)
     .run(target, from)
   return Number(result.changes)
 }
@@ -566,7 +645,9 @@ export function importMany(rows: ProductInput[]): { created: number; updated: nu
     for (const r of rows) {
       const existing = r.barcode ? byBarcode(r.barcode, { includeArchived: true }) : null
       if (existing) {
-        update(existing.id, r)
+        // El stock del CSV reemplaza al actual; la diferencia queda como
+        // ingreso (o ajuste) con motivo "Importación CSV".
+        update(existing.id, { ...r, stock_reason: 'Importación CSV' }, { stock_kind: 'entry' })
         updated++
       } else {
         create(r)

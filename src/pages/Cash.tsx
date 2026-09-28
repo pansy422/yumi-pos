@@ -38,15 +38,8 @@ import { api } from '@/lib/api'
 import { formatCLP, formatDateTimeCL } from '@shared/money'
 import type { CashMovement, CashSessionSummary } from '@shared/types'
 
-/** Parsea timestamp SQLite (UTC sin sufijo) a Date local correcta. */
-function parseDate(s: string | null): Date | null {
-  if (!s) return null
-  const iso = s.includes('T') || s.endsWith('Z') ? s : s.replace(' ', 'T') + 'Z'
-  return new Date(iso)
-}
 function fmtDate(s: string | null): string {
-  const d = parseDate(s)
-  return d ? formatDateTimeCL(d) : '—'
+  return s ? formatDateTimeCL(s) || '—' : '—'
 }
 
 const KIND_LABEL: Record<CashMovement['kind'], string> = {

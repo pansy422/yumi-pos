@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
-import { formatWeight, lineTotal } from '../../shared/money'
+import { applyStockMovement } from './stock'
+import { nowIso } from './sql'
+import { lineTotal } from '../../shared/money'
 import type {
   PaymentMethod,
   Sale,
@@ -83,7 +85,6 @@ export function create(input: SaleInput): SaleWithItems {
       lineTotal: number
     }[] = []
     let subtotal = 0
-    const oversold: { name: string; qty: number; stock: number; is_weight: 0 | 1 }[] = []
 
     const fetchProduct = db.prepare(
       `SELECT id, name, cost, price, stock, archived, is_weight FROM products WHERE id = ?`,
@@ -126,9 +127,6 @@ export function create(input: SaleInput): SaleWithItems {
       // sin trazabilidad en cash_movements).
       const price = Math.max(0, Math.round(it.price))
       const surcharge = Math.max(0, Math.round(it.surcharge ?? 0))
-      if (qty > p.stock) {
-        oversold.push({ name: p.name, qty, stock: p.stock, is_weight: isWeight })
-      }
       const lt = lineTotal({ price, surcharge, qty, is_weight: isWeight })
       subtotal += lt
       itemsResolved.push({
@@ -144,16 +142,10 @@ export function create(input: SaleInput): SaleWithItems {
       })
     }
 
-    if (oversold.length > 0) {
-      const detail = oversold
-        .map((o) => {
-          const want = o.is_weight ? formatWeight(o.qty) : `${o.qty}`
-          const has = o.is_weight ? formatWeight(o.stock) : `${o.stock}`
-          return `${o.name} (pediste ${want}, hay ${has})`
-        })
-        .join('; ')
-      throw new Error(`Stock insuficiente: ${detail}`)
-    }
+    // Vender sin stock NO se bloquea (decisión sep-2026): el POS avisa al
+    // agregar el producto y el movimiento queda registrado igual, con
+    // stock_after negativo en stock_movements aunque products.stock se
+    // mantenga en 0. Así se ve cuánto se vendió sin stock en el cuadre.
 
     const discount = Math.max(0, Math.round(input.discount || 0))
     if (discount > subtotal) {
@@ -232,8 +224,8 @@ export function create(input: SaleInput): SaleWithItems {
     })
 
     const insPayment = db.prepare(
-      `INSERT INTO sale_payments (sale_id, method, amount, cash_received, change_given)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO sale_payments (sale_id, method, amount, cash_received, change_given, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
     )
     for (const p of cleanPayments) {
       insPayment.run(
@@ -242,6 +234,7 @@ export function create(input: SaleInput): SaleWithItems {
         p.amount,
         p.method === 'efectivo' ? p.cash_received : null,
         p.method === 'efectivo' ? p.change_given : null,
+        now,
       )
     }
 
@@ -249,7 +242,6 @@ export function create(input: SaleInput): SaleWithItems {
       `INSERT INTO sale_items (sale_id, product_id, name_snapshot, price_snapshot, cost_snapshot, surcharge, qty, line_total, is_weight)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    const decStock = db.prepare(`UPDATE products SET stock = stock - ? WHERE id = ?`)
     for (const it of itemsResolved) {
       // sale_id = saleId (NO it.id — eso es product_id y rompe la FK)
       insItem.run(
@@ -263,7 +255,15 @@ export function create(input: SaleInput): SaleWithItems {
         it.lineTotal,
         it.is_weight,
       )
-      decStock.run(it.qty, it.id)
+      applyStockMovement(db, {
+        product_id: it.id,
+        kind: 'sale',
+        qty: -it.qty,
+        ref_table: 'sales',
+        ref_id: saleId,
+        reason: `Venta #${next.last_number}`,
+        user_id: input.cashier_id ?? null,
+      })
     }
 
     // Por cada pago en efectivo registramos un cash_movement con SU monto
@@ -271,8 +271,8 @@ export function create(input: SaleInput): SaleWithItems {
     // lo que entró por la caja (y no la parte que se cobró con tarjeta).
     if (session) {
       const insMov = db.prepare(
-        `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, sale_id)
-         VALUES (?, ?, 'sale', ?, ?, ?)`,
+        `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, sale_id, cashier_id, created_at)
+         VALUES (?, ?, 'sale', ?, ?, ?, ?, ?)`,
       )
       for (const p of cleanPayments) {
         if (p.method === 'efectivo' && p.amount > 0) {
@@ -282,6 +282,8 @@ export function create(input: SaleInput): SaleWithItems {
             p.amount,
             `Venta #${next.last_number}`,
             saleId,
+            input.cashier_id ?? null,
+            now,
           )
         }
       }
@@ -377,11 +379,21 @@ export function voidSale(id: string, reason: string): void {
     if (!sale) throw new Error('Venta no encontrada')
     if (sale.voided) return
     db.prepare(`UPDATE sales SET voided = 1, void_reason = ? WHERE id = ?`).run(reason, id)
-    const restore = db.prepare(`UPDATE products SET stock = stock + ? WHERE id = ?`)
     // Solo restaurar la cantidad que NO había sido devuelta previamente.
+    // Productos borrados después de la venta (product_id NULL) no tienen
+    // dónde volver.
     for (const it of sale.items) {
       const remaining = it.qty - it.returned_qty
-      if (remaining > 0) restore.run(remaining, it.product_id)
+      if (remaining > 0 && it.product_id) {
+        applyStockMovement(db, {
+          product_id: it.product_id,
+          kind: 'return',
+          qty: remaining,
+          ref_table: 'sales',
+          ref_id: id,
+          reason: `Anulación venta #${sale.number}: ${reason}`,
+        })
+      }
     }
   })
   tx()
@@ -407,7 +419,6 @@ export function returnItems(
     if (sale.voided) throw new Error('La venta está anulada; no se puede devolver parcialmente')
 
     let refunded = 0
-    const restoreStock = db.prepare(`UPDATE products SET stock = stock + ? WHERE id = ?`)
     const updateReturned = db.prepare(
       `UPDATE sale_items SET returned_qty = returned_qty + ? WHERE sale_id = ? AND product_id = ?`,
     )
@@ -431,7 +442,14 @@ export function returnItems(
       })
       refunded += lineRefund
       updateReturned.run(toReturn, saleId, r.product_id)
-      restoreStock.run(toReturn, r.product_id)
+      applyStockMovement(db, {
+        product_id: r.product_id,
+        kind: 'return',
+        qty: toReturn,
+        ref_table: 'sales',
+        ref_id: saleId,
+        reason: `Devolución venta #${sale.number}: ${reason}`,
+      })
     }
 
     if (refunded === 0) throw new Error('Las cantidades a devolver son cero')
@@ -457,14 +475,15 @@ export function returnItems(
             ? ` (efectivo $${cashRefund.toLocaleString('es-CL')} de $${refunded.toLocaleString('es-CL')} reembolsado; el resto pagado por otro medio)`
             : ''
         db.prepare(
-          `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, sale_id)
-           VALUES (?, ?, 'adjustment', ?, ?, ?)`,
+          `INSERT INTO cash_movements (id, cash_session_id, kind, amount, note, sale_id, created_at)
+           VALUES (?, ?, 'adjustment', ?, ?, ?, ?)`,
         ).run(
           randomUUID(),
           sale.cash_session_id,
           -cashRefund,
           `Devolución parcial venta #${sale.number}: ${reason}${noteSuffix}`,
           saleId,
+          nowIso(),
         )
       }
     }

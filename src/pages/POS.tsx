@@ -46,7 +46,7 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { clampMoney, formatCLP, formatWeight, todayISO } from '@shared/money'
+import { clampMoney, formatCLP, formatDateTimeCL, formatWeight, todayISO } from '@shared/money'
 import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
 import {
   Dialog,
@@ -248,8 +248,18 @@ export function POS() {
         return
       }
       addWithMultiplier(p)
+      // Aviso visible al agregar sin stock: la venta NO se bloquea (el
+      // sistema la registra con stock negativo en el historial), pero la
+      // cajera tiene que enterarse de que el inventario no cuadra.
+      if (p.stock <= 0) {
+        toast({
+          variant: 'warning',
+          title: `${p.name}: sin stock`,
+          description: 'Se vende igual. El historial de stock quedará en negativo para el cuadre.',
+        })
+      }
     },
-    [addWithMultiplier],
+    [addWithMultiplier, toast],
   )
 
   const handleScan = useCallback(
@@ -275,8 +285,8 @@ export function POS() {
       if (p.stock <= 0) {
         toast({
           variant: 'warning',
-          title: p.name,
-          description: `Sin stock — vendiendo a deuda (stock quedará en ${p.stock - willAdd})`,
+          title: `${p.name}: sin stock`,
+          description: `Se vende igual; el historial quedará en ${p.stock - willAdd} para el cuadre.`,
         })
       } else if (after > p.stock) {
         toast({
@@ -1248,17 +1258,7 @@ function HeldTicketsDialog({
                         {units} unidad{units === 1 ? '' : 'es'} ·{' '}
                         <span className="num">{formatCLP(total)}</span>
                         {' · '}
-                        {/* SQLite datetime('now') guarda en UTC sin sufijo;
-                            agregamos la 'Z' para que JS lo interprete como UTC
-                            y muestre la hora local correctamente. */}
-                        {new Date(
-                          t.created_at.includes('T') || t.created_at.endsWith('Z')
-                            ? t.created_at
-                            : t.created_at.replace(' ', 'T') + 'Z',
-                        ).toLocaleTimeString('es-CL', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatDateTimeCL(t.created_at).slice(-5)}
                       </div>
                     </div>
                     <Button
