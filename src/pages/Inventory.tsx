@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -6,34 +6,19 @@ import {
   ArrowDownAZ,
   Edit3,
   FileUp,
-  Pencil,
   Percent,
   Plus,
   Printer,
   Search,
   ScanBarcode,
   Tag,
+  Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/common/PageHeader'
 import { EmptyState, BoxEmptyArt } from '@/components/common/EmptyState'
 import { useToast } from '@/hooks/useToast'
@@ -42,95 +27,133 @@ import { ProductDialog } from './ProductDialog'
 import { CsvImport } from '@/components/common/CsvImport'
 import { BulkPriceDialog } from '@/components/common/BulkPriceDialog'
 import { api } from '@/lib/api'
-import type { Category, Product } from '@shared/types'
+import type { Product, ProductStats } from '@shared/types'
 import { formatCLP, formatWeight } from '@shared/money'
 import { cn } from '@/lib/utils'
+
+/** Filas por bloque al desplazar. La lista NO tiene tope: se piden
+ *  bloques hasta llegar al `total` que informa la base. */
+const PAGE_SIZE = 100
+
+type StatusFilter = 'active' | 'archived' | 'all'
 
 export function Inventory() {
   const { toast } = useToast()
   const isAdmin = useIsAdmin()
   const [search, setSearch] = useState('')
   const [items, setItems] = useState<Product[]>([])
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<ProductStats | null>(null)
   const [editing, setEditing] = useState<Product | null>(null)
   const [creating, setCreating] = useState(false)
-  const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived' | 'all'>('active')
+  const [status, setStatus] = useState<StatusFilter>('active')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [firstLoad, setFirstLoad] = useState(true)
-  const [categories, setCategories] = useState<Category[]>([])
-  const [category, setCategory] = useState<'__all__' | '__none__' | string>('__all__')
-  const [renameOpen, setRenameOpen] = useState(false)
-  const [renameFrom, setRenameFrom] = useState('')
-  const [renameTo, setRenameTo] = useState('')
   const [csvOpen, setCsvOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  // Cada recarga desde cero incrementa este contador; las respuestas de
+  // consultas viejas (búsqueda que cambió mientras esperábamos) se
+  // descartan comparando contra él.
+  const queryVersion = useRef(0)
 
-  const load = async () => {
-    setLoading(true)
-    const filterCategory =
-      category === '__all__' ? undefined : category === '__none__' ? null : category
-    const list = await api.productsList({
-      search,
-      includeArchived: archivedFilter === 'all',
-      onlyArchived: archivedFilter === 'archived',
-      category: filterCategory,
-    })
-    setItems(list)
-    setLoading(false)
-    setFirstLoad(false)
-  }
-
-  const loadCategories = async () => {
-    setCategories(await api.categoriesCrud())
-  }
-
-  useEffect(() => {
-    loadCategories()
+  const loadStats = useCallback(async () => {
+    try {
+      setStats(await api.productsStats())
+    } catch (err) {
+      console.error('[inventario] stats', err)
+    }
   }, [])
 
-  useEffect(() => {
-    const t = setTimeout(load, 120)
-    return () => clearTimeout(t)
-  }, [search, archivedFilter, category])
+  const reload = useCallback(async () => {
+    const version = ++queryVersion.current
+    setLoading(true)
+    try {
+      const r = await api.productsPage({ search, status, offset: 0, limit: PAGE_SIZE })
+      if (version !== queryVersion.current) return
+      setItems(r.items)
+      setTotal(r.total)
+    } finally {
+      if (version === queryVersion.current) {
+        setLoading(false)
+        setFirstLoad(false)
+      }
+    }
+  }, [search, status])
 
-  const totalStockValue = items.reduce(
-    (a, i) => a + (i.is_weight === 1 ? Math.round((i.cost * i.stock) / 1000) : i.cost * i.stock),
-    0,
-  )
-  // Producto "crítico" cuando:
-  //  - tiene stock_min definido y stock por debajo de ese mínimo, o
-  //  - no tiene stock_min configurado y le quedan menos de 3 unidades
-  //    (fallback para alertar aunque la cajera no haya seteado mínimos
-  //    en cada producto). No aplica a productos al peso (stock en gramos).
-  const LOW_STOCK_FLOOR = 3
-  const lowStock = items.filter((i) => {
-    if (i.archived || i.stock <= 0) return false
-    if (i.stock_min > 0) return i.stock < i.stock_min
-    return i.is_weight === 0 && i.stock < LOW_STOCK_FLOOR
-  }).length
-  const outOfStock = items.filter((i) => i.stock <= 0 && !i.archived).length
+  const loadMore = useCallback(async () => {
+    if (loadingMore || loading) return
+    if (items.length >= total) return
+    const version = queryVersion.current
+    setLoadingMore(true)
+    try {
+      const r = await api.productsPage({
+        search,
+        status,
+        offset: items.length,
+        limit: PAGE_SIZE,
+      })
+      if (version !== queryVersion.current) return
+      setItems((cur) => {
+        const seen = new Set(cur.map((p) => p.id))
+        return [...cur, ...r.items.filter((p) => !seen.has(p.id))]
+      })
+      setTotal(r.total)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [items.length, loading, loadingMore, search, status, total])
+
+  useEffect(() => {
+    loadStats()
+  }, [loadStats])
+
+  useEffect(() => {
+    const t = setTimeout(reload, 120)
+    return () => clearTimeout(t)
+  }, [reload])
+
+  // Desplazamiento progresivo: cuando el centinela del final de la tabla
+  // entra en pantalla pedimos el siguiente bloque.
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) loadMore()
+      },
+      { rootMargin: '200px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [loadMore])
+
+  const refreshAll = async () => {
+    await Promise.all([reload(), loadStats()])
+  }
+
+  const printLowStock = async () => {
+    const r = await api.printLowStock()
+    if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
+    else toast({ variant: 'destructive', title: 'No se pudo imprimir', description: r.error })
+  }
+
   const showCriticalBanner =
-    !firstLoad && lowStock + outOfStock > 0 && !search && category === '__all__'
+    !!stats && stats.low_stock + stats.out_of_stock > 0 && !search && status === 'active'
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Inventario"
-        description={`${items.length} ${items.length === 1 ? 'producto' : 'productos'}${lowStock ? ` · ${lowStock} con stock bajo` : ''}`}
+        description={
+          stats
+            ? `${stats.active} ${stats.active === 1 ? 'producto activo' : 'productos activos'}${stats.low_stock ? ` · ${stats.low_stock} con stock bajo` : ''}`
+            : undefined
+        }
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                const r = await api.printLowStock()
-                if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
-                else
-                  toast({
-                    variant: 'destructive',
-                    title: 'No se pudo imprimir',
-                    description: r.error,
-                  })
-              }}
-            >
+            <Button variant="outline" onClick={printLowStock}>
               <Printer className="h-4 w-4" /> Imprimir reposición
             </Button>
             {isAdmin && (
@@ -141,6 +164,11 @@ export function Inventory() {
                 <Button asChild variant="outline">
                   <Link to="/ajustes?tab=categories">
                     <Tag className="h-4 w-4" /> Categorías
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/mermas">
+                    <Trash2 className="h-4 w-4" /> Mermas
                   </Link>
                 </Button>
               </>
@@ -159,7 +187,7 @@ export function Inventory() {
         }
       />
       <div className="flex flex-col gap-4 p-6">
-        {archivedFilter === 'archived' && (
+        {status === 'archived' && (
           <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-muted/30 p-3 text-sm animate-fade-in">
             <Archive className="mt-0.5 h-4 w-4 text-muted-foreground" />
             <div>
@@ -167,65 +195,50 @@ export function Inventory() {
               <p className="mt-0.5 text-[11px] text-muted-foreground">
                 Estos productos están ocultos del POS pero aparecen en las boletas históricas.
                 Click en uno para abrirlo: usa el switch <strong>Activo / Inactivo</strong> para
-                volver a venderlo, o el botón rojo <strong>Eliminar</strong> para borrarlo de
-                forma definitiva.
+                volver a venderlo. Eliminar solo es posible cuando el stock es 0.
               </p>
             </div>
           </div>
         )}
-        {showCriticalBanner && (
+        {showCriticalBanner && stats && (
           <div className="flex items-center justify-between rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning animate-fade-in">
             <div className="flex items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4" />
               <div>
                 <div className="font-medium">Atención al stock</div>
                 <p className="mt-0.5 text-[11px] opacity-90">
-                  {outOfStock > 0 && (
+                  {stats.out_of_stock > 0 && (
                     <>
-                      <span className="font-semibold">{outOfStock}</span> producto
-                      {outOfStock === 1 ? '' : 's'} sin stock
+                      <span className="font-semibold">{stats.out_of_stock}</span> producto
+                      {stats.out_of_stock === 1 ? '' : 's'} sin stock
                     </>
                   )}
-                  {outOfStock > 0 && lowStock > 0 && ' · '}
-                  {lowStock > 0 && (
+                  {stats.out_of_stock > 0 && stats.low_stock > 0 && ' · '}
+                  {stats.low_stock > 0 && (
                     <>
-                      <span className="font-semibold">{lowStock}</span> bajo del mínimo
+                      <span className="font-semibold">{stats.low_stock}</span> bajo del mínimo
                     </>
                   )}
                 </p>
               </div>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-warning"
-              onClick={async () => {
-                const r = await api.printLowStock()
-                if (r.ok) toast({ variant: 'success', title: 'Reporte enviado a la impresora' })
-                else
-                  toast({
-                    variant: 'destructive',
-                    title: 'No se pudo imprimir',
-                    description: r.error,
-                  })
-              }}
-            >
+            <Button size="sm" variant="ghost" className="text-warning" onClick={printLowStock}>
               <Printer className="h-3.5 w-3.5" /> Imprimir reposición
             </Button>
           </div>
         )}
-        {!firstLoad && items.length > 0 && (
+        {stats && (
           <div className="grid grid-cols-3 gap-3">
-            <SmallStat label="Productos activos" value={String(items.filter((i) => !i.archived).length)} />
+            <SmallStat label="Productos activos" value={String(stats.active)} />
             <SmallStat
               label="Valor inventario (costo)"
-              value={formatCLP(totalStockValue)}
+              value={formatCLP(stats.stock_value)}
               accent="primary"
             />
             <SmallStat
               label="Sin stock"
-              value={String(outOfStock)}
-              accent={outOfStock > 0 ? 'warning' : undefined}
+              value={String(stats.out_of_stock)}
+              accent={stats.out_of_stock > 0 ? 'warning' : undefined}
             />
           </div>
         )}
@@ -236,57 +249,22 @@ export function Inventory() {
             <Input
               autoFocus
               className="h-11 pl-9"
-              placeholder="Buscar por nombre, código o SKU…"
+              placeholder="Buscar por nombre, código de barras o SKU…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="flex items-center gap-1">
-            <Select value={category} onValueChange={(v) => setCategory(v)}>
-              <SelectTrigger className="w-56">
-                <Tag className="h-3.5 w-3.5" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">Todas las categorías</SelectItem>
-                <SelectItem value="__none__">Sin categoría</SelectItem>
-                {categories.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>
-                    {c.name} ({c.product_count})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {category !== '__all__' && category !== '__none__' && (
-              <Button
-                size="icon"
-                variant="ghost"
-                title="Renombrar categoría"
-                onClick={() => {
-                  setRenameFrom(category)
-                  setRenameTo(category)
-                  setRenameOpen(true)
-                }}
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-            )}
-            {isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                title={
-                  category === '__all__'
-                    ? 'Subir o bajar todos los precios por %'
-                    : `Cambiar precios de ${category === '__none__' ? 'productos sin categoría' : category} en %`
-                }
-                onClick={() => setBulkOpen(true)}
-              >
-                <Percent className="h-3.5 w-3.5" />
-                Precios
-              </Button>
-            )}
-          </div>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              title="Subir o bajar todos los precios por %"
+              onClick={() => setBulkOpen(true)}
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Precios
+            </Button>
+          )}
           <div className="flex overflow-hidden rounded-md border border-border">
             {(
               [
@@ -297,10 +275,10 @@ export function Inventory() {
             ).map((opt) => (
               <button
                 key={opt.id}
-                onClick={() => setArchivedFilter(opt.id)}
+                onClick={() => setStatus(opt.id)}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors',
-                  archivedFilter === opt.id
+                  status === opt.id
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-card text-muted-foreground hover:bg-accent',
                 )}
@@ -326,7 +304,7 @@ export function Inventory() {
                 title={search ? 'Sin resultados' : 'Inventario vacío'}
                 description={
                   search
-                    ? 'Prueba con otro término o limpia el filtro.'
+                    ? 'Prueba con otro término o limpia el buscador.'
                     : 'Crea un producto manualmente o usa el modo pistoleo de stock.'
                 }
                 action={
@@ -385,7 +363,7 @@ export function Inventory() {
                           )}
                         </td>
                         <td className="px-4 py-2.5 mono text-xs text-muted-foreground">
-                          {p.barcode ?? '—'}
+                          {p.barcode ?? p.sku ?? '—'}
                         </td>
                         <td className="px-4 py-2.5 text-right num text-muted-foreground">
                           {formatCLP(p.cost)}
@@ -424,6 +402,14 @@ export function Inventory() {
                     ))}
                   </tbody>
                 </table>
+                <div ref={sentinelRef} className="h-px" />
+                <div className="border-t border-border/40 px-4 py-2 text-center text-[11px] text-muted-foreground">
+                  {loadingMore
+                    ? 'Cargando más…'
+                    : items.length < total
+                      ? `${items.length} de ${total} · desplázate para ver más`
+                      : `${total} ${total === 1 ? 'producto' : 'productos'}`}
+                </div>
               </div>
             )}
           </CardContent>
@@ -436,7 +422,7 @@ export function Inventory() {
         product={null}
         onSaved={() => {
           setCreating(false)
-          load()
+          refreshAll()
         }}
       />
       <ProductDialog
@@ -445,93 +431,18 @@ export function Inventory() {
         product={editing}
         onSaved={() => {
           setEditing(null)
-          load()
-          loadCategories()
+          refreshAll()
         }}
       />
 
-      <CsvImport
-        open={csvOpen}
-        onOpenChange={setCsvOpen}
-        onImported={async () => {
-          await load()
-          await loadCategories()
-        }}
-      />
+      <CsvImport open={csvOpen} onOpenChange={setCsvOpen} onImported={refreshAll} />
 
       <BulkPriceDialog
         open={bulkOpen}
         onOpenChange={setBulkOpen}
-        filter={
-          category === '__all__'
-            ? { kind: 'all', label: 'todos los productos' }
-            : category === '__none__'
-              ? { kind: 'category', category: null, label: 'productos sin categoría' }
-              : { kind: 'category', category, label: category }
-        }
-        onApplied={async () => {
-          await load()
-          await loadCategories()
-        }}
+        filter={{ kind: 'all', label: 'todos los productos' }}
+        onApplied={refreshAll}
       />
-
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Renombrar categoría</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label>De</Label>
-              <Input value={renameFrom} disabled />
-            </div>
-            <div className="space-y-1">
-              <Label>A</Label>
-              <Input
-                autoFocus
-                value={renameTo}
-                onChange={(e) => setRenameTo(e.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Si dejas vacío, los productos quedarán "sin categoría".
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={async () => {
-                // Renombrar a vacío manda los productos a "sin categoría"
-                // en masa — efecto destructivo y silencioso (no se puede
-                // deshacer en bloque). Confirmamos antes para evitar
-                // clicks accidentales.
-                if (
-                  !renameTo.trim() &&
-                  !confirm(
-                    `Vas a sacar la categoría "${renameFrom}" a todos sus productos. Quedarán sin categoría. ¿Continuar?`,
-                  )
-                ) {
-                  return
-                }
-                const r = await api.categoriesRename(renameFrom, renameTo)
-                toast({
-                  variant: 'success',
-                  title: `${r.updated} producto${r.updated === 1 ? '' : 's'} actualizado${r.updated === 1 ? '' : 's'}`,
-                })
-                setRenameOpen(false)
-                if (category === renameFrom)
-                  setCategory(renameTo.trim() ? renameTo.trim() : '__none__')
-                await loadCategories()
-                await load()
-              }}
-            >
-              Renombrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -6,8 +6,12 @@ import type {
   Product,
   ProductInput,
   ProductPatch,
+  ProductStats,
   ScanInResult,
 } from '../../shared/types'
+
+/** Umbral de "stock bajo" cuando el producto no tiene stock_min propio. */
+const DEFAULT_LOW_STOCK_FLOOR = 3
 
 function row(r: Record<string, unknown> | undefined): Product | null {
   if (!r) return null
@@ -61,6 +65,80 @@ export function list(
   return (db.prepare(sql).all(params) as Record<string, unknown>[])
     .map(row)
     .filter((p): p is Product => p !== null)
+}
+
+/**
+ * Listado paginado para la pantalla de Inventario. A diferencia de
+ * `list()` (que tiene tope de 1.000 filas y sirve para buscadores), acá
+ * NO hay tope: la pantalla pide bloques de `limit` filas con `offset` y
+ * el `total` real para saber cuándo parar. El buscador corre en la base
+ * (nombre, código de barras o SKU), no sobre lo ya cargado.
+ *
+ * Contexto: con 1.187 productos activos la lista vieja se cortaba en los
+ * 1.000 primeros por nombre y los 187 restantes (t–z) desaparecían de la
+ * pantalla y de los totales. Ver `stats()` para los totales.
+ */
+export function page(q: {
+  search?: string
+  status?: 'active' | 'archived' | 'all'
+  offset?: number
+  limit?: number
+}): { items: Product[]; total: number } {
+  const db = getDb()
+  const where: string[] = []
+  const params: Record<string, unknown> = {}
+  const status = q.status ?? 'active'
+  if (status === 'archived') where.push('archived = 1')
+  else if (status === 'active') where.push('archived = 0')
+  if (q.search && q.search.trim()) {
+    where.push('(name LIKE @s OR barcode LIKE @s OR sku LIKE @s)')
+    params.s = `%${q.search.trim()}%`
+  }
+  const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : ''
+  const limit = Math.max(1, Math.min(500, Math.round(q.limit ?? 100)))
+  const offset = Math.max(0, Math.round(q.offset ?? 0))
+  const total = db
+    .prepare(`SELECT COUNT(*) AS c FROM products ${whereSql}`)
+    .get(params) as { c: number }
+  const rows = db
+    .prepare(
+      `SELECT * FROM products ${whereSql} ORDER BY name COLLATE NOCASE, id LIMIT @limit OFFSET @offset`,
+    )
+    .all({ ...params, limit, offset }) as Record<string, unknown>[]
+  return {
+    items: rows.map(row).filter((p): p is Product => p !== null),
+    total: Number(total.c),
+  }
+}
+
+/**
+ * Totales del inventario calculados en SQL sobre la tabla COMPLETA, no
+ * sobre la lista cargada en pantalla. Valor a costo: los productos al
+ * peso tienen stock en gramos y costo por kilo → /1000.
+ */
+export function stats(): ProductStats {
+  const db = getDb()
+  const r = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS active,
+         COALESCE(SUM(CASE WHEN is_weight = 1 THEN stock * cost / 1000.0 ELSE stock * cost END), 0) AS stock_value,
+         COALESCE(SUM(CASE WHEN stock <= 0 THEN 1 ELSE 0 END), 0) AS out_of_stock,
+         COALESCE(SUM(CASE WHEN stock > 0 AND (
+             (stock_min > 0 AND stock < stock_min)
+             OR (COALESCE(stock_min, 0) = 0 AND is_weight = 0 AND stock < ${DEFAULT_LOW_STOCK_FLOOR})
+           ) THEN 1 ELSE 0 END), 0) AS low_stock,
+         (SELECT COUNT(*) FROM products WHERE archived = 1) AS archived
+       FROM products WHERE archived = 0`,
+    )
+    .get() as Record<string, number>
+  return {
+    active: Number(r.active),
+    archived: Number(r.archived),
+    stock_value: Math.round(Number(r.stock_value)),
+    out_of_stock: Number(r.out_of_stock),
+    low_stock: Number(r.low_stock),
+  }
 }
 
 export function get(id: string): Product | null {
@@ -248,6 +326,18 @@ export function deleteHard(id: string): void {
   const db = getDb()
   const product = get(id)
   if (!product) throw new Error('El producto no existe')
+  // Regla (auditoría sep-2026): un producto con stock NO se borra. En
+  // septiembre desaparecieron $60.321 de inventario con 30+ productos
+  // eliminados sin rastro. Primero se da de baja el stock (venta, merma
+  // o ajuste con motivo) y recién ahí se puede eliminar; mientras tanto
+  // la opción es archivar.
+  if (product.stock !== 0) {
+    const has =
+      product.is_weight === 1 ? formatWeight(product.stock) : `${product.stock} unidades`
+    throw new Error(
+      `"${product.name}" todavía tiene ${has} en stock. Da de baja el stock en Vencidos y mermas (o archívalo) antes de eliminarlo.`,
+    )
+  }
   const inPromos = db
     .prepare(
       `SELECT 1 FROM promotions WHERE kind = 'percent_off_product' AND target = ? LIMIT 1`,
@@ -349,7 +439,6 @@ export function reactivate(id: string, opts?: { newStock?: number }): Product {
  *    para que la cajera reciba aviso aunque no haya configurado un mínimo
  *    explícito en cada producto.
  */
-const DEFAULT_LOW_STOCK_FLOOR = 3
 
 export function critical(): Product[] {
   const db = getDb()

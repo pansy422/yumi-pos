@@ -34,6 +34,16 @@ export type ProductInput = {
 
 export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
 
+/** Totales del inventario calculados en la base sobre TODOS los productos. */
+export type ProductStats = {
+  active: number
+  archived: number
+  /** Valor a costo del stock activo (pesos enteros). */
+  stock_value: number
+  out_of_stock: number
+  low_stock: number
+}
+
 export type SlowMovingProduct = {
   id: string
   name: string
@@ -360,6 +370,13 @@ export type Api = {
     onlyArchived?: boolean
     category?: string | null
   }) => Promise<Product[]>
+  productsPage: (q: {
+    search?: string
+    status?: 'active' | 'archived' | 'all'
+    offset?: number
+    limit?: number
+  }) => Promise<{ items: Product[]; total: number }>
+  productsStats: () => Promise<ProductStats>
   productsGet: (id: string) => Promise<Product | null>
   productsGetMany: (ids: string[]) => Promise<(Product | null)[]>
   productsByBarcode: (barcode: string) => Promise<Product | null>

@@ -106,6 +106,8 @@ export function registerIpc(): void {
     (q?: { search?: string; includeArchived?: boolean; category?: string | null }) =>
       products.list(q ?? {}),
   )
+  handle(IPC.productsPage, (q: Parameters<typeof products.page>[0]) => products.page(q ?? {}))
+  handle(IPC.productsStats, () => products.stats())
   handle(IPC.productsGet, (id: string) => products.get(id))
   handle(IPC.productsGetMany, (ids: string[]) => products.getMany(ids))
   handle(IPC.productsByBarcode, (barcode: string) => products.byBarcode(barcode))

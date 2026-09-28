@@ -1,5 +1,7 @@
 export const IPC = {
   productsList: 'products:list',
+  productsPage: 'products:page',
+  productsStats: 'products:stats',
   productsGet: 'products:get',
   productsGetMany: 'products:getMany',
   productsByBarcode: 'products:byBarcode',
