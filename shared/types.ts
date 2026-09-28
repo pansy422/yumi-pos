@@ -50,6 +50,78 @@ export type CashFundMovementKind =
   | 'out_transfer_swap'
   | 'adjustment'
 
+export type Purchase = {
+  id: number
+  /** Fecha de la compra, AAAA-MM-DD. */
+  purchased_at: string
+  supplier: string
+  amount: number
+  payment_method: PurchasePaymentMethod
+  note: string | null
+  /** Ruta local de la foto de la boleta (opcional). */
+  receipt_path: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
+
+export type PurchaseInput = {
+  purchased_at?: string
+  supplier: string
+  amount: number
+  payment_method: PurchasePaymentMethod
+  note?: string | null
+  receipt_path?: string | null
+  user_id?: string | null
+}
+
+export type PurchaseMonth = {
+  month: string
+  items: Purchase[]
+  total: number
+  by_supplier: { supplier: string; count: number; total: number }[]
+  by_method: { method: PurchasePaymentMethod; count: number; total: number }[]
+}
+
+export type StockWriteoff = {
+  id: number
+  product_id: string | null
+  product_name: string
+  /** Unidades, o gramos si es por peso. */
+  qty: number
+  reason: WriteoffReason
+  cost_snapshot: number
+  is_weight: 0 | 1
+  note: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+  /** qty × costo (con /1000 para peso). */
+  cost_total: number
+}
+
+export type WriteoffInput = {
+  product_id: string
+  qty: number
+  reason: WriteoffReason
+  note?: string | null
+  user_id?: string | null
+}
+
+export type WriteoffReport = {
+  month: string
+  count: number
+  total_cost: number
+  by_reason: { reason: WriteoffReason; count: number; cost: number }[]
+  by_product: {
+    product_id: string | null
+    product_name: string
+    is_weight: 0 | 1
+    qty: number
+    cost: number
+  }[]
+}
+
 export type StockMovementKind =
   | 'sale'
   | 'return'
@@ -586,6 +658,22 @@ export type Api = {
   }) => Promise<CashFundMovement>
   fundSinceLastCount: () => Promise<{ last_count_at: string | null; movements: CashFundMovement[] }>
   fundCount: (counted: number, userId?: string | null, note?: string) => Promise<CashFundCount>
+
+  purchasesCreate: (input: PurchaseInput) => Promise<Purchase>
+  purchasesRemove: (id: number) => Promise<void>
+  purchasesSetReceipt: (id: number, receiptPath: string | null) => Promise<Purchase>
+  purchasesMonth: (q: {
+    month: string
+    supplier?: string
+    payment_method?: PurchasePaymentMethod
+  }) => Promise<PurchaseMonth>
+  purchasesSuppliers: () => Promise<string[]>
+  purchasesPickReceipt: () => Promise<{ path: string } | null>
+  purchasesOpenReceipt: (path: string) => Promise<Result<void>>
+
+  writeoffsCreate: (input: WriteoffInput) => Promise<StockWriteoff>
+  writeoffsList: (q: { from?: string; to?: string; limit?: number }) => Promise<StockWriteoff[]>
+  writeoffsReport: (q: { month: string }) => Promise<WriteoffReport>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>

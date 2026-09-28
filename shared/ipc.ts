@@ -61,6 +61,18 @@ export const IPC = {
   fundAdd: 'fund:add',
   fundSinceLastCount: 'fund:sinceLastCount',
   fundCount: 'fund:count',
+
+  purchasesCreate: 'purchases:create',
+  purchasesRemove: 'purchases:remove',
+  purchasesSetReceipt: 'purchases:setReceipt',
+  purchasesMonth: 'purchases:month',
+  purchasesSuppliers: 'purchases:suppliers',
+  purchasesPickReceipt: 'purchases:pickReceipt',
+  purchasesOpenReceipt: 'purchases:openReceipt',
+
+  writeoffsCreate: 'writeoffs:create',
+  writeoffsList: 'writeoffs:list',
+  writeoffsReport: 'writeoffs:report',
   printZReport: 'printer:zreport',
   printLowStock: 'printer:lowStock',
   printSlowMoving: 'printer:slowMoving',

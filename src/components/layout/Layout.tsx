@@ -13,6 +13,7 @@ export function Layout() {
   useShortcut({ key: 'F3' }, () => navigate('/caja'), { allowInInput: true })
   useShortcut({ key: 'F4' }, () => navigate('/reportes'), { allowInInput: true })
   useShortcut({ key: 'F6' }, () => navigate('/ventas'), { allowInInput: true })
+  useShortcut({ key: 'F7' }, () => navigate('/compras'), { allowInInput: true })
   useShortcut({ key: 'F9' }, () => navigate('/ajustes'), { allowInInput: true })
 
   // En la pantalla de venta el sidebar se oculta para que la cajera vea el

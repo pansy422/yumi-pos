@@ -14,6 +14,9 @@ import { Inventory } from '@/pages/Inventory'
 import { InventoryScan } from '@/pages/InventoryScan'
 import { Sales } from '@/pages/Sales'
 import { Cash } from '@/pages/Cash'
+import { Purchases } from '@/pages/Purchases'
+import { Writeoffs } from '@/pages/Writeoffs'
+import { Reconciliation } from '@/pages/Reconciliation'
 import { Reports } from '@/pages/Reports'
 import { Settings } from '@/pages/Settings'
 
@@ -41,6 +44,9 @@ export default function App() {
           <Route path="/inventario/pistolear" element={<InventoryScan />} />
           <Route path="/ventas" element={<Sales />} />
           <Route path="/caja" element={<Cash />} />
+          <Route path="/compras" element={<Purchases />} />
+          <Route path="/mermas" element={<Writeoffs />} />
+          <Route path="/cuadre" element={<Reconciliation />} />
           <Route path="/reportes" element={<Reports />} />
           <Route path="/ajustes" element={<Settings />} />
           <Route path="*" element={<Navigate to="/pos" replace />} />

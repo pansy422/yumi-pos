@@ -16,6 +16,7 @@ import {
   Scale,
   Search,
   Settings as Cog,
+  ShoppingBag,
   ShoppingCart,
   Sparkles,
   Trash2,
@@ -415,6 +416,7 @@ export function POS() {
         <nav className="ml-auto flex items-center gap-0.5 text-xs">
           <NavBtn to="/inventario" icon={Box} label="Inventario" hint="F2" />
           <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
+          <NavBtn to="/compras" icon={ShoppingBag} label="Compras" hint="F7" />
           <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
           <NavBtn to="/reportes" icon={BarChart3} label="Reportes" hint="F4" />
           {isAdmin && <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />}

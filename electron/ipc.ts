@@ -12,6 +12,9 @@ import * as categoriesRepo from './db/categories'
 import * as heldTicketsRepo from './db/heldTickets'
 import * as stock from './db/stock'
 import * as fund from './db/cashFund'
+import * as purchases from './db/purchases'
+import * as writeoffs from './db/writeoffs'
+import { openReceipt, pickReceipt } from './utils/receipts'
 import { setCurrentUserId } from './db/session'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
@@ -254,6 +257,28 @@ export function registerIpc(): void {
   handle(IPC.fundCount, (counted: number, userId?: string | null, note?: string) =>
     fund.count(counted, userId ?? null, note),
   )
+
+  handle(IPC.purchasesCreate, (input: Parameters<typeof purchases.create>[0]) =>
+    purchases.create(input),
+  )
+  handle(IPC.purchasesRemove, (id: number) => {
+    purchases.remove(id)
+  })
+  handle(IPC.purchasesSetReceipt, (id: number, receiptPath: string | null) =>
+    purchases.setReceipt(id, receiptPath),
+  )
+  handle(IPC.purchasesMonth, (q: Parameters<typeof purchases.listMonth>[0]) =>
+    purchases.listMonth(q),
+  )
+  handle(IPC.purchasesSuppliers, () => purchases.suppliers())
+  handle(IPC.purchasesPickReceipt, () => pickReceipt())
+  handleSafe(IPC.purchasesOpenReceipt, (p: string) => openReceipt(p))
+
+  handle(IPC.writeoffsCreate, (input: Parameters<typeof writeoffs.create>[0]) =>
+    writeoffs.create(input),
+  )
+  handle(IPC.writeoffsList, (q: Parameters<typeof writeoffs.list>[0]) => writeoffs.list(q ?? {}))
+  handle(IPC.writeoffsReport, (q: Parameters<typeof writeoffs.report>[0]) => writeoffs.report(q))
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
   handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))

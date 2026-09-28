@@ -88,6 +88,18 @@ const api = {
   fundAdd: invoke(IPC.fundAdd),
   fundSinceLastCount: invoke(IPC.fundSinceLastCount),
   fundCount: invoke(IPC.fundCount),
+
+  purchasesCreate: invoke(IPC.purchasesCreate),
+  purchasesRemove: invoke(IPC.purchasesRemove),
+  purchasesSetReceipt: invoke(IPC.purchasesSetReceipt),
+  purchasesMonth: invoke(IPC.purchasesMonth),
+  purchasesSuppliers: invoke(IPC.purchasesSuppliers),
+  purchasesPickReceipt: invoke(IPC.purchasesPickReceipt),
+  purchasesOpenReceipt: invoke(IPC.purchasesOpenReceipt),
+
+  writeoffsCreate: invoke(IPC.writeoffsCreate),
+  writeoffsList: invoke(IPC.writeoffsList),
+  writeoffsReport: invoke(IPC.writeoffsReport),
   printZReport: invoke(IPC.printZReport),
   printLowStock: invoke(IPC.printLowStock),
   printSlowMoving: invoke(IPC.printSlowMoving),

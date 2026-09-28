@@ -9,6 +9,8 @@ const NAV = [
   { keys: ['F2'], label: 'Ir a Inventario' },
   { keys: ['F3'], label: 'Ir a Caja' },
   { keys: ['F4'], label: 'Ir a Reportes' },
+  { keys: ['F6'], label: 'Ir a Ventas' },
+  { keys: ['F7'], label: 'Ir a Compras' },
   { keys: ['F9'], label: 'Ir a Ajustes' },
 ]
 

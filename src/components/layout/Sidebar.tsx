@@ -7,8 +7,11 @@ import {
   HelpCircle,
   LogOut,
   Receipt,
+  Scale,
   Settings as Cog,
+  ShoppingBag,
   ShoppingCart,
+  Trash2,
   Type,
   User as UserIcon,
 } from 'lucide-react'
@@ -19,12 +22,21 @@ import { Kbd } from '@/components/common/Kbd'
 import { FontScaleDialog } from '@/components/common/FontScaleDialog'
 import { useIsAdmin } from '@/hooks/useRole'
 
-const ALL_ITEMS = [
+const ALL_ITEMS: {
+  to: string
+  label: string
+  icon: typeof ShoppingCart
+  hint: string | null
+  adminOnly: boolean
+}[] = [
   { to: '/pos', label: 'Vender', icon: ShoppingCart, hint: 'F1', adminOnly: false },
   { to: '/inventario', label: 'Inventario', icon: Box, hint: 'F2', adminOnly: false },
   { to: '/caja', label: 'Caja', icon: DollarSign, hint: 'F3', adminOnly: false },
+  { to: '/compras', label: 'Compras', icon: ShoppingBag, hint: 'F7', adminOnly: false },
+  { to: '/mermas', label: 'Mermas', icon: Trash2, hint: null, adminOnly: false },
   { to: '/reportes', label: 'Reportes', icon: BarChart3, hint: 'F4', adminOnly: false },
   { to: '/ventas', label: 'Ventas', icon: Receipt, hint: 'F6', adminOnly: false },
+  { to: '/cuadre', label: 'Cuadre', icon: Scale, hint: null, adminOnly: true },
   { to: '/ajustes', label: 'Ajustes', icon: Cog, hint: 'F9', adminOnly: true },
 ]
 
@@ -70,7 +82,9 @@ export function Sidebar() {
                   />
                   {it.label}
                 </span>
-                <Kbd className={cn(isActive ? 'border-primary/30 text-primary' : '')}>{it.hint}</Kbd>
+                {it.hint && (
+                  <Kbd className={cn(isActive ? 'border-primary/30 text-primary' : '')}>{it.hint}</Kbd>
+                )}
               </>
             )}
           </NavLink>
