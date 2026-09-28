@@ -130,6 +130,7 @@ export function UnknownBarcodeDialog({
       const updated = await api.productsUpdate(picked.id, {
         barcode,
         stock: picked.stock + 1,
+        stock_reason: `Pistoleo: código ${barcode} vinculado`,
       })
       onResolved(updated, 'linked')
     } catch (err) {

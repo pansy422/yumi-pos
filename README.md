@@ -23,6 +23,8 @@ Hecho para **Minimarket Entre Palmas** (Rancagua).
 - **IVA configurable**: tasa (default 19%), modo inclusivo (precios ya incluyen IVA, formato boleta Chile) o exclusivo (formato factura).
 - **Impresión térmica ESC/POS** con apertura automática del cajón de dinero, copia opcional para la tienda y soporte de Epson TM-T20IIIL (USB y red).
 - **Respaldo manual** de la base de datos (un solo clic, exporta archivo `.db`).
+- **Compras** (pagos a proveedores con foto de boleta), **Mermas** (bajas de stock con motivo), **Fondo de efectivo** (efectivo fuera del cajón) y **Cuadre semanal** con cartola BCI.
+- **Historial de stock** por producto: cada entrada, venta, devolución, merma o ajuste con su motivo y responsable.
 - **Atajos de teclado** y overlay de ayuda con tecla `?`.
 
 ## Compilar el `.exe` (sin necesidad de tener Node.js instalado)
@@ -89,6 +91,7 @@ Después de eso ya estás vendiendo.
 | `F3`      | Ir a Caja                             |
 | `F4`      | Ir a Reportes                         |
 | `F6`      | Ir a Ventas (historial)               |
+| `F7`      | Ir a Compras                          |
 | `F9`      | Ir a Ajustes                          |
 | `F5`      | Cobrar (en pantalla POS)              |
 | `Ctrl+B`  | Buscar producto manualmente (en POS)  |
@@ -106,12 +109,29 @@ Después de eso ya estás vendiendo.
 - Si el cliente fue a buscar algo, **Reservar** ticket y atender al siguiente.
 - Para abrir cajón sin venta (cambio de billete, etc.), botón **Cajón**.
 
-**Al cerrar:**
-1. `F3` → **Cerrar caja** → contar el efectivo → ingresar el monto contado.
-2. Se imprime el **Z-report** automáticamente con el resumen del día.
+- Cada pago a un proveedor se registra en `F7` **Compras** (fecha, proveedor, monto, medio de pago, foto de la boleta). Si es en efectivo, sale solo del **fondo de efectivo**.
+- Lo que se vence, se rompe o se consume va a **Mermas** (busca o pistolea el producto, cantidad, motivo). Nunca se edita el stock a mano sin motivo.
+- Todo retiro de efectivo del cajón pide **motivo y a quién** se entregó.
 
-**Una vez por semana:**
+**Al cerrar:**
+1. `F3` → **Cerrar caja**: contar el efectivo → indicar cuánto **queda en el cajón** para mañana → repartir el resto en destinos (fondo / proveedor / dueño / otro) → explicar la diferencia si la hay.
+2. Se imprime el **Z-report** automáticamente con el resumen del día.
+3. La apertura del día siguiente se llena sola con lo que quedó en el cajón.
+
+**Los lunes (admin):**
+- **Cuadre** de la semana anterior: ventas, compras, efectivo del fondo (contado vs calculado), tarjetas y transferencias contra la cartola BCI (CSV), e inventario a costo. Cada diferencia se explica o se marca pendiente. Hasta confirmarlo, la pantalla de venta queda bloqueada.
 - Ajustes → Datos → **Descargar respaldo** y guardarlo en pendrive o nube.
+
+## Auditoría y trazabilidad (v2, sep-2026)
+
+Ver `docs/CAMBIOS-V2.md` para la especificación completa. En resumen:
+
+- **Historial de stock** (`stock_movements`): toda variación de stock (venta, devolución, ingreso, pistoleo, merma, ajuste manual con motivo, archivado) queda registrada con stock resultante, costo del momento y responsable. Se ve en la ficha de cada producto.
+- **Vender sin stock no se bloquea**: el POS avisa, el catálogo queda en 0 y el historial guarda el negativo para el cuadre.
+- **Un producto con stock no se puede eliminar**: primero merma o archivar.
+- **Fondo de efectivo**: libro único del efectivo fuera del cajón. Sube con los retiros al cerrar caja; baja con compras en efectivo, gastos y retiros del dueño. Botón **Contar fondo** registra la diferencia.
+- **Fechas** en ISO 8601 UTC en toda la base; se muestran siempre en hora de Chile.
+- **Respaldo automático antes de cada migración** de esquema, en la misma carpeta de los respaldos diarios (`yumi-pos-pre-migracion-v*.db`).
 
 ## Base de datos
 

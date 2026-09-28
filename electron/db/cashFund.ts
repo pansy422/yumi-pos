@@ -191,6 +191,8 @@ export function count(counted: number, userId?: string | null, note?: string): C
   return db.transaction((): CashFundCount => {
     const before = balance()
     const difference = c - before
+    // Sin diferencia no se inserta fila (un ajuste de $0 no aporta nada);
+    // con diferencia queda el ajuste con el detalle del conteo.
     let movement: CashFundMovement | null = null
     if (difference !== 0) {
       movement = addWith(db, {
@@ -201,10 +203,6 @@ export function count(counted: number, userId?: string | null, note?: string): C
           (note?.trim() ? ` — ${note.trim()}` : ''),
         user_id: userId ?? null,
       })
-    } else if (note?.trim()) {
-      // Sin diferencia igual dejamos constancia del conteo (monto 0 no se
-      // permite, así que no insertamos fila; el historial de compras y
-      // cierres ya muestra la actividad).
     }
     return { balance_before: before, counted: c, difference, movement }
   })()
