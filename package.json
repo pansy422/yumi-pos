@@ -1,6 +1,6 @@
 {
   "name": "yumi-pos",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Yumi POS - Software de punto de venta para minimarket",
   "main": "dist-electron/electron/main.js",
   "author": "Vicente - TokyoTech",
