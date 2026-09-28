@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       ELECTRON_CACHE: ${{ github.workspace }}\.electron-cache
       GYP_MSVS_VERSION: '2022'
