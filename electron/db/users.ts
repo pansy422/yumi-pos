@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from 'node:crypto'
 import { getDb } from './index'
+import { nowIso } from './sql'
 import type { User, UserInput, UserRole } from '../../shared/types'
 
 /**
@@ -120,8 +121,16 @@ export function save(input: UserInput): User {
   }
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO users (id, name, pin, role, active, font_scale) VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(id, name, hashPin(input.pin!), input.role, input.active === false ? 0 : 1, fontScale)
+    `INSERT INTO users (id, name, pin, role, active, font_scale, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id,
+    name,
+    hashPin(input.pin!),
+    input.role,
+    input.active === false ? 0 : 1,
+    fontScale,
+    nowIso(),
+  )
   return get(id)!
 }
 

@@ -10,6 +10,13 @@ import * as promotions from './db/promotions'
 import * as users from './db/users'
 import * as categoriesRepo from './db/categories'
 import * as heldTicketsRepo from './db/heldTickets'
+import * as stock from './db/stock'
+import * as fund from './db/cashFund'
+import * as purchases from './db/purchases'
+import * as writeoffs from './db/writeoffs'
+import * as reconciliation from './db/reconciliation'
+import { openReceipt, pickReceipt } from './utils/receipts'
+import { setCurrentUserId } from './db/session'
 import { exportBackup, importBackup } from './utils/backup'
 import { listSystemPrinters } from './utils/printersList'
 import {
@@ -106,6 +113,8 @@ export function registerIpc(): void {
     (q?: { search?: string; includeArchived?: boolean; category?: string | null }) =>
       products.list(q ?? {}),
   )
+  handle(IPC.productsPage, (q: Parameters<typeof products.page>[0]) => products.page(q ?? {}))
+  handle(IPC.productsStats, () => products.stats())
   handle(IPC.productsGet, (id: string) => products.get(id))
   handle(IPC.productsGetMany, (ids: string[]) => products.getMany(ids))
   handle(IPC.productsByBarcode, (barcode: string) => products.byBarcode(barcode))
@@ -150,6 +159,13 @@ export function registerIpc(): void {
   handle(IPC.productsBulkPrice, (filter: Parameters<typeof products.bulkPriceChange>[0]) =>
     products.bulkPriceChange(filter),
   )
+  handle(IPC.stockMovementsForProduct, (productId: string, limit?: number) =>
+    stock.forProduct(productId, limit),
+  )
+  handle(IPC.stockMovementsList, (q: Parameters<typeof stock.list>[0]) => stock.list(q ?? {}))
+  handle(IPC.sessionSetUser, (userId: string | null) => {
+    setCurrentUserId(userId ?? null)
+  })
 
   handle(IPC.heldTicketsList, () => heldTicketsRepo.list())
   handle(IPC.heldTicketsSave, (input: Parameters<typeof heldTicketsRepo.save>[0]) =>
@@ -220,11 +236,7 @@ export function registerIpc(): void {
     (amt: number, notes?: string, cashierId?: string | null) =>
       cash.open(amt, notes, cashierId ?? null),
   )
-  handle(
-    IPC.cashClose,
-    (amt: number, notes?: string, cashierId?: string | null) =>
-      cash.close(amt, notes, cashierId ?? null),
-  )
+  handle(IPC.cashClose, (input: Parameters<typeof cash.close>[0]) => cash.close(input))
   handle(
     IPC.cashMove,
     (
@@ -232,8 +244,56 @@ export function registerIpc(): void {
       amt: number,
       note: string,
       cashierId?: string | null,
-    ) => cash.move(kind, amt, note, cashierId ?? null),
+      opts?: { counterparty?: string },
+    ) => cash.move(kind, amt, note, cashierId ?? null, opts),
   )
+  handle(IPC.cashLastRegisterFloat, () => cash.lastRegisterFloat())
+  handle(IPC.fundBalance, () => fund.balance())
+  handle(IPC.fundList, (opts?: Parameters<typeof fund.list>[0]) => fund.list(opts))
+  handle(IPC.fundAdd, (input: Parameters<typeof fund.add>[0]) => fund.add(input))
+  handle(IPC.fundSinceLastCount, () => ({
+    last_count_at: fund.lastCountAt(),
+    movements: fund.sinceLastCount(),
+  }))
+  handle(IPC.fundCount, (counted: number, userId?: string | null, note?: string) =>
+    fund.count(counted, userId ?? null, note),
+  )
+
+  handle(IPC.purchasesCreate, (input: Parameters<typeof purchases.create>[0]) =>
+    purchases.create(input),
+  )
+  handle(IPC.purchasesRemove, (id: number) => {
+    purchases.remove(id)
+  })
+  handle(IPC.purchasesSetReceipt, (id: number, receiptPath: string | null) =>
+    purchases.setReceipt(id, receiptPath),
+  )
+  handle(IPC.purchasesMonth, (q: Parameters<typeof purchases.listMonth>[0]) =>
+    purchases.listMonth(q),
+  )
+  handle(IPC.purchasesSuppliers, () => purchases.suppliers())
+  handle(IPC.purchasesPickReceipt, () => pickReceipt())
+  handleSafe(IPC.purchasesOpenReceipt, (p: string) => openReceipt(p))
+
+  handle(IPC.writeoffsCreate, (input: Parameters<typeof writeoffs.create>[0]) =>
+    writeoffs.create(input),
+  )
+  handle(IPC.writeoffsList, (q: Parameters<typeof writeoffs.list>[0]) => writeoffs.list(q ?? {}))
+  handle(IPC.writeoffsReport, (q: Parameters<typeof writeoffs.report>[0]) => writeoffs.report(q))
+
+  handle(IPC.reconciliationStatus, () => reconciliation.status())
+  handle(IPC.reconciliationWeeks, () => reconciliation.weeks())
+  handle(
+    IPC.reconciliationCompute,
+    (weekStart: string, opts?: Parameters<typeof reconciliation.compute>[1]) =>
+      reconciliation.compute(weekStart, opts),
+  )
+  handle(IPC.reconciliationConfirm, (input: Parameters<typeof reconciliation.confirm>[0]) =>
+    reconciliation.confirm(input),
+  )
+  handle(IPC.reconciliationGet, (weekStart: string) => reconciliation.get(weekStart))
+  handle(IPC.reconciliationHistory, (limit?: number) => reconciliation.history(limit))
+  handle(IPC.reconciliationParseBci, (text: string) => reconciliation.parseBciCsv(text))
   handle(IPC.cashMovements, (sessionId: string) => cash.movements(sessionId))
   handle(IPC.cashSummary, (sessionId: string) => cash.summary(sessionId))
   handle(IPC.cashZReport, (sessionId: string) => cash.buildZReport(sessionId))

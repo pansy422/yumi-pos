@@ -32,7 +32,283 @@ export type ProductInput = {
   is_weight?: 0 | 1
 }
 
-export type ProductPatch = Partial<ProductInput> & { archived?: 0 | 1 }
+export type ProductPatch = Partial<ProductInput> & {
+  archived?: 0 | 1
+  /** Obligatorio cuando `stock` cambia: queda en `stock_movements`. */
+  stock_reason?: string
+}
+
+export type PurchasePaymentMethod = 'efectivo' | 'transferencia' | 'debito' | 'credito'
+
+export type WriteoffReason = 'vencido' | 'dañado' | 'consumo' | 'robo' | 'conteo' | 'otro'
+
+export type CashFundMovementKind =
+  | 'in_from_register'
+  | 'out_supplier'
+  | 'out_expense'
+  | 'out_owner'
+  | 'out_transfer_swap'
+  | 'adjustment'
+
+export type Purchase = {
+  id: number
+  /** Fecha de la compra, AAAA-MM-DD. */
+  purchased_at: string
+  supplier: string
+  amount: number
+  payment_method: PurchasePaymentMethod
+  note: string | null
+  /** Ruta local de la foto de la boleta (opcional). */
+  receipt_path: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
+
+export type PurchaseInput = {
+  purchased_at?: string
+  supplier: string
+  amount: number
+  payment_method: PurchasePaymentMethod
+  note?: string | null
+  receipt_path?: string | null
+  user_id?: string | null
+}
+
+export type PurchaseMonth = {
+  month: string
+  items: Purchase[]
+  total: number
+  by_supplier: { supplier: string; count: number; total: number }[]
+  by_method: { method: PurchasePaymentMethod; count: number; total: number }[]
+}
+
+export type StockWriteoff = {
+  id: number
+  product_id: string | null
+  product_name: string
+  /** Unidades, o gramos si es por peso. */
+  qty: number
+  reason: WriteoffReason
+  cost_snapshot: number
+  is_weight: 0 | 1
+  note: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+  /** qty × costo (con /1000 para peso). */
+  cost_total: number
+}
+
+export type WriteoffInput = {
+  product_id: string
+  qty: number
+  reason: WriteoffReason
+  note?: string | null
+  user_id?: string | null
+}
+
+export type WriteoffReport = {
+  month: string
+  count: number
+  total_cost: number
+  by_reason: { reason: WriteoffReason; count: number; cost: number }[]
+  by_product: {
+    product_id: string | null
+    product_name: string
+    is_weight: 0 | 1
+    qty: number
+    cost: number
+  }[]
+}
+
+// ── Cuadre semanal ──────────────────────────────────────────────────────
+
+export type BankRow = {
+  /** AAAA-MM-DD */
+  date: string
+  description: string
+  debit: number
+  credit: number
+  balance: number | null
+}
+
+export type ReconciliationStatus = {
+  /** true ⇒ la pantalla de venta se bloquea hasta confirmar. */
+  required: boolean
+  week_start: string
+  week_end: string
+  confirmed: boolean
+  has_activity: boolean
+  weekday: number
+}
+
+export type ReconciliationExplanation = { note: string; pending: boolean }
+
+export type WeekReconciliation = {
+  week_start: string
+  week_end: string
+  generated_at: string
+  sales: {
+    count: number
+    total: number
+    by_method: { method: PaymentMethod; count: number; total: number }[]
+    by_day: {
+      date: string
+      efectivo: number
+      debito: number
+      credito: number
+      transferencia: number
+      otro: number
+      total: number
+    }[]
+  }
+  purchases: {
+    count: number
+    total: number
+    by_method: { method: string; count: number; total: number }[]
+    by_supplier: { supplier: string; count: number; total: number }[]
+  }
+  cash: {
+    cash_sales: number
+    withdrawals_total: number
+    withdrawals: {
+      amount: number
+      reason: string
+      counterparty: string | null
+      created_at: string
+      user_name: string | null
+    }[]
+    sessions: {
+      id: string
+      opened_at: string
+      closed_at: string | null
+      opening_amount: number
+      expected_close: number | null
+      counted_close: number | null
+      difference: number | null
+      difference_note: string | null
+      register_float: number | null
+    }[]
+    sessions_difference: number
+    fund_start: number
+    fund_in_from_register: number
+    /** Negativo. */
+    fund_out_total: number
+    fund_adjustments: number
+    fund_out_by_kind: { kind: string; total: number; count: number }[]
+    fund_out: {
+      kind: string
+      amount: number
+      reason: string
+      counterparty: string | null
+      created_at: string
+      user_name: string | null
+    }[]
+    fund_end_calc: number
+  }
+  cards: {
+    expected_total: number
+    received_total: number | null
+    rows: {
+      settle_date: string
+      sales_days: string[]
+      expected: number
+      received: number | null
+      difference: number | null
+      flagged: boolean
+    }[]
+  }
+  transfers: {
+    expected_total: number
+    received_total: number | null
+    rows: {
+      sale_number: number
+      date: string
+      amount: number
+      matched: boolean | null
+      bank_date: string | null
+    }[]
+    unmatched_count: number | null
+  }
+  inventory: {
+    value_start: number
+    entries: number
+    returns: number
+    /** Vendido a costo según líneas de venta (neto de devoluciones). */
+    sold_cost: number
+    /** Vendido a costo según movimientos de stock. */
+    sold_movements: number
+    /** Parte vendida sin stock (el historial quedó negativo). */
+    sold_without_stock: number
+    writeoffs: number
+    manual: number
+    value_end_calc: number
+    value_end_real: number
+    difference: number
+    movements_count: number
+  }
+  carried_pending: { key: string; note: string; week_start: string }[]
+  bank_rows: BankRow[]
+  bank_rows_count: number
+  manual: { fund_counted: number | null; bank_balance: number | null }
+  explanations: Record<string, ReconciliationExplanation>
+}
+
+export type WeeklyReconciliationRecord = {
+  id: number
+  week_start: string
+  week_end: string
+  confirmed_at: string
+  user_id: string | null
+  user_name: string | null
+  data: WeekReconciliation | null
+}
+
+export type ReconciliationConfirmInput = {
+  week_start: string
+  data: WeekReconciliation
+  user_id?: string | null
+}
+
+export type StockMovementKind =
+  | 'sale'
+  | 'return'
+  | 'entry'
+  | 'writeoff'
+  | 'manual'
+  | 'archive'
+
+export type StockMovement = {
+  id: number
+  /** null si el producto fue borrado después. */
+  product_id: string | null
+  product_name: string
+  kind: StockMovementKind
+  /** Con signo: negativo sale, positivo entra. Gramos si `is_weight`. */
+  qty: number
+  /** Stock resultante. Puede ser negativo en `sale` (venta sin stock)
+   * aunque `products.stock` se mantenga en 0. */
+  stock_after: number
+  cost_snapshot: number
+  is_weight: 0 | 1
+  reason: string | null
+  ref_table: string | null
+  ref_id: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
+
+/** Totales del inventario calculados en la base sobre TODOS los productos. */
+export type ProductStats = {
+  active: number
+  archived: number
+  /** Valor a costo del stock activo (pesos enteros). */
+  stock_value: number
+  out_of_stock: number
+  low_stock: number
+}
 
 export type SlowMovingProduct = {
   id: string
@@ -127,6 +403,10 @@ export type CashSession = {
   counted_close: number | null
   difference: number | null
   notes: string | null
+  /** Efectivo que quedó en el cajón al cerrar (fondo fijo). */
+  register_float: number | null
+  /** Explicación obligatoria cuando contado ≠ esperado. */
+  difference_note: string | null
   /** Cajero que abrió la sesión. null si era anónimo / borrado. */
   opened_by_id: string | null
   opened_by_name: string | null
@@ -248,12 +528,61 @@ export type CashMovement = {
   kind: CashMovementKind
   amount: number
   note: string | null
+  /** Motivo (obligatorio en retiros). */
+  reason: string | null
+  /** A quién se entregó el efectivo (obligatorio en retiros). */
+  counterparty: string | null
   created_at: string
   sale_id: string | null
   /** Quién hizo el movimiento. null para movimientos de venta antiguos
    * (sale_id != null) o cuando el user fue borrado. */
   cashier_id: string | null
   cashier_name: string | null
+}
+
+export type CashCloseDestinationKind = 'fondo' | 'proveedor' | 'dueño' | 'otro'
+
+export type CashCloseDestination = {
+  kind: CashCloseDestinationKind
+  amount: number
+  /** Nombre del proveedor (obligatorio en `proveedor`). */
+  name?: string
+  /** Motivo (obligatorio en `otro`). */
+  reason?: string
+}
+
+export type CashCloseInput = {
+  /** Efectivo físico contado en el cajón. */
+  counted: number
+  /** Lo que queda en el cajón para mañana. */
+  register_float: number
+  /** Reparto de (contado − queda). Debe sumar exacto. */
+  destinations: CashCloseDestination[]
+  /** Obligatoria si contado ≠ esperado. */
+  difference_note?: string
+  notes?: string
+  cashier_id?: string | null
+}
+
+export type CashFundMovement = {
+  id: number
+  kind: CashFundMovementKind
+  /** Positivo entra al fondo, negativo sale. */
+  amount: number
+  reason: string
+  counterparty: string | null
+  purchase_id: number | null
+  cash_session_id: string | null
+  user_id: string | null
+  user_name: string | null
+  created_at: string
+}
+
+export type CashFundCount = {
+  balance_before: number
+  counted: number
+  difference: number
+  movement: CashFundMovement | null
 }
 
 /** Resumen de una sesión cerrada con conteo de ventas/movimientos para
@@ -298,11 +627,23 @@ export type BackupSettings = {
   keep_last: number
 }
 
+export type CashSettings = {
+  /** Fondo fijo que queda en el cajón al cerrar (propuesto en el cierre). */
+  register_float: number
+}
+
+export type ReconciliationSettings = {
+  /** Día del cuadre semanal: 1 = lunes … 7 = domingo. */
+  weekday: number
+}
+
 export type Settings = {
   store: StoreSettings
   printer: PrinterSettings
   flags: AppFlags
   backup: BackupSettings
+  cash: CashSettings
+  reconciliation: ReconciliationSettings
   receipt_template: ReceiptTemplate
 }
 
@@ -360,6 +701,13 @@ export type Api = {
     onlyArchived?: boolean
     category?: string | null
   }) => Promise<Product[]>
+  productsPage: (q: {
+    search?: string
+    status?: 'active' | 'archived' | 'all'
+    offset?: number
+    limit?: number
+  }) => Promise<{ items: Product[]; total: number }>
+  productsStats: () => Promise<ProductStats>
   productsGet: (id: string) => Promise<Product | null>
   productsGetMany: (ids: string[]) => Promise<(Product | null)[]>
   productsByBarcode: (barcode: string) => Promise<Product | null>
@@ -383,6 +731,16 @@ export type Api = {
     percent: number
     field?: 'price' | 'cost'
   }) => Promise<{ updated: number; oldTotal: number; newTotal: number }>
+  stockMovementsForProduct: (productId: string, limit?: number) => Promise<StockMovement[]>
+  stockMovementsList: (q: {
+    from?: string
+    to?: string
+    kind?: StockMovementKind
+    search?: string
+    limit?: number
+  }) => Promise<StockMovement[]>
+  /** Avisa al proceso main quién está logueado (para atribuir movimientos). */
+  sessionSetUser: (userId: string | null) => Promise<void>
 
   heldTicketsList: () => Promise<HeldTicket[]>
   heldTicketsSave: (input: {
@@ -423,17 +781,59 @@ export type Api = {
     notes?: string,
     cashierId?: string | null,
   ) => Promise<CashSession>
-  cashClose: (
-    countedAmount: number,
-    notes?: string,
-    cashierId?: string | null,
-  ) => Promise<CashSession>
+  cashClose: (input: CashCloseInput) => Promise<CashSession>
   cashMove: (
     kind: 'withdraw' | 'deposit' | 'adjustment',
     amount: number,
     note: string,
     cashierId?: string | null,
+    opts?: { counterparty?: string },
   ) => Promise<CashMovement>
+  /** Fondo fijo propuesto para la próxima apertura (último cierre o ajuste). */
+  cashLastRegisterFloat: () => Promise<number>
+  fundBalance: () => Promise<number>
+  fundList: (opts?: {
+    limit?: number
+    from?: string
+    to?: string
+    kind?: CashFundMovementKind
+  }) => Promise<CashFundMovement[]>
+  fundAdd: (input: {
+    kind: CashFundMovementKind
+    amount: number
+    reason: string
+    counterparty?: string | null
+    user_id?: string | null
+  }) => Promise<CashFundMovement>
+  fundSinceLastCount: () => Promise<{ last_count_at: string | null; movements: CashFundMovement[] }>
+  fundCount: (counted: number, userId?: string | null, note?: string) => Promise<CashFundCount>
+
+  purchasesCreate: (input: PurchaseInput) => Promise<Purchase>
+  purchasesRemove: (id: number) => Promise<void>
+  purchasesSetReceipt: (id: number, receiptPath: string | null) => Promise<Purchase>
+  purchasesMonth: (q: {
+    month: string
+    supplier?: string
+    payment_method?: PurchasePaymentMethod
+  }) => Promise<PurchaseMonth>
+  purchasesSuppliers: () => Promise<string[]>
+  purchasesPickReceipt: () => Promise<{ path: string } | null>
+  purchasesOpenReceipt: (path: string) => Promise<Result<void>>
+
+  writeoffsCreate: (input: WriteoffInput) => Promise<StockWriteoff>
+  writeoffsList: (q: { from?: string; to?: string; limit?: number }) => Promise<StockWriteoff[]>
+  writeoffsReport: (q: { month: string }) => Promise<WriteoffReport>
+
+  reconciliationStatus: () => Promise<ReconciliationStatus>
+  reconciliationWeeks: () => Promise<{ week_start: string; week_end: string; confirmed: boolean }[]>
+  reconciliationCompute: (
+    weekStart: string,
+    opts?: { bank_rows?: BankRow[] },
+  ) => Promise<WeekReconciliation>
+  reconciliationConfirm: (input: ReconciliationConfirmInput) => Promise<WeeklyReconciliationRecord>
+  reconciliationGet: (weekStart: string) => Promise<WeeklyReconciliationRecord | null>
+  reconciliationHistory: (limit?: number) => Promise<WeeklyReconciliationRecord[]>
+  reconciliationParseBci: (text: string) => Promise<BankRow[]>
   cashMovements: (sessionId: string) => Promise<CashMovement[]>
   cashSummary: (sessionId: string) => Promise<CashSummary>
   cashZReport: (sessionId: string) => Promise<ZReport>

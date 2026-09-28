@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { nowIso } from './sql'
 import type { Category, CategoryInput } from '../../shared/types'
 
 function rowToCategory(r: Record<string, unknown> | undefined): Category | null {
@@ -78,9 +79,10 @@ export function ensureExists(name: string): void {
   const trimmed = name.trim()
   if (!trimmed) return
   const db = getDb()
-  db.prepare(`INSERT OR IGNORE INTO categories (id, name) VALUES (?, ?)`).run(
+  db.prepare(`INSERT OR IGNORE INTO categories (id, name, created_at) VALUES (?, ?, ?)`).run(
     randomUUID(),
     trimmed,
+    nowIso(),
   )
 }
 
@@ -114,8 +116,8 @@ export function save(input: CategoryInput): Category {
   if (dup) throw new Error(`Ya existe una categoría con ese nombre: ${name}`)
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO categories (id, name, color, default_margin) VALUES (?, ?, ?, ?)`,
-  ).run(id, name, input.color ?? null, input.default_margin ?? null)
+    `INSERT INTO categories (id, name, color, default_margin, created_at) VALUES (?, ?, ?, ?, ?)`,
+  ).run(id, name, input.color ?? null, input.default_margin ?? null, nowIso())
   return get(id)!
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Box, Scale, TrendingUp } from 'lucide-react'
+import { Box, History as HistoryIcon, Scale, TrendingUp } from 'lucide-react'
+import { formatDateTimeCL, formatWeight } from '@shared/money'
+import { STOCK_KIND_LABEL } from '@/lib/labels'
 import {
   Dialog,
   DialogContent,
@@ -17,7 +19,7 @@ import { useToast } from '@/hooks/useToast'
 import { useIsAdmin } from '@/hooks/useRole'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
-import type { Product, ProductInput } from '@shared/types'
+import type { Product, ProductInput, StockMovement } from '@shared/types'
 
 type Form = {
   barcode: string
@@ -176,6 +178,25 @@ export function ProductDialog({
   const [saving, setSaving] = useState(false)
   const [archived, setArchived] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [stockReason, setStockReason] = useState('')
+  const [history, setHistory] = useState<StockMovement[]>([])
+
+  useEffect(() => {
+    if (!open || !product) {
+      setHistory([])
+      return
+    }
+    let cancelled = false
+    api
+      .stockMovementsForProduct(product.id, 8)
+      .then((list) => {
+        if (!cancelled) setHistory(list)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [open, product])
   /**
    * Para productos nuevos mostramos primero un picker preguntando si es por
    * unidad o por peso. Para edición saltamos directo al formulario.
@@ -218,15 +239,31 @@ export function ProductDialog({
         stock_max_kg: product.is_weight === 1 ? kgText(product.stock_max ?? 0) : '0',
       })
       setArchived(product.archived === 1)
+      setStockReason('')
       setStep('form')
     } else {
       setForm({ ...empty, barcode: defaultBarcode ?? '' })
       setArchived(false)
+      setStockReason('')
       // Si vienes con un barcode (pistoleo), saltamos el picker — los códigos
       // pistoleados son por definición productos por unidad.
       setStep(defaultBarcode ? 'form' : 'pick_type')
     }
   }, [open, product, defaultBarcode])
+
+  // ¿El stock del formulario difiere del guardado? Solo entonces pedimos
+  // motivo (mismo parser que usa save()).
+  const stockDiffers = (() => {
+    if (!product) return false
+    if (form.is_weight) {
+      const t = form.stock_kg.trim()
+      const normalized = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t
+      const n = parseFloat(normalized)
+      const grams = Number.isFinite(n) && n >= 0 ? Math.round(n * 1000) : 0
+      return grams !== product.stock
+    }
+    return (Math.round(form.stock) || 0) !== product.stock
+  })()
 
   const handleDelete = async () => {
     if (!product) return
@@ -278,6 +315,17 @@ export function ProductDialog({
         return Math.round(n * 1000)
       }
       const stockValue = form.is_weight ? toGrams(form.stock_kg) : Math.round(form.stock) || 0
+      const stockChanged = !!product && stockValue !== product.stock
+      if (stockChanged && !stockReason.trim()) {
+        toast({
+          variant: 'warning',
+          title: 'Falta el motivo del cambio de stock',
+          description:
+            'Todo cambio manual de stock queda en el historial con su motivo. Para mercadería vencida o dañada usa Vencidos y mermas.',
+        })
+        setSaving(false)
+        return
+      }
       const stockMin = form.is_weight
         ? toGrams(form.stock_min_kg)
         : Math.round(form.stock_min) || 0
@@ -312,7 +360,11 @@ export function ProductDialog({
         is_weight: form.is_weight ? 1 : 0,
       }
       const saved = product
-        ? await api.productsUpdate(product.id, { ...input, archived: archived ? 1 : 0 })
+        ? await api.productsUpdate(product.id, {
+            ...input,
+            archived: archived ? 1 : 0,
+            stock_reason: stockChanged ? stockReason.trim() : undefined,
+          })
         : await api.productsCreate(input)
       toast({ variant: 'success', title: product ? 'Producto actualizado' : 'Producto creado' })
       onSaved(saved)
@@ -463,6 +515,21 @@ export function ProductDialog({
               />
             </div>
           )}
+          {product && stockDiffers && (
+            <div className="space-y-1 sm:col-span-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
+              <Label className="text-warning">Motivo del cambio de stock *</Label>
+              <Input
+                value={stockReason}
+                onChange={(e) => setStockReason(e.target.value)}
+                placeholder="ej. conteo físico, error de carga, regalo…"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Queda en el historial del producto con tu nombre. Si es mercadería vencida,
+                dañada o robada, regístralo en <strong>Vencidos y mermas</strong> para que entre al
+                reporte.
+              </p>
+            </div>
+          )}
           <div className="space-y-1">
             <Label>Costo {form.is_weight ? 'por kg' : ''}</Label>
             <MoneyInput value={form.cost} onValueChange={(n) => setForm({ ...form, cost: n })} />
@@ -576,14 +643,53 @@ export function ProductDialog({
         </div>
         )}
 
+        {step === 'form' && product && history.length > 0 && (
+          <div className="rounded-md border border-border/60 bg-muted/20">
+            <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2 text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+              <HistoryIcon className="h-3.5 w-3.5" /> Últimos movimientos de stock
+            </div>
+            <ul className="max-h-40 divide-y divide-border/40 overflow-auto text-[12px]">
+              {history.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium">{STOCK_KIND_LABEL[m.kind]}</span>
+                    {m.reason && (
+                      <span className="text-muted-foreground"> · {m.reason}</span>
+                    )}
+                    <div className="text-[10px] text-muted-foreground">
+                      {formatDateTimeCL(m.created_at)}
+                      {m.user_name ? ` · ${m.user_name}` : ''}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div
+                      className={cn(
+                        'num font-semibold',
+                        m.qty > 0 ? 'text-success' : m.qty < 0 ? 'text-destructive' : 'text-muted-foreground',
+                      )}
+                    >
+                      {m.qty > 0 ? '+' : ''}
+                      {m.is_weight ? formatWeight(Math.abs(m.qty)).replace(/^/, m.qty < 0 ? '-' : '') : m.qty}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      → {m.is_weight ? formatWeight(m.stock_after) : m.stock_after}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {step === 'form' && product && confirmDelete && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3">
             <div className="text-sm font-semibold text-destructive">
               ¿Eliminar "{product.name}"?
             </div>
             <p className="mt-1 text-[12px] text-foreground">
-              Esta acción no se puede deshacer. Las boletas históricas siguen viéndose
-              perfectas (guardamos el nombre y precio en cada línea de venta).
+              Esta acción no se puede deshacer. Solo se puede eliminar con stock en 0: si
+              todavía queda mercadería, dala de baja en Vencidos y mermas o archiva el producto.
+              Las boletas históricas siguen viéndose perfectas.
             </p>
             <div className="mt-2 flex gap-2">
               <Button

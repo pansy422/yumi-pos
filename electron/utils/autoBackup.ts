@@ -1,11 +1,11 @@
 import { app } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
-import { getDb } from '../db'
+import { getBackupDir, getDb } from '../db'
 import * as settingsRepo from '../db/settings'
 
 export function getAutoBackupDir(): string {
-  return path.join(app.getPath('documents'), 'Yumi POS Backups')
+  return getBackupDir()
 }
 
 function listBackupFiles(dir: string): string[] {

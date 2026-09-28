@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getDb } from './index'
+import { nowIso } from './sql'
 import { lineTotal } from '../../shared/money'
 import type { CartItem, Promotion, PromotionInput, AppliedPromotion } from '../../shared/types'
 
@@ -57,7 +58,7 @@ export function save(input: PromotionInput): Promotion {
   }
   const id = randomUUID()
   db.prepare(
-    `INSERT INTO promotions (id, name, kind, target, params, active) VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO promotions (id, name, kind, target, params, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     name,
@@ -65,6 +66,7 @@ export function save(input: PromotionInput): Promotion {
     input.target ?? null,
     JSON.stringify(input.params ?? {}),
     input.active === false ? 0 : 1,
+    nowIso(),
   )
   return rowToPromo(
     db.prepare(`SELECT * FROM promotions WHERE id = ?`).get(id) as Record<string, unknown>,

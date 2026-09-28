@@ -36,6 +36,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/common/PageHeader'
+import { MoneyInput } from '@/components/common/MoneyInput'
 import { ReceiptEditor } from '@/components/common/ReceiptEditor'
 import { PromotionsTab } from './SettingsPromotions'
 import { UsersTab } from './SettingsUsers'
@@ -281,7 +282,75 @@ function StoreTab({ settings, onSaved }: { settings: SettingsT; onSaved: () => v
           </div>
         </CardContent>
       </Card>
+
+      <CashSettingsCard settings={settings} onSaved={onSaved} />
     </div>
+  )
+}
+
+const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+
+function CashSettingsCard({ settings, onSaved }: { settings: SettingsT; onSaved: () => void }) {
+  const [registerFloat, setRegisterFloat] = useState(settings.cash.register_float)
+  const [weekday, setWeekday] = useState(settings.reconciliation.weekday)
+  const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
+  return (
+    <Card className="card-elev">
+      <CardContent className="grid gap-4 p-5 sm:grid-cols-2">
+        <div className="sm:col-span-2">
+          <Label className="text-sm text-foreground">Efectivo y cuadre</Label>
+          <p className="text-[11px] text-muted-foreground">
+            El fondo fijo es lo que queda en el cajón al cerrar y con lo que se abre al día
+            siguiente. El cuadre semanal bloquea la venta hasta que se confirme la semana anterior.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label>Fondo fijo del cajón</Label>
+          <MoneyInput value={registerFloat} onValueChange={setRegisterFloat} />
+        </div>
+        <div className="space-y-1">
+          <Label>Día del cuadre semanal</Label>
+          <Select value={String(weekday)} onValueChange={(v) => setWeekday(Number(v))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {WEEKDAYS.map((d, i) => (
+                <SelectItem key={d} value={String(i + 1)}>
+                  {d}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="sm:col-span-2 flex justify-end">
+          <Button
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true)
+              try {
+                await api.settingsSet({
+                  cash: { register_float: registerFloat },
+                  reconciliation: { weekday },
+                })
+                onSaved()
+              } catch (err) {
+                toast({
+                  variant: 'destructive',
+                  title: 'No se pudo guardar',
+                  description: err instanceof Error ? err.message : String(err),
+                })
+              } finally {
+                setSaving(false)
+              }
+            }}
+          >
+            <Save className="h-4 w-4" /> Guardar
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 

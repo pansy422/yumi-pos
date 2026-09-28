@@ -2,7 +2,9 @@ import { getDb } from './index'
 import type {
   AppFlags,
   BackupSettings,
+  CashSettings,
   PrinterSettings,
+  ReconciliationSettings,
   Settings,
   StoreSettings,
 } from '../../shared/types'
@@ -40,6 +42,12 @@ const DEFAULTS: Settings = {
     last_run: null,
     keep_last: 30,
   },
+  cash: {
+    register_float: 30000,
+  },
+  reconciliation: {
+    weekday: 1,
+  },
   receipt_template: DEFAULT_TEMPLATE,
 }
 
@@ -72,6 +80,11 @@ export function getAll(): Settings {
     printer: { ...DEFAULTS.printer, ...readKey<Partial<PrinterSettings>>('printer', {}) },
     flags: { ...DEFAULTS.flags, ...readKey<Partial<AppFlags>>('flags', {}) },
     backup: { ...DEFAULTS.backup, ...readKey<Partial<BackupSettings>>('backup', {}) },
+    cash: { ...DEFAULTS.cash, ...readKey<Partial<CashSettings>>('cash', {}) },
+    reconciliation: {
+      ...DEFAULTS.reconciliation,
+      ...readKey<Partial<ReconciliationSettings>>('reconciliation', {}),
+    },
     receipt_template,
   }
 }
@@ -81,6 +94,16 @@ export function setPatch(patch: Partial<Settings>): Settings {
   if (patch.printer) writeKey('printer', { ...getAll().printer, ...patch.printer })
   if (patch.flags) writeKey('flags', { ...getAll().flags, ...patch.flags })
   if (patch.backup) writeKey('backup', { ...getAll().backup, ...patch.backup })
+  if (patch.cash) {
+    const rf = Math.round(Number(patch.cash.register_float))
+    if (!Number.isFinite(rf) || rf < 0) throw new Error('El fondo fijo del cajón debe ser 0 o más.')
+    writeKey('cash', { ...getAll().cash, register_float: rf })
+  }
+  if (patch.reconciliation) {
+    const wd = Math.round(Number(patch.reconciliation.weekday))
+    if (!Number.isFinite(wd) || wd < 1 || wd > 7) throw new Error('El día del cuadre debe ser 1 (lunes) a 7 (domingo).')
+    writeKey('reconciliation', { ...getAll().reconciliation, weekday: wd })
+  }
   if (patch.receipt_template) {
     if (!isValidTemplate(patch.receipt_template)) {
       throw new Error('Plantilla de boleta inválida')

@@ -6,6 +6,7 @@ import {
   Box,
   DollarSign,
   DoorOpen,
+  Lock,
   LogOut,
   Minus,
   PauseCircle,
@@ -16,6 +17,7 @@ import {
   Scale,
   Search,
   Settings as Cog,
+  ShoppingBag,
   ShoppingCart,
   Sparkles,
   Trash2,
@@ -46,8 +48,14 @@ import { useScanner } from '@/hooks/useScanner'
 import { useShortcut } from '@/lib/keyboard'
 import { useToast } from '@/hooks/useToast'
 import { api } from '@/lib/api'
-import { clampMoney, formatCLP, formatWeight, todayISO } from '@shared/money'
-import type { AppliedPromotion, PaymentMethod, Product, SaleWithItems } from '@shared/types'
+import { clampMoney, formatCLP, formatDateCL, formatDateTimeCL, formatWeight, todayISO } from '@shared/money'
+import type {
+  AppliedPromotion,
+  PaymentMethod,
+  Product,
+  ReconciliationStatus,
+  SaleWithItems,
+} from '@shared/types'
 import {
   Dialog,
   DialogContent,
@@ -168,6 +176,24 @@ export function POS() {
     if (!heldLoaded) refreshHeld()
   }, [heldLoaded, refreshHeld])
 
+  // Cuadre de los lunes: si la semana anterior no está confirmada (a
+  // partir del día configurado), la venta se bloquea hasta que un admin
+  // lo haga. Se consulta al montar y cada vez que cambia la caja.
+  const [reconBlock, setReconBlock] = useState<ReconciliationStatus | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    api
+      .reconciliationStatus()
+      .then((st) => {
+        if (!cancelled) setReconBlock(st.required ? st : null)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [cash])
+  const blocked = !!reconBlock
+
   // Auto-scroll: cuando se agrega un producto, llevar la fila a la vista
   // para que la cajera siempre vea la última lectura aunque el ticket sea
   // largo.
@@ -248,8 +274,18 @@ export function POS() {
         return
       }
       addWithMultiplier(p)
+      // Aviso visible al agregar sin stock: la venta NO se bloquea (el
+      // sistema la registra con stock negativo en el historial), pero la
+      // cajera tiene que enterarse de que el inventario no cuadra.
+      if (p.stock <= 0) {
+        toast({
+          variant: 'warning',
+          title: `${p.name}: sin stock`,
+          description: 'Se vende igual. El historial de stock quedará en negativo para el cuadre.',
+        })
+      }
     },
-    [addWithMultiplier],
+    [addWithMultiplier, toast],
   )
 
   const handleScan = useCallback(
@@ -275,8 +311,8 @@ export function POS() {
       if (p.stock <= 0) {
         toast({
           variant: 'warning',
-          title: p.name,
-          description: `Sin stock — vendiendo a deuda (stock quedará en ${p.stock - willAdd})`,
+          title: `${p.name}: sin stock`,
+          description: `Se vende igual; el historial quedará en ${p.stock - willAdd} para el cuadre.`,
         })
       } else if (after > p.stock) {
         toast({
@@ -296,7 +332,7 @@ export function POS() {
   )
 
   useScanner({
-    enabled: !payOpen && !weightProduct,
+    enabled: !payOpen && !weightProduct && !blocked,
     onScan: handleScan,
   })
 
@@ -311,6 +347,7 @@ export function POS() {
   useShortcut(
     { key: 'F5' },
     () => {
+      if (blocked) return
       if (items.length === 0) {
         toast({ variant: 'warning', title: 'Carrito vacío' })
         return
@@ -347,7 +384,40 @@ export function POS() {
   const totalUnits = items.reduce((a, i) => a + i.qty, 0)
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
+      {reconBlock && (
+        <div className="absolute inset-0 z-40 grid place-items-center bg-background/85 backdrop-blur-sm">
+          <div className="max-w-md rounded-xl border border-destructive/40 bg-card p-6 text-center shadow-lg">
+            <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-destructive/10 text-destructive">
+              <Lock className="h-6 w-6" />
+            </div>
+            <h2 className="mt-3 font-display text-xl font-semibold tracking-display-tight">
+              Falta el cuadre de la semana pasada
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              La semana del {formatDateCL(reconBlock.week_start)} al {formatDateCL(reconBlock.week_end)}{' '}
+              no tiene cuadre confirmado. La venta queda bloqueada hasta que un administrador lo
+              complete.
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              {isAdmin ? (
+                <Button asChild>
+                  <Link to="/cuadre">
+                    <Scale className="h-4 w-4" /> Hacer el cuadre
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={logout}>
+                  <LogOut className="h-4 w-4" /> Cambiar de usuario
+                </Button>
+              )}
+              <Button asChild variant="outline">
+                <Link to="/caja">Ir a Caja</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Barra superior premium tipo macOS: glass + branding + estado
           + navegación admin. Sticky para que la cajera no la pierda al
           scrollear el ticket. */}
@@ -405,6 +475,7 @@ export function POS() {
         <nav className="ml-auto flex items-center gap-0.5 text-xs">
           <NavBtn to="/inventario" icon={Box} label="Inventario" hint="F2" />
           <NavBtn to="/caja" icon={DollarSign} label="Caja" hint="F3" />
+          <NavBtn to="/compras" icon={ShoppingBag} label="Compras" hint="F7" />
           <NavBtn to="/ventas" icon={ReceiptIcon} label="Ventas" hint="F6" />
           <NavBtn to="/reportes" icon={BarChart3} label="Reportes" hint="F4" />
           {isAdmin && <NavBtn to="/ajustes" icon={Cog} label="Ajustes" hint="F9" />}
@@ -1248,17 +1319,7 @@ function HeldTicketsDialog({
                         {units} unidad{units === 1 ? '' : 'es'} ·{' '}
                         <span className="num">{formatCLP(total)}</span>
                         {' · '}
-                        {/* SQLite datetime('now') guarda en UTC sin sufijo;
-                            agregamos la 'Z' para que JS lo interprete como UTC
-                            y muestre la hora local correctamente. */}
-                        {new Date(
-                          t.created_at.includes('T') || t.created_at.endsWith('Z')
-                            ? t.created_at
-                            : t.created_at.replace(' ', 'T') + 'Z',
-                        ).toLocaleTimeString('es-CL', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {formatDateTimeCL(t.created_at).slice(-5)}
                       </div>
                     </div>
                     <Button
@@ -1352,7 +1413,8 @@ function HeldTicketsDialog({
 
 type PaymentLine = {
   id: number
-  method: PaymentMethod
+  /** null hasta que el cajero elige: no hay medio de pago por defecto. */
+  method: PaymentMethod | null
   amount: number
   cash_received: number
 }
@@ -1401,11 +1463,12 @@ function PaymentDialog({
       setShowPreview(false)
       setPrintError(null)
     } else {
-      // Por defecto una línea efectivo cubriendo todo el total. NO
-      // incluimos `tot` en deps — si el cliente repintó el carrito
-      // mientras el dialog está abierto, no queremos pisarle al cajero
-      // las líneas que ya empezó a editar.
-      setLines([{ id: 1, method: 'efectivo', amount: tot, cash_received: tot }])
+      // Una línea por el total SIN medio de pago: el cajero tiene que
+      // elegirlo (decisión sep-2026: las boletas marcadas "efectivo" que
+      // fueron débito descuadraban la caja). NO incluimos `tot` en deps —
+      // si el cliente repintó el carrito mientras el dialog está abierto,
+      // no queremos pisarle al cajero las líneas que ya empezó a editar.
+      setLines([{ id: 1, method: null, amount: tot, cash_received: 0 }])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
@@ -1416,20 +1479,26 @@ function PaymentDialog({
   const cashShortage = lines.some(
     (l) => l.method === 'efectivo' && l.cash_received < l.amount,
   )
+  const methodMissing = lines.some((l) => l.method === null)
   const needsCashOpen = hasCash && !cash
   const cashChange = lines
     .filter((l) => l.method === 'efectivo')
     .reduce((a, l) => a + Math.max(0, (l.cash_received || 0) - l.amount), 0)
   const canSubmit =
-    !submitting && remaining === 0 && !cashShortage && !needsCashOpen && lines.length > 0
+    !submitting &&
+    remaining === 0 &&
+    !cashShortage &&
+    !methodMissing &&
+    !needsCashOpen &&
+    lines.length > 0
 
   const updateLine = (id: number, patch: Partial<PaymentLine>) =>
     setLines((cur) => cur.map((l) => (l.id === id ? { ...l, ...patch } : l)))
 
   /**
-   * Cambiar método de pago de una línea sin dejar `cash_received` colgado:
-   * - A efectivo: si quedaba en 0 (vino de débito/etc.), lo equiparamos al
-   *   amount para no pintar "Falta efectivo" en una línea recién cambiada.
+   * Cambiar método de pago de una línea:
+   * - A efectivo: cash_received arranca en 0 para que el cajero tipee lo
+   *   que recibió (el vuelto se calcula de ahí). Hay botón "Exacto".
    * - Desde efectivo: cash_received pierde sentido, lo limpiamos a 0.
    */
   const setLineMethod = (id: number, method: PaymentMethod) =>
@@ -1437,7 +1506,7 @@ function PaymentDialog({
       cur.map((l) => {
         if (l.id !== id) return l
         if (method === 'efectivo') {
-          return { ...l, method, cash_received: Math.max(l.cash_received, l.amount) }
+          return { ...l, method, cash_received: l.method === 'efectivo' ? l.cash_received : 0 }
         }
         return { ...l, method, cash_received: 0 }
       }),
@@ -1469,9 +1538,9 @@ function PaymentDialog({
         ...reconciled,
         {
           id,
-          method: reconciled.some((l) => l.method === 'efectivo') ? 'debito' : 'efectivo',
+          method: null,
           amount: fillAmount,
-          cash_received: fillAmount,
+          cash_received: 0,
         },
       ]
     })
@@ -1525,9 +1594,9 @@ function PaymentDialog({
         // automáticos por promociones (recomputadas arriba).
         discount: discount + freshAutoDiscount,
         payments: lines
-          .filter((l) => l.amount > 0)
+          .filter((l) => l.amount > 0 && l.method !== null)
           .map((l) => ({
-            method: l.method,
+            method: l.method as PaymentMethod,
             amount: l.amount,
             cash_received: l.method === 'efectivo' ? l.cash_received : undefined,
           })),
@@ -1621,7 +1690,9 @@ function PaymentDialog({
                         'rounded-lg border p-3 transition-colors',
                         overshort
                           ? 'border-destructive/40 bg-destructive/10'
-                          : 'border-border/60 bg-card/30',
+                          : line.method === null
+                            ? 'border-warning/40 bg-warning/5'
+                            : 'border-border/60 bg-card/30',
                       )}
                     >
                       <div className="mb-2 flex items-center justify-between">
@@ -1656,8 +1727,13 @@ function PaymentDialog({
 
                       <div className="space-y-2">
                         <div>
-                          <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
-                            Método
+                          <Label
+                            className={cn(
+                              'text-[10px] font-semibold uppercase tracking-caps',
+                              line.method === null ? 'text-warning' : 'text-muted-foreground',
+                            )}
+                          >
+                            {line.method === null ? 'Elige el medio de pago' : 'Método'}
                           </Label>
                           <div className="mt-1 grid grid-cols-5 gap-1">
                             {(
@@ -1714,16 +1790,26 @@ function PaymentDialog({
                           </div>
                           {isCash && (
                             <div>
-                              <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
-                                Efectivo recibido
-                              </Label>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-semibold uppercase tracking-caps text-muted-foreground">
+                                  Efectivo recibido
+                                </Label>
+                                <button
+                                  type="button"
+                                  className="text-[10px] font-semibold uppercase tracking-caps text-primary hover:underline"
+                                  onClick={() => updateLine(line.id, { cash_received: line.amount })}
+                                >
+                                  Exacto
+                                </button>
+                              </div>
                               <MoneyInput
+                                key={`cash-${line.id}`}
                                 value={line.cash_received}
                                 onValueChange={(n) =>
                                   updateLine(line.id, { cash_received: n })
                                 }
                                 className="mt-1 text-lg"
-                                autoFocus={idx === 0}
+                                autoFocus
                               />
                             </div>
                           )}
